@@ -1,0 +1,12 @@
+[submodule "AggregatorService"]
+	path = AggregatorService
+	url = https://github.com/Kamil-Zuki/AggregatorService.git
+    branch = master
+[submodule "VocabularyService"]
+	path = VocabularyService
+	url = https://github.com/Kamil-Zuki/VocabularyService.git
+    branch = master
+[submodule "authorization-module"]
+	path = authorization-module
+	url = https://github.com/Kamil-Zuki/authorization-module.git
+    branch = master
