@@ -10,3 +10,6 @@
 	path = authorization-module
 	url = https://github.com/Kamil-Zuki/authorization-module.git
     branch = master
+[submodule "polyraspad-frontend"]
+	path = polyraspad-frontend
+	url = file:///C:/Users/Zuko/Desktop/01Projects/Development_Documents/Polyraspad/polyraspad-frontend
