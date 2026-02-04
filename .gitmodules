@@ -12,4 +12,4 @@
     branch = master
 [submodule "polyraspad-frontend"]
 	path = polyraspad-frontend
-	url = file:///C:/Users/Zuko/Desktop/01Projects/Development_Documents/Polyraspad/polyraspad-frontend
+	url = https://github.com/Kamil-Zuki/polyraspad-frontend.git
