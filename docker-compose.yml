@@ -165,6 +165,25 @@ services:
       timeout: 5s
       retries: 5
 
+  vocabulary-service:
+    container_name: vocabulary-service
+    build:
+      context: ./VocabularyService
+      dockerfile: Dockerfile
+    ports:
+      - "5117:5117"
+    networks:
+      - backend
+    depends_on:
+      inclusive:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=vocabulary_service;User Id=postgres;Password=123"
+      Inclusive__GrpcAddress: "http://inclusive:40051"
+      Inclusive__UseForFsrs: "true"
+
   speech-analysis:
     container_name: speech-analysis
     build:
