@@ -1,155 +1,24 @@
 services:
-  api-gateway:
-    user: root
-    container_name: api-gateway
-    build:
-      context: ./api-gateway/api-gateway
-      dockerfile: Dockerfile
+  postgres:
+    container_name: postgres
+    image: postgres:13
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      POSTGRES_DB: postgres
+    ports:
+      - "5454:5432"
     volumes:
-      - ./api-gateway/api-gateway/ocelot.json:/app/ocelot.json
-    depends_on:
-      - dictionary-parser
-      - authorization-module
-      - personal-vocab
-      - postgres
-      - postgres_pv
-    ports:
-      - "8090:80"
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  dictionary-parser:
-    container_name: dictionary-parser
-    build:
-      context: ./dictionary-parser
-      dockerfile: Dockerfile
-    depends_on:
-      - postgres
-    networks:
-      - backend
-
-  study-module:
-    container_name: study-module
-    build:
-      context: ./study-module
-      dockerfile: Dockerfile
-    depends_on:
-      - postgres
-    networks:
-      - backend
-
-  authorization-module:
-    container_name: authorization-module
-    build:
-      context: ./authorization-module
-      dockerfile: Dockerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - backend
-    environment:
-      DB_CONNECTION_STRING: "Server=postgres; Port=5432; Database=auth-module; User Id=postgres; Password=123"
-
-  personal-vocab:
-    container_name: personal-vocab
-    build:
-      context: ./personal-vocab
-      dockerfile: Dockerfile
-    networks:
-      - backend
-    depends_on:
-      postgres_pv:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      inclusive:
-        condition: service_started
-    environment:
-      DB_CONNECTION_STRING: "Server=postgres_pv; Port=5432; Database=personal-vocabulary; User Id=postgres; Password=123"
-      REDIS_CONNECTION_STRING: "redis:6379"
-      GRPC_INCLUSIVE_ADDRESS: "http://inclusive:40051"
-
-  content-service:
-    container_name: content-service
-    build:
-      context: ./content-service
-      dockerfile: Dockerfile
-    networks:
-      - backend
-    depends_on:
-      postgres_content:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      ConnectionStrings__Db: "Host=postgres_content;Port=5432;Database=content_service;Username=postgres;Password=123"
-      Redis__ConnectionString: "redis:6379"
-      Elasticsearch__Uri: "http://elasticsearch:9200"
-
-  media-service:
-    container_name: media-service
-    build:
-      context: ./media-service
-      dockerfile: Dockerfile
-    networks:
-      - backend
-    depends_on:
-      postgres_media:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      minio:
-        condition: service_healthy
-      faster-whisper-api:
-        condition: service_started
-      piper-tts:
-        condition: service_started
-    environment:
-      ConnectionStrings__Db: "Host=postgres_media;Port=5432;Database=media_service;Username=postgres;Password=123"
-      Redis__ConnectionString: "redis:6379"
-      MinIO__Endpoint: "http://minio:9000"
-      MinIO__AccessKey: "minioadmin"
-      MinIO__SecretKey: "minioadmin"
-      Whisper__Url: "http://faster-whisper-api:8000"
-      Piper__Url: "http://piper-tts:10200"
-
-  analytics-service:
-    container_name: analytics-service
-    build:
-      context: ./analytics-service
-      dockerfile: Dockerfile
-    networks:
-      - backend
-    depends_on:
-      timescaledb:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    environment:
-      ConnectionStrings__Db: "Host=timescaledb;Port=5432;Database=analytics_service;Username=postgres;Password=123"
-      Redis__ConnectionString: "redis:6379"
-
-  line-by-line-ui:
-    container_name: line-by-line-ui
-    build:
-      context: ./line-by-line-ui
-      dockerfile: Dockerfile
-      args:
-        API_SERVER_ADDRESS: "http://85.175.218.17:8090"
-    ports:
-      - "8081:3000"
-    networks:
-      - backend
-    depends_on:
-      - api-gateway
-    environment:
-      NODE_ENV: production
-      API_SERVER_ADDRESS: "http://85.175.218.17:8090"
-
-  # FSRS gRPC service (inclusive submodule)
   inclusive:
     container_name: inclusive
     build:
@@ -159,11 +28,21 @@ services:
       - "40051:40051"
     networks:
       - backend
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import grpc; import sys; channel = grpc.insecure_channel('localhost:40051'); sys.exit(0 if channel else 1)" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
+  authorization-module:
+    container_name: authorization-module
+    build:
+      context: ./authorization-module
+      dockerfile: Dockerfile
+    ports:
+      - "5027:5027"
+    networks:
+      - backend
+    depends_on:
+      - postgres
+    environment:
+      ConnectionStrings__Db: "Server=postgres;Port=5432;Database=auth-module;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-123}"
+      ASPNETCORE_ENVIRONMENT: Production
 
   vocabulary-service:
     container_name: vocabulary-service
@@ -175,344 +54,54 @@ services:
     networks:
       - backend
     depends_on:
-      inclusive:
-        condition: service_started
-      postgres:
-        condition: service_healthy
+      - postgres
+      - inclusive
     environment:
-      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=vocabulary_service;User Id=postgres;Password=123"
+      APP_UID: "0"
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=vocabulary_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-123}"
       Inclusive__GrpcAddress: "http://inclusive:40051"
       Inclusive__UseForFsrs: "true"
+      DOTNET_RUNNING_IN_CONTAINER: "true"
 
-  speech-analysis:
-    container_name: speech-analysis
+  aggregator-service:
+    container_name: aggregator-service
     build:
-      context: ./speech-analysis
+      context: ./AggregatorService
       dockerfile: Dockerfile
     ports:
-      - "50052:50052"
+      - "5000:5206"
     networks:
       - backend
-    environment:
-      GRPC_PORT: "50052"
-      REDIS_HOST: "redis"
-      REDIS_PORT: "6379"
-      LOG_LEVEL: "INFO"
     depends_on:
-      - redis
-    volumes:
-      - speech-models:/app/models
-
-  postgres:
-    container_name: postgres
-    image: postgres:13
+      - vocabulary-service
+      - authorization-module
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123
-      POSTGRES_DB: auth-module
-    ports:
-      - "5454:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      APP_UID: "0"
+      ASPNETCORE_URLS: "http://0.0.0.0:5206"
+      AggregatorService__VocabularyServiceBaseUrl: "http://vocabulary-service:5117"
+      AggregatorService__AuthorizationModuleBaseUrl: "http://authorization-module:5027"
+      DOTNET_RUNNING_IN_CONTAINER: "true"
 
-  postgres_pv:
-    container_name: postgres_pv
-    image: postgres:13
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123
-      POSTGRES_DB: personal-vocabulary
-    ports:
-      - "5455:5432"
-    volumes:
-      - postgres-pv-data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    container_name: redis
-    image: redis:7
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres_content:
-    container_name: postgres_content
-    image: postgres:13
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123
-      POSTGRES_DB: content_service
-    ports:
-      - "5456:5432"
-    volumes:
-      - postgres-content-data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  elasticsearch:
-    container_name: elasticsearch
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  postgres_media:
-    container_name: postgres_media
-    image: postgres:13
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123
-      POSTGRES_DB: media_service
-    ports:
-      - "5457:5432"
-    volumes:
-      - postgres-media-data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  minio:
-    container_name: minio
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # Web Console
-    volumes:
-      - minio-data:/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD", "mc", "ready", "local" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  faster-whisper-api:
-    container_name: faster-whisper-api
-    image: fedirz/faster-whisper-server:latest-cpu
-    ports:
-      - "9002:8000"
-    environment:
-      WHISPER_MODEL: base
-    volumes:
-      - whisper-models:/root/.cache
-    networks:
-      - backend
-
-  piper-tts:
-    container_name: piper-tts
-    image: rhasspy/piper:latest
-    ports:
-      - "9003:10200"
-    volumes:
-      - piper-voices:/voices
-    networks:
-      - backend
-    command: [ "--port", "10200" ]
-
-  timescaledb:
-    container_name: timescaledb
-    image: timescale/timescaledb:latest-pg16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123
-      POSTGRES_DB: analytics_service
-    ports:
-      - "5433:5432"
-    volumes:
-      - timescaledb-data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Social Service
-  social-service:
+  polyraspad-frontend:
+    container_name: polyraspad-frontend
     build:
-      context: ./social-service
+      context: ./polyraspad-frontend
       dockerfile: Dockerfile
-    container_name: social-service
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
     ports:
-      - "5005:80"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres_social;Port=5432;Database=social;Username=postgres;Password=postgres
-      - ConnectionStrings__Redis=redis_social:6379
-      - Jwt__SecretKey=your-secret-key-min-32-characters-long-for-production
-      - Jwt__Issuer=LineByLine
-      - Jwt__Audience=LineByLine
+      - "3000:3000"
+    networks:
+      - backend
     depends_on:
-      - postgres_social
-      - redis_social
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:80/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Social Service - PostgreSQL
-  postgres_social:
-    image: postgres:16-alpine
-    container_name: postgres_social
-    ports:
-      - "5439:5432"
+      - aggregator-service
     environment:
-      POSTGRES_DB: social
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - postgres-social-data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Social Service - Redis
-  redis_social:
-    image: redis:7-alpine
-    container_name: redis_social
-    ports:
-      - "6385:6379"
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Notification Service
-  notification-service:
-    build:
-      context: ./notification-service
-      dockerfile: Dockerfile
-    container_name: notification-service
-    ports:
-      - "5006:80"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=postgres_notification;Port=5432;Database=notification;Username=postgres;Password=postgres
-      - ConnectionStrings__Redis=redis_notification:6379
-      - Jwt__SecretKey=your-secret-key-min-32-characters-long-for-production
-      - Jwt__Issuer=LineByLine
-      - Jwt__Audience=LineByLine
-    depends_on:
-      - postgres_notification
-      - redis_notification
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:80/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Notification Service - PostgreSQL
-  postgres_notification:
-    image: postgres:16-alpine
-    container_name: postgres_notification
-    ports:
-      - "5440:5432"
-    environment:
-      POSTGRES_DB: notification
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - postgres-notification-data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Notification Service - Redis
-  redis_notification:
-    image: redis:7-alpine
-    container_name: redis_notification
-    ports:
-      - "6386:6379"
-    networks:
-      - backend
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      NODE_ENV: production
 
 networks:
   backend:
-
+    driver: bridge
 
 volumes:
   postgres-data:
-  postgres-pv-data:
-  postgres-content-data:
-  postgres-media-data:
-  postgres-social-data:
-  postgres-notification-data:
-  timescaledb-data:
-  redis-data:
-  elasticsearch-data:
-  minio-data:
-  whisper-models:
-  piper-voices:
-  speech-models:
