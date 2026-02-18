@@ -149,6 +149,7 @@ services:
       NODE_ENV: production
       API_SERVER_ADDRESS: "http://85.175.218.17:8090"
 
+  # FSRS gRPC service (inclusive submodule)
   inclusive:
     container_name: inclusive
     build:

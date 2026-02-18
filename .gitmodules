@@ -13,3 +13,7 @@
 [submodule "polyraspad-frontend"]
 	path = polyraspad-frontend
 	url = https://github.com/Kamil-Zuki/polyraspad-frontend.git
+[submodule "inclusive"]
+	path = inclusive
+	url = https://github.com/Kamil-Zuki/inclusive.git
+	branch = master
