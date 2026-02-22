@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
@@ -33,7 +34,7 @@ public class CardServiceMediaTests
 
         await using (var actContext = CreateContext(dbName))
         {
-            var sut = new CardService(actContext, NullLogger<CardService>.Instance);
+            var sut = new CardService(actContext, new MockMediaStorage(), NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
             {
@@ -76,7 +77,7 @@ public class CardServiceMediaTests
         Guid createdCardId;
         await using (var actContext = CreateContext(dbName))
         {
-            var sut = new CardService(actContext, NullLogger<CardService>.Instance);
+            var sut = new CardService(actContext, new MockMediaStorage(), NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
             {
@@ -121,7 +122,7 @@ public class CardServiceMediaTests
         List<Guid> createdIds;
         await using (var actContext = CreateContext(dbName))
         {
-            var sut = new CardService(actContext, NullLogger<CardService>.Instance);
+            var sut = new CardService(actContext, new MockMediaStorage(), NullLogger<CardService>.Instance);
 
             var dtos = new List<CreateCardDto>
             {
@@ -169,6 +170,54 @@ public class CardServiceMediaTests
             bananas.Media.Should().NotBeNull();
             bananas.Media!.ImageUrl.Should().BeNull();
             bananas.Media.AudioUrl.Should().Be(audioUrl2);
+        }
+    }
+
+    [Fact]
+    public async Task CaptureCardAsync_WhenScreenshotBase64Provided_ShouldUploadAndSetImageId()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var expectedImageId = Guid.NewGuid();
+
+        await using (var arrangeContext = CreateContext(dbName))
+        {
+            ArrangeProjectAndDeck(arrangeContext, userId, projectId, Guid.NewGuid());
+            await arrangeContext.SaveChangesAsync();
+        }
+
+        var screenshotBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="; // 1x1 PNG
+
+        Guid createdCardId;
+        await using (var actContext = CreateContext(dbName))
+        {
+            var mockStorage = new Mock<IMediaStorageService>();
+            mockStorage
+                .Setup(s => s.UploadImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(expectedImageId);
+
+            var sut = new CardService(actContext, mockStorage.Object, NullLogger<CardService>.Instance);
+
+            var dto = new CaptureCardDto
+            {
+                UserId = userId,
+                ProjectId = projectId,
+                Sentence = "Test sentence",
+                TargetWord = "sentence",
+                Translation = "Тест",
+                ScreenshotBase64 = screenshotBase64
+            };
+
+            var created = await sut.CaptureCardAsync(dto);
+            createdCardId = created.Id;
+        }
+
+        await using (var assertContext = CreateContext(dbName))
+        {
+            var fromDb = await assertContext.Cards.AsNoTracking().SingleAsync(c => c.Id == createdCardId);
+            fromDb.Media.Should().NotBeNull();
+            fromDb.Media!.ImageId.Should().Be(expectedImageId);
         }
     }
 
@@ -234,6 +283,18 @@ public class CardServiceMediaTests
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
+    }
+
+    private sealed class MockMediaStorage : IMediaStorageService
+    {
+        public Task<Guid> UploadImageAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Guid.NewGuid());
+        public Task<Guid> UploadAudioAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Guid.NewGuid());
+        public Task<string> GetMediaUrlAsync(Guid mediaId, string prefix, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+        public Task FillCardMediaUrlsAsync(JsonTypes.CardMedia? media, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }
 

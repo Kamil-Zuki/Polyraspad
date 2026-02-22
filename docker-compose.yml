@@ -19,6 +19,21 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    container_name: minio
+    image: minio/minio:latest
+    command: server /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    networks:
+      - backend
+
   inclusive:
     container_name: inclusive
     build:
@@ -56,12 +71,19 @@ services:
     depends_on:
       - postgres
       - inclusive
+      - minio
     environment:
       APP_UID: "0"
       ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=vocabulary_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-123}"
       Inclusive__GrpcAddress: "http://inclusive:40051"
       Inclusive__UseForFsrs: "true"
       DOTNET_RUNNING_IN_CONTAINER: "true"
+      Storage__Endpoint: "http://minio:9000"
+      Storage__Bucket: "polyraspad-media"
+      Storage__AccessKey: "${MINIO_ROOT_USER:-minioadmin}"
+      Storage__SecretKey: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+      Storage__UsePathStyle: "true"
+      Storage__PublicBaseUrl: "http://minio:9000/polyraspad-media"
 
   aggregator-service:
     container_name: aggregator-service
@@ -105,3 +127,4 @@ networks:
 
 volumes:
   postgres-data:
+  minio-data:
