@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Avoid explicit mapping for same-name fields (auto-mapped).
