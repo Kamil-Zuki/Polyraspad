@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVS - Marketplace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        app: { bg: '#0B0F15', surface: '#131927', hover: '#1C2438', border: 'rgba(255, 255, 255, 0.08)' },
+                        brand: { primary: '#8B5CF6', secondary: '#3B82F6', pink: '#EC4899', green: '#10B981', yellow: '#F59E0B' }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    boxShadow: { 'glow': '0 0 20px rgba(139, 92, 246, 0.15)' }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0B0F15; }
+        ::-webkit-scrollbar-thumb { background: #1C2438; border-radius: 3px; }
+        .glass { background: rgba(19, 25, 39, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .glass-tag { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        
+        .market-card { transition: all 0.3s ease; border: 1px solid rgba(255,255,255,0.05); }
+        .market-card:hover { transform: translateY(-4px); border-color: rgba(139, 92, 246, 0.4); box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body class="bg-app-bg text-gray-400 font-sans h-screen flex overflow-hidden">
+
+    <!-- SIDEBAR (Placeholder) -->
+    <aside class="w-[260px] bg-app-surface border-r border-app-border flex flex-col z-30">
+        <div class="h-16 flex items-center px-6 border-b border-app-border">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-primary to-brand-secondary flex items-center justify-center text-white font-bold text-lg mr-3 shadow-glow">P</div>
+            <span class="text-white font-bold text-lg">PVS.ai</span>
+        </div>
+        <div class="p-6">
+            <div class="text-xs uppercase font-bold text-brand-primary mb-2">Marketplace Active</div>
+            <div class="h-2 w-full bg-app-hover rounded mb-2"></div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 flex flex-col min-w-0 bg-app-bg relative">
+        
+        <!-- HEADER -->
+        <header class="h-20 glass border-b border-app-border flex items-center justify-between px-8 sticky top-0 z-20">
+            <div class="flex items-center gap-4 flex-1">
+                <div class="relative w-full max-w-xl">
+                    <i class="fas fa-search absolute left-4 top-3 text-gray-500"></i>
+                    <input type="text" placeholder="Search for decks, topics, or authors..." 
+                           class="w-full bg-app-bg border border-app-border rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all">
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <button class="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition">
+                    <i class="fas fa-filter"></i> Filters
+                </button>
+                <div class="h-6 w-px bg-app-border"></div>
+                <button class="bg-app-surface hover:bg-app-hover border border-app-border text-white px-4 py-2 rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-upload mr-2"></i> Sell Your Deck
+                </button>
+            </div>
+        </header>
+
+        <!-- CONTENT AREA -->
+        <div class="flex-1 flex overflow-hidden">
+            
+            <!-- LEFT: FILTERS SIDEBAR -->
+            <div class="w-64 bg-app-bg border-r border-app-border p-6 overflow-y-auto hidden lg:block">
+                
+                <div class="mb-8">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Category</h3>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" checked class="w-4 h-4 rounded border-app-border bg-app-surface text-brand-primary focus:ring-offset-app-bg">
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">Languages</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" class="w-4 h-4 rounded border-app-border bg-app-surface text-brand-primary focus:ring-offset-app-bg">
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">Medicine</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="checkbox" class="w-4 h-4 rounded border-app-border bg-app-surface text-brand-primary focus:ring-offset-app-bg">
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">Programming</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Level (CEFR)</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="px-3 py-1 bg-brand-primary/20 text-brand-primary border border-brand-primary/30 rounded-lg text-xs font-bold">A1</button>
+                        <button class="px-3 py-1 bg-app-surface text-gray-400 border border-app-border rounded-lg text-xs font-medium hover:text-white hover:border-gray-500 transition">A2</button>
+                        <button class="px-3 py-1 bg-app-surface text-gray-400 border border-app-border rounded-lg text-xs font-medium hover:text-white hover:border-gray-500 transition">B1</button>
+                        <button class="px-3 py-1 bg-app-surface text-gray-400 border border-app-border rounded-lg text-xs font-medium hover:text-white hover:border-gray-500 transition">B2</button>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Price</h3>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="radio" name="price" class="w-4 h-4 bg-app-surface border-app-border text-brand-primary focus:ring-offset-app-bg">
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">All</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer group">
+                            <input type="radio" name="price" class="w-4 h-4 bg-app-surface border-app-border text-brand-primary focus:ring-offset-app-bg">
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">Free Only</span>
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT: GRID -->
+            <main class="flex-1 overflow-y-auto p-8">
+                
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-bold text-white">Featured Courses</h2>
+                    <div class="text-xs text-gray-500">Showing 142 results</div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+
+                    <!-- Product Card 1 -->
+                    <div class="bg-app-surface rounded-xl overflow-hidden market-card group cursor-pointer relative">
+                        <!-- Cover -->
+                        <div class="h-48 relative">
+                            <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&q=80" class="w-full h-full object-cover transition duration-700 group-hover:scale-105">
+                            <div class="absolute inset-0 bg-gradient-to-t from-app-surface via-transparent to-transparent"></div>
+                            
+                            <!-- Price Tag -->
+                            <div class="absolute top-3 right-3 glass-tag px-2 py-1 rounded-lg text-white font-bold text-xs shadow-lg">
+                                $19.99
+                            </div>
+                            <!-- Verified Author Badge -->
+                            <div class="absolute top-3 left-3 bg-brand-primary text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg flex items-center gap-1">
+                                <i class="fas fa-check-circle"></i> VERIFIED
+                            </div>
+                        </div>
+
+                        <!-- Content -->
+                        <div class="p-5 pt-2 relative">
+                            <!-- Avatar Overlap -->
+                            <div class="absolute -top-6 right-4">
+                                <img src="https://i.pravatar.cc/150?u=1" class="w-10 h-10 rounded-full border-2 border-app-surface shadow-md">
+                            </div>
+
+                            <div class="flex gap-2 mb-2">
+                                <span class="text-[10px] uppercase font-bold text-brand-secondary bg-brand-secondary/10 px-2 py-0.5 rounded">Business</span>
+                                <span class="text-[10px] uppercase font-bold text-gray-400 bg-white/5 px-2 py-0.5 rounded">C1</span>
+                            </div>
+
+                            <h3 class="text-white font-bold text-lg mb-1 leading-tight group-hover:text-brand-primary transition">Advanced Business English</h3>
+                            <p class="text-xs text-gray-500 mb-4 line-clamp-2">Master negotiations and corporate vocabulary with native audio.</p>
+                            
+                            <div class="flex items-center justify-between border-t border-app-border pt-3">
+                                <div class="flex items-center gap-1 text-brand-yellow text-xs font-bold">
+                                    <i class="fas fa-star"></i> 4.9 <span class="text-gray-600 font-normal">(120)</span>
+                                </div>
+                                <div class="flex items-center gap-1 text-gray-500 text-xs">
+                                    <i class="fas fa-user-friends"></i> 2.5k
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Product Card 2 -->
+                    <div class="bg-app-surface rounded-xl overflow-hidden market-card group cursor-pointer relative">
+                        <div class="h-48 relative">
+                            <img src="https://images.unsplash.com/photo-1528164344705-47542687000d?w=600&q=80" class="w-full h-full object-cover transition duration-700 group-hover:scale-105">
+                            <div class="absolute inset-0 bg-gradient-to-t from-app-surface via-transparent to-transparent"></div>
+                            
+                            <div class="absolute top-3 right-3 bg-brand-green/20 border border-brand-green/30 text-brand-green px-2 py-1 rounded-lg font-bold text-xs shadow-lg backdrop-blur">
+                                FREE
+                            </div>
+                        </div>
+
+                        <div class="p-5 pt-2 relative">
+                            <div class="absolute -top-6 right-4">
+                                <img src="https://i.pravatar.cc/150?u=2" class="w-10 h-10 rounded-full border-2 border-app-surface shadow-md">
+                            </div>
+
+                            <div class="flex gap-2 mb-2">
+                                <span class="text-[10px] uppercase font-bold text-brand-pink bg-brand-pink/10 px-2 py-0.5 rounded">Kanji</span>
+                                <span class="text-[10px] uppercase font-bold text-gray-400 bg-white/5 px-2 py-0.5 rounded">N5</span>
+                            </div>
+
+                            <h3 class="text-white font-bold text-lg mb-1 leading-tight group-hover:text-brand-pink transition">Japanese N5 Basic</h3>
+                            <p class="text-xs text-gray-500 mb-4 line-clamp-2">Start your journey with the essential 100 Kanji. Includes stroke order.</p>
+                            
+                            <div class="flex items-center justify-between border-t border-app-border pt-3">
+                                <div class="flex items-center gap-1 text-brand-yellow text-xs font-bold">
+                                    <i class="fas fa-star"></i> 4.5 <span class="text-gray-600 font-normal">(40)</span>
+                                </div>
+                                <div class="flex items-center gap-1 text-gray-500 text-xs">
+                                    <i class="fas fa-download"></i> 10k+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Product Card 3 -->
+                    <div class="bg-app-surface rounded-xl overflow-hidden market-card group cursor-pointer relative">
+                        <div class="h-48 relative bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center">
+                            <i class="fas fa-code text-6xl text-white/10"></i>
+                            <div class="absolute inset-0 bg-gradient-to-t from-app-surface via-transparent to-transparent"></div>
+                            
+                            <div class="absolute top-3 right-3 glass-tag px-2 py-1 rounded-lg text-white font-bold text-xs shadow-lg">
+                                $5.00
+                            </div>
+                        </div>
+
+                        <div class="p-5 pt-2 relative">
+                            <div class="absolute -top-6 right-4">
+                                <img src="https://i.pravatar.cc/150?u=3" class="w-10 h-10 rounded-full border-2 border-app-surface shadow-md">
+                            </div>
+
+                            <div class="flex gap-2 mb-2">
+                                <span class="text-[10px] uppercase font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">IT / Tech</span>
+                            </div>
+
+                            <h3 class="text-white font-bold text-lg mb-1 leading-tight group-hover:text-blue-400 transition">Python for Data Science</h3>
+                            <p class="text-xs text-gray-500 mb-4 line-clamp-2">English vocabulary specifically for DS/ML engineers.</p>
+                            
+                            <div class="flex items-center justify-between border-t border-app-border pt-3">
+                                <div class="flex items-center gap-1 text-brand-yellow text-xs font-bold">
+                                    <i class="fas fa-star"></i> 5.0 <span class="text-gray-600 font-normal">(12)</span>
+                                </div>
+                                <div class="flex items-center gap-1 text-gray-500 text-xs">
+                                    <i class="fas fa-user-friends"></i> 300
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+
+        </div>
+    </div>
+</body>
+</html>
