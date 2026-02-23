@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVS.ai - Выучи язык через контекст</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        dark: {
+                            900: '#0b0f19', // Main Background
+                            800: '#111625', // Cards, Panels
+                            700: '#1c2339', // Hover
+                        },
+                        brand: {
+                            purple: '#8B5CF6',
+                            blue: '#3B82F6',
+                            pink: '#EC4899',
+                        }
+                    },
+                    animation: {
+                        'blob': 'blob 7s infinite',
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                            '100%': { transform: 'translate(0px, 0px) scale(1)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #0b0f19;
+            color: #F3F4F6;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: rgba(17, 22, 37, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .glass-panel:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 10px 40px -10px rgba(139, 92, 246, 0.15);
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
+
+        /* Gradients */
+        .text-gradient {
+            background: linear-gradient(to right, #8B5CF6, #3B82F6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            filter: brightness(1.1);
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.6);
+            transform: translateY(-1px);
+        }
+
+        /* Pricing Border Glow */
+        .pricing-pro {
+            position: relative;
+        }
+        .pricing-pro::before {
+            content: "";
+            position: absolute;
+            inset: -2px;
+            border-radius: 1.1rem;
+            background: linear-gradient(to bottom right, #8B5CF6, #EC4899, #3B82F6);
+            z-index: -1;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-brand-purple selection:text-white">
+
+    <!-- Decorative Background Blobs -->
+    <div class="fixed inset-0 w-full h-full pointer-events-none z-0 overflow-hidden">
+        <div class="absolute top-0 left-1/4 w-96 h-96 bg-brand-purple/20 rounded-full mix-blend-screen filter blur-[100px] opacity-50 animate-blob"></div>
+        <div class="absolute top-40 right-1/4 w-96 h-96 bg-brand-blue/20 rounded-full mix-blend-screen filter blur-[100px] opacity-50 animate-blob animation-delay-2000"></div>
+        <div class="absolute -bottom-32 left-1/3 w-96 h-96 bg-brand-pink/10 rounded-full mix-blend-screen filter blur-[100px] opacity-50 animate-blob animation-delay-4000"></div>
+    </div>
+
+    <!-- NAVBAR -->
+    <nav class="fixed w-full z-50 glass-panel border-b-0 border-white/10 rounded-none bg-dark-900/50">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-purple to-brand-blue flex items-center justify-center text-white font-bold shadow-[0_0_15px_rgba(139,92,246,0.4)]">P</div>
+                <span class="font-bold text-xl tracking-tight text-white">PVS.ai</span>
+            </div>
+            
+            <div class="hidden md:flex items-center gap-8 text-sm font-medium text-gray-300">
+                <a href="#features" class="hover:text-white transition">Методика</a>
+                <a href="#marketplace" class="hover:text-white transition">Библиотека</a>
+                <a href="#creators" class="hover:text-white transition">Для авторов</a>
+                <a href="#pricing" class="hover:text-white transition">Тарифы</a>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <a href="#" class="text-sm font-medium text-gray-300 hover:text-white hidden md:block">Войти</a>
+                <a href="#" class="btn-primary text-white px-5 py-2.5 rounded-lg text-sm font-bold">Начать бесплатно</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="relative z-10 pt-40 pb-20 px-6 text-center">
+        <div class="max-w-4xl mx-auto">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-purple/30 bg-brand-purple/10 text-brand-purple text-xs font-bold uppercase tracking-wider mb-6">
+                <i class="fas fa-bolt"></i> FSRS Algorithm + AI Assistant внутри
+            </div>
+            
+            <h1 class="text-5xl md:text-7xl font-extrabold text-white leading-tight mb-6 tracking-tight">
+                Перестаньте зубрить слова. <br />
+                <span class="text-gradient">Начните понимать язык.</span>
+            </h1>
+            
+            <p class="text-lg md:text-xl text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+                PVS.ai — платформа нового поколения. Мы объединили изучение через контекст (Sentence Mining), научный алгоритм памяти и ИИ, чтобы вы заговорили свободно.
+            </p>
+            
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <a href="#" class="btn-primary w-full sm:w-auto text-white px-8 py-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2">
+                    Создать аккаунт <i class="fas fa-arrow-right text-sm"></i>
+                </a>
+                <a href="#" class="w-full sm:w-auto px-8 py-4 rounded-xl text-lg font-bold text-white glass-panel hover:bg-white/10 transition flex items-center justify-center gap-2">
+                    <i class="fas fa-play-circle text-brand-purple"></i> Смотреть демо
+                </a>
+            </div>
+            
+            <p class="mt-6 text-sm text-gray-500">
+                <span class="text-yellow-400"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star-half-alt"></i></span>
+                4.9/5 • Присоединяйтесь к 10,000+ полиглотам
+            </p>
+        </div>
+
+        <!-- Dashboard Mockup Placeholder -->
+        <div class="max-w-5xl mx-auto mt-20 relative">
+            <div class="absolute inset-0 bg-gradient-to-t from-dark-900 via-transparent to-transparent z-10"></div>
+            <img src="https://images.unsplash.com/photo-1618761714954-0b8cd0026356?q=80&w=2070&auto=format&fit=crop" alt="App Interface" class="rounded-2xl border border-white/10 shadow-2xl opacity-60">
+        </div>
+    </section>
+
+    <!-- PROBLEM SECTION -->
+    <section class="relative z-10 py-24 bg-dark-800/30 border-y border-white/5">
+        <div class="max-w-4xl mx-auto px-6 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold text-white mb-6">Большинство приложений — это просто игры.</h2>
+            <p class="text-lg text-gray-400 leading-relaxed">
+                Вы тратите месяцы на сбор «алмазов» и поддержание серии, но всё ещё теряетесь в реальном разговоре. Изучение изолированных слов не работает. А профессиональные инструменты вроде Anki слишком сложны в настройке.
+            </p>
+            <p class="mt-6 text-xl font-medium text-brand-purple">
+                Мы создали инструмент для тех, кому нужен реальный результат.
+            </p>
+        </div>
+    </section>
+
+    <!-- CORE FEATURES -->
+    <section id="features" class="relative z-10 py-24 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-5xl font-bold text-white mb-4">Учите язык так, как он живет</h2>
+                <p class="text-gray-400 text-lg">Методика, основанная на лингвистике и нейробиологии.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Feature 1 -->
+                <div class="glass-panel p-8 rounded-2xl">
+                    <div class="w-14 h-14 bg-brand-purple/20 rounded-xl flex items-center justify-center text-brand-purple text-2xl mb-6 border border-brand-purple/30">
+                        <i class="fas fa-puzzle-piece"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-3">Контекст — это король</h3>
+                    <p class="text-gray-400 leading-relaxed">Не учите голое слово "Run". Учите фразу <em>"The engine failed to run"</em>. Система автоматически выделит целевое слово и создаст тест с пропусками (Cloze Deletion).</p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="glass-panel p-8 rounded-2xl">
+                    <div class="w-14 h-14 bg-brand-blue/20 rounded-xl flex items-center justify-center text-brand-blue text-2xl mb-6 border border-brand-blue/30">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-3">FSRS Алгоритм Памяти</h3>
+                    <p class="text-gray-400 leading-relaxed">Забудьте старые алгоритмы. Наш движок точно предсказывает, когда вы забудете слово, и показывает карточку ровно за день до этого. Целевое удержание — 90%.</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="glass-panel p-8 rounded-2xl">
+                    <div class="w-14 h-14 bg-brand-pink/20 rounded-xl flex items-center justify-center text-brand-pink text-2xl mb-6 border border-brand-pink/30">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-3">Личный AI-Репетитор</h3>
+                    <p class="text-gray-400 leading-relaxed">Не понимаете грамматику в предложении? Нажмите одну кнопку, и AI-ассистент мгновенно объяснит правило прямо на примере вашей карточки. Лень переводить? AI сделает это сам.</p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="glass-panel p-8 rounded-2xl">
+                    <div class="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 text-2xl mb-6 border border-green-500/30">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-3">Весь интернет — ваш учебник</h3>
+                    <p class="text-gray-400 leading-relaxed">Читаете статью или смотрите Netflix? Наше браузерное расширение Capture API позволяет создать идеальную карточку со скриншотом и контекстом в один клик.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- MARKETPLACE SECTION -->
+    <section id="marketplace" class="relative z-10 py-24 px-6 bg-dark-800/50 border-y border-white/5 overflow-hidden">
+        <div class="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-16">
+            <div class="lg:w-1/2">
+                <div class="text-brand-blue font-bold tracking-wider uppercase text-sm mb-2">Глобальная Библиотека</div>
+                <h2 class="text-3xl md:text-5xl font-bold text-white mb-6">Маркетплейс Знаний</h2>
+                <p class="text-gray-400 text-lg leading-relaxed mb-6">
+                    Зачем тратить сотни часов на создание карточек? В нашей библиотеке вас ждут тысячи готовых колод от профессиональных преподавателей и носителей языка.
+                </p>
+                <ul class="space-y-4 mb-8 text-gray-300">
+                    <li class="flex items-start gap-3"><i class="fas fa-check-circle text-brand-purple mt-1"></i> <div><strong>Smart Preview:</strong> Пройдите мини-урок перед покупкой, чтобы оценить качество аудио и перевода.</div></li>
+                    <li class="flex items-start gap-3"><i class="fas fa-check-circle text-brand-purple mt-1"></i> <div><strong>Синхронизация:</strong> Получайте исправления опечаток от авторов без потери вашего прогресса SRS.</div></li>
+                    <li class="flex items-start gap-3"><i class="fas fa-check-circle text-brand-purple mt-1"></i> <div><strong>Коллаборация:</strong> Нашли ошибку? Предложите правку (Pull Request) и станьте соавтором курса.</div></li>
+                </ul>
+                <a href="#" class="btn-primary inline-block text-white px-6 py-3 rounded-lg font-bold">Изучить Библиотеку</a>
+            </div>
+            
+            <div class="lg:w-1/2 w-full">
+                <!-- Abstract UI representation of marketplace -->
+                <div class="glass-panel p-4 rounded-2xl transform rotate-2 hover:rotate-0 transition duration-500">
+                    <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&q=80" class="rounded-xl mb-4 opacity-80" alt="Course">
+                    <div class="flex justify-between items-center px-2">
+                        <div>
+                            <div class="text-white font-bold text-lg">Business English Pro</div>
+                            <div class="text-xs text-gray-400">by Elena Teach • 4.9 ★</div>
+                        </div>
+                        <div class="bg-brand-purple/20 text-brand-purple px-3 py-1 rounded font-bold border border-brand-purple/30">$19.99</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CREATOR ECONOMY -->
+    <section id="creators" class="relative z-10 py-24 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <i class="fas fa-pen-nib text-4xl text-brand-pink mb-6"></i>
+            <h2 class="text-3xl md:text-5xl font-bold text-white mb-6">Вы преподаватель?<br/>Монетизируйте свои материалы.</h2>
+            <p class="text-xl text-gray-400 mb-10">
+                PVS.ai — это мощная платформа для авторов. Упакуйте свои знания в премиум-колоды и продавайте их тысячам пользователей.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 text-left">
+                <div class="glass-panel p-6 rounded-xl">
+                    <i class="fas fa-shield-alt text-brand-purple text-xl mb-3"></i>
+                    <h4 class="text-white font-bold mb-2">DRM Защита</h4>
+                    <p class="text-sm text-gray-400">Ваш платный контент нельзя скопировать и выложить бесплатно.</p>
+                </div>
+                <div class="glass-panel p-6 rounded-xl">
+                    <i class="fas fa-chart-line text-brand-blue text-xl mb-3"></i>
+                    <h4 class="text-white font-bold mb-2">Аналитика</h4>
+                    <p class="text-sm text-gray-400">Узнайте, на каких карточках ученики ошибаются чаще всего.</p>
+                </div>
+                <div class="glass-panel p-6 rounded-xl">
+                    <i class="fas fa-hand-holding-usd text-green-400 text-xl mb-3"></i>
+                    <h4 class="text-white font-bold mb-2">Доход</h4>
+                    <p class="text-sm text-gray-400">Зарабатывайте на своих знаниях. Справедливая комиссия площадки.</p>
+                </div>
+            </div>
+            
+            <a href="#" class="text-brand-pink font-bold hover:text-white transition border-b border-brand-pink pb-1">Узнать больше о Creator Studio &rarr;</a>
+        </div>
+    </section>
+
+    <!-- OFFLINE SECTION -->
+    <section class="relative z-10 py-16 bg-brand-purple/10 border-y border-brand-purple/20">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-center gap-6 text-center md:text-left">
+            <div class="w-16 h-16 bg-dark-900 rounded-full flex items-center justify-center text-brand-purple text-2xl border border-brand-purple/30 shrink-0">
+                <i class="fas fa-wifi"></i>
+            </div>
+            <div>
+                <h3 class="text-2xl font-bold text-white mb-2">Учитесь в метро. В самолете. Где угодно.</h3>
+                <p class="text-gray-400">Полный Офлайн-режим. Приложение сохранит каждый ваш ответ и моментально синхронизирует прогресс (Delta Sync), как только вы вернетесь в сеть.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- PRICING -->
+    <section id="pricing" class="relative z-10 py-24 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-5xl font-bold text-white mb-4">Простые тарифы</h2>
+                <p class="text-gray-400 text-lg">Начните бесплатно, улучшайте с ИИ.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                
+                <!-- Free -->
+                <div class="glass-panel p-8 rounded-2xl flex flex-col">
+                    <h3 class="text-xl font-bold text-white mb-2">Learner</h3>
+                    <div class="text-3xl font-bold text-white mb-6">Бесплатно</div>
+                    <ul class="space-y-3 mb-8 text-sm text-gray-400 flex-1">
+                        <li><i class="fas fa-check text-brand-purple mr-2"></i> Безлимитное создание карточек</li>
+                        <li><i class="fas fa-check text-brand-purple mr-2"></i> Алгоритм FSRS</li>
+                        <li><i class="fas fa-check text-brand-purple mr-2"></i> Офлайн-режим</li>
+                        <li><i class="fas fa-check text-brand-purple mr-2"></i> Доступ к бесплатным колодам</li>
+                    </ul>
+                    <button class="w-full py-3 rounded-xl border border-white/20 text-white font-bold hover:bg-white/10 transition">Выбрать</button>
+                </div>
+
+                <!-- PRO -->
+                <div class="pricing-pro p-8 rounded-2xl flex flex-col bg-dark-800 shadow-2xl shadow-purple-900/50 transform md:-translate-y-4">
+                    <div class="bg-gradient-to-r from-brand-purple to-brand-pink text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full absolute -top-3 left-1/2 -translate-x-1/2">
+                        Самый популярный
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Pro</h3>
+                    <div class="text-4xl font-bold text-white mb-1">$8 <span class="text-sm text-gray-400 font-normal">/ мес</span></div>
+                    <p class="text-xs text-gray-400 mb-6">Для серьезного погружения</p>
+                    <ul class="space-y-3 mb-8 text-sm text-gray-300 flex-1">
+                        <li><i class="fas fa-check text-brand-pink mr-2"></i> <strong>Всё из Free</strong></li>
+                        <li><i class="fas fa-check text-brand-pink mr-2"></i> Безлимитный AI-ассистент</li>
+                        <li><i class="fas fa-check text-brand-pink mr-2"></i> Генерация Neural TTS Audio</li>
+                        <li><i class="fas fa-check text-brand-pink mr-2"></i> Продвинутая статистика (Heatmaps)</li>
+                    </ul>
+                    <button class="w-full btn-primary py-3 rounded-xl text-white font-bold">Попробовать 7 дней</button>
+                </div>
+
+                <!-- Creator -->
+                <div class="glass-panel p-8 rounded-2xl flex flex-col">
+                    <h3 class="text-xl font-bold text-white mb-2">Creator</h3>
+                    <div class="text-3xl font-bold text-white mb-6">% с продаж</div>
+                    <ul class="space-y-3 mb-8 text-sm text-gray-400 flex-1">
+                        <li><i class="fas fa-check text-brand-blue mr-2"></i> Доступ к Creator Studio</li>
+                        <li><i class="fas fa-check text-brand-blue mr-2"></i> Публикация платных курсов</li>
+                        <li><i class="fas fa-check text-brand-blue mr-2"></i> Защита контента (DRM)</li>
+                        <li><i class="fas fa-check text-brand-blue mr-2"></i> Аналитика вовлеченности</li>
+                    </ul>
+                    <button class="w-full py-3 rounded-xl border border-white/20 text-white font-bold hover:bg-white/10 transition">Открыть студию</button>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <section class="relative z-10 py-24 px-6">
+        <div class="max-w-4xl mx-auto bg-gradient-to-br from-brand-purple to-indigo-900 rounded-3xl p-12 text-center shadow-2xl shadow-brand-purple/20 border border-white/10">
+            <h2 class="text-3xl md:text-5xl font-bold text-white mb-4">Готовы сделать свою память абсолютной?</h2>
+            <p class="text-indigo-200 text-lg mb-8 max-w-2xl mx-auto">Создайте аккаунт за 1 минуту и импортируйте свои карточки из Anki или Quizlet в пару кликов.</p>
+            
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-md mx-auto">
+                <input type="email" placeholder="Ваш Email" class="w-full bg-black/30 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-indigo-300 focus:outline-none focus:border-white">
+                <button class="w-full sm:w-auto bg-white text-brand-purple font-bold px-6 py-3 rounded-xl hover:bg-gray-100 transition whitespace-nowrap">
+                    Создать аккаунт
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-white/5 bg-dark-900 pt-16 pb-8 px-6 text-sm text-gray-500">
+        <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 rounded bg-brand-purple flex items-center justify-center text-white font-bold text-xs">P</div>
+                    <span class="font-bold text-white">PVS.ai</span>
+                </div>
+                <p class="mb-4">Платформа нового поколения для изучения языков.</p>
+                <div class="flex gap-4">
+                    <a href="#" class="hover:text-white transition"><i class="fab fa-twitter text-lg"></i></a>
+                    <a href="#" class="hover:text-white transition"><i class="fab fa-discord text-lg"></i></a>
+                    <a href="#" class="hover:text-white transition"><i class="fab fa-github text-lg"></i></a>
+                </div>
+            </div>
+            
+            <div>
+                <h4 class="text-white font-bold mb-4 uppercase tracking-wider text-xs">Продукт</h4>
+                <ul class="space-y-2">
+                    <li><a href="#" class="hover:text-brand-purple transition">Особенности</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">Маркетплейс</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">Для преподавателей</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">Скачать расширение</a></li>
+                </ul>
+            </div>
+            
+            <div>
+                <h4 class="text-white font-bold mb-4 uppercase tracking-wider text-xs">Ресурсы</h4>
+                <ul class="space-y-2">
+                    <li><a href="#" class="hover:text-brand-purple transition">Блог</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">База знаний</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">Миграция с Anki</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">Алгоритм FSRS</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="text-white font-bold mb-4 uppercase tracking-wider text-xs">Правовое</h4>
+                <ul class="space-y-2">
+                    <li><a href="#" class="hover:text-brand-purple transition">Privacy Policy</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">Terms of Service</a></li>
+                    <li><a href="#" class="hover:text-brand-purple transition">Cookie Policy</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="max-w-7xl mx-auto border-t border-white/5 pt-8 text-center">
+            &copy; 2026 PVS.ai. All rights reserved.
+        </div>
+    </footer>
+
+</body>
+</html>
