@@ -1,0 +1,13 @@
+---
+description: Frontend — React/Next.js patterns, types, IA routes
+globs: polyraspad-frontend/**/*.ts, polyraspad-frontend/**/*.tsx
+alwaysApply: false
+---
+
+# Frontend (React / Next.js)
+
+- **Components:** Use function components. Extract reusable logic into custom hooks.
+- **API types:** Keep shared API/DTO types in one place (e.g. `lib/api/types.ts`). Align with `Docs/DTO Description.md` for field names and shapes.
+- **Routes and IA:** Follow the sitemap in `Docs/Информационную Архитектуру (IA).md`: Launcher (`/projects`, `/profile`), Workspace with Sidebar — Learning (`/dashboard`, `/library`, `/browser`), Studio (`/editor`, `/reader`, `/import`), Community (`/marketplace`, `/marketplace/product/:id`), Focus (`/study`). Use these paths when adding or changing pages and navigation.
+
+Stack: Next.js 16, React 19, TypeScript, Tailwind, TanStack Query. Prefer existing UI patterns and design tokens.

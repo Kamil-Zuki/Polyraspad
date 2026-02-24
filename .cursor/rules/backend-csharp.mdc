@@ -1,0 +1,14 @@
+---
+description: C# backend conventions — .NET 10, naming, gRPC
+globs: AggregatorService/**/*.cs, VocabularyService/**/*.cs, authorization-module/**/*.cs
+alwaysApply: false
+---
+
+# Backend C#
+
+- **Target:** .NET 10. Keep nullable reference types enabled (`Nullable` in .csproj).
+- **Naming:** PascalCase for types, methods, and public members; camelCase for parameters and local variables.
+- **Mapping:** Do not add explicit mapping for properties with the same name; they are auto-mapped (see project rule explicit-mapping).
+- **gRPC:** Service contracts live in `Protos/*.proto`. For method names, errors, and message shapes, follow `Docs/Описание gRPC.md`. BFF uses Grpc.Net.Client to call VocabularyService and authorization-module.
+
+Example: prefer letting AutoMapper/convention handle same-name fields instead of `CreateMap<A, B>().ForMember(d => d.X, o => o.MapFrom(s => s.X))`.
