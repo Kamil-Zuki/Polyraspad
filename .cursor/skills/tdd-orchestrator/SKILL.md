@@ -1,19 +1,15 @@
 ---
 name: tdd-orchestrator
-description: Orchestrates full TDD workflow across feature work, bugfixes, test design, test doubles, and refactoring. Use when the user asks to implement via TDD, Detroit TDD, regression-first TDD, or wants step-by-step red-green-refactor execution.
+description: Routes and enforces TDD-specific execution across feature work, bugfixes, test design, test doubles, and refactoring. Use when the user asks to implement via TDD, Detroit TDD, regression-first TDD, or wants explicit red-green-refactor execution.
 ---
 
 # TDD Orchestrator
 
 ## When to use
 
-Use when the user wants:
+Use when the user wants explicit TDD execution: Detroit TDD, regression-first TDD, or step-by-step red-green-refactor.
 
-- TDD
-- Detroit TDD
-- red-green-refactor
-- regression-first bug fixing
-- step-by-step test-driven implementation
+If the user wants full autonomous delivery until completion, pair this skill with `autonomous-development`.
 
 ## Routing
 
@@ -24,18 +20,14 @@ Use when the user wants:
 - **Code is green and needs cleanup** -> use `refactor-on-green`
 - **Ambiguous task** -> first determine whether expected behavior is new or previously broken
 
-## Execution flow
+## TDD flow
 
 1. Classify task: feature or bugfix.
-   If unclear, ask whether the behavior existed and is now broken, or is being introduced now.
 2. Define the next observable behavior.
 3. Design the smallest useful failing test.
-4. Decide collaborator strategy at boundaries.
-5. Make the test fail for the right reason.
-6. Implement the smallest green change.
-7. Re-run relevant tests.
-8. Refactor only on green.
-9. Repeat until behavior is complete.
+4. Decide boundary strategy and test doubles only as needed.
+5. Drive `Red -> Green -> Refactor`.
+6. Repeat in small cycles until the requested behavior is complete.
 
 ## Output expectations
 
@@ -51,3 +43,4 @@ While working, explain the current TDD stage clearly:
 - Never start with broad implementation when one failing test would do.
 - Never refactor while tests are red.
 - Prefer several tiny TDD cycles over one large cycle.
+- Ask for clarification if feature-vs-bugfix classification changes the approach.
