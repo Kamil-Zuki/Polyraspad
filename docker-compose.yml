@@ -34,6 +34,25 @@ services:
     networks:
       - backend
 
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 3;
+      /usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb myminio/polyraspad-media 2>/dev/null || true;
+      /usr/bin/mc anonymous set download myminio/polyraspad-media;
+      echo 'Bucket polyraspad-media is now public for read';
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    networks:
+      - backend
+
   inclusive:
     container_name: inclusive
     build:
@@ -72,6 +91,7 @@ services:
       - postgres
       - inclusive
       - minio
+      - minio-init
     environment:
       APP_UID: "0"
       ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=vocabulary_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-123}"
@@ -83,7 +103,8 @@ services:
       Storage__AccessKey: "${MINIO_ROOT_USER:-minioadmin}"
       Storage__SecretKey: "${MINIO_ROOT_PASSWORD:-minioadmin}"
       Storage__UsePathStyle: "true"
-      Storage__PublicBaseUrl: "http://minio:9000/polyraspad-media"
+      Storage__PublicBaseUrl: "http://localhost:9000/polyraspad-media"
+      Storage__ServerFetchBaseUrl: "http://minio:9000/polyraspad-media"
 
   aggregator-service:
     container_name: aggregator-service
