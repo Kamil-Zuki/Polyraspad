@@ -1,0 +1,41 @@
+---
+description: Detroit TDD workflow for behavior-first development
+alwaysApply: true
+---
+
+# Detroit TDD (Classicist) Rule
+
+Use Detroit TDD for new features and bug fixes.
+
+## Core Loop
+
+1. **Red**: write a failing test for observable behavior.
+2. **Green**: implement the smallest change to pass.
+3. **Refactor**: improve design without changing behavior.
+
+## What To Test
+
+- Test through public API/use-case boundaries (controller/service/hook), not private methods.
+- Prefer state/output assertions over interaction-only checks.
+- Cover happy path, edge cases, and one meaningful failure path.
+- For bugs: first add a regression test that fails on current behavior.
+
+## Test Design
+
+- Keep tests deterministic: no real time/network/randomness without control.
+- Use real domain objects when cheap; mock only external boundaries (DB, HTTP, queue, file system).
+- Avoid over-mocking internal collaborators just to mirror implementation.
+- Name tests by behavior: `should_<outcome>_when_<condition>`.
+
+## Implementation Constraints
+
+- Do not write production code before a failing test exists.
+- Do not broaden scope while green; ship minimal passing change.
+- Refactor only with green test suite.
+- Keep tests fast and isolated so they can run continuously.
+
+## Done Criteria
+
+- New/changed behavior is covered by tests.
+- All related tests pass locally.
+- Refactor step completed (remove duplication, clarify names, simplify flow).

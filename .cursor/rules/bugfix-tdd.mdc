@@ -1,0 +1,37 @@
+---
+description: Bug fixing workflow via regression-first TDD
+alwaysApply: true
+---
+
+# Bugfix TDD Rule
+
+For every bug fix, use a regression-first TDD flow.
+
+## Mandatory Sequence
+
+1. Reproduce the bug with an automated test.
+2. Confirm the test fails for the current behavior.
+3. Implement the smallest fix to make the test pass.
+4. Run related suite to ensure no regressions.
+5. Refactor safely with all tests green.
+
+## Regression Test Requirements
+
+- The test must capture user-visible incorrect behavior.
+- Name tests by defect scenario: `should_<expected>_when_<bug_condition>`.
+- Include at least one nearby edge case if the bug is boundary-related.
+- Do not delete the regression test after fixing the bug.
+
+## Fix Scope Rules
+
+- Fix the root cause, not only symptoms.
+- Keep changes minimal and focused on the defect scope.
+- Avoid broad refactors before the bug is green.
+- If behavior changes intentionally, update tests to match new contract.
+
+## Verification Checklist
+
+- Regression test is red before fix and green after fix.
+- Existing related tests remain green.
+- No new warnings/errors introduced by the fix.
+- Commit message should mention bug scenario and protected behavior.
