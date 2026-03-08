@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Stages changes, writes conventional commit messages, and pushes. Handles monorepo with polyraspad-frontend submodule. Use when the user asks to commit, push, make a commit, or save changes to git.
+description: Stages changes, writes conventional commit messages, commits and pushes in the correct repository, including child repositories and git submodules, then updates parent repo references. Use when the user asks to commit, push, make a commit, or save changes to git.
 ---
 
 # Commit and Push
@@ -41,33 +41,48 @@ Keep the first line under ~72 characters. Add a blank line and body only when ex
 ### 1. See what changed
 
 - **Root repo:** `git status` (and `git diff --name-only` if needed).
-- If `polyraspad-frontend` appears as modified, it is a **submodule**; changes live inside it.
+- If a directory appears as modified but file changes are not visible in the root repo, it is likely a **child repo/submodule**; inspect it from inside that directory.
 
 ### 2. Where to commit
 
-- **Only frontend files changed** (e.g. under `polyraspad-frontend/src/`):  
-  Run all git commands from `polyraspad-frontend/`. Then update the parent repo’s submodule reference (step 4).
+- **Only child repo/submodule files changed** (e.g. under `polyraspad-frontend/`):  
+  Run git commands from that child repo first. Then update the parent repo’s submodule reference (step 4).
 - **Only root files changed** (e.g. `AggregatorService/`, `Docs/`, `.cursor/`):  
   Run git commands from the repo root.
-- **Both:** Commit in submodule first, then in root (stage submodule, commit, push both).
+- **Both root and child repos changed:** Commit and push in each child repo first, then commit and push in root.
 
-### 3. Stage, commit, push (in the repo that has the changes)
+### 3. Stage, commit, push (inside each repo that has direct file changes)
 
 - Stage the files that belong to the commit (avoid build artifacts: `bin/`, `obj/`, `.next/`, `node_modules/`).
 - Commit with a message following the format above.
 - Push (e.g. `git push`). Use `git_write` and `network` permissions when running git commands.
 
-### 4. If you committed in polyraspad-frontend
+### 4. If you committed in one or more child repos/submodules
 
-- From **repo root**: `git add polyraspad-frontend` then `git commit -m "chore: update polyraspad-frontend (<short reason>)"` and `git push`.
+- From **repo root**: stage each updated child repo path, commit the updated submodule references, then push root.
+- Example:
+  - `git add polyraspad-frontend`
+  - `git commit -m "chore: update polyraspad-frontend (<short reason>)"`
+  - `git push`
+- If several child repos changed, stage all of them in the same root commit when they belong to one logical change.
+
+### 5. Order of operations
+
+1. Commit child repo A.
+2. Push child repo A.
+3. Commit child repo B.
+4. Push child repo B.
+5. Commit root repo with updated child repo references.
+6. Push root repo.
 
 ## Shell notes
 
 - **PowerShell:** Use `;` to chain commands, not `&&`.
-- **Paths:** Prefer the workspace root or `polyraspad-frontend` as the working directory for git; use absolute or repo-relative paths as appropriate.
+- **Paths:** Prefer the workspace root or the relevant child repo as the working directory for git; use absolute or repo-relative paths as appropriate.
 
 ## Checklist
 
 - [ ] Commit message follows conventional format (type + optional scope + description).
 - [ ] Only intended source/config files staged (no bin, obj, .next, node_modules).
-- [ ] If frontend was committed, parent repo’s submodule reference updated and pushed.
+- [ ] Every changed child repo/submodule was committed and pushed before the root repo.
+- [ ] Parent repo references to child repos/submodules were updated and pushed.
