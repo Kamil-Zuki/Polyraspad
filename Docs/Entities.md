@@ -506,29 +506,33 @@ CREATE INDEX idx_sessions_heatmap ON internal.study_sessions (user_id, project_i
 3.  Оптимизации алгоритма FSRS (анализ истории для подстройки весов).
 
   -------------------------------------------------------------------------------------
-  Колонка              Тип           Описание
-  -------------------- ------------- --------------------------------------------------
-  id                   uuid          **PK**.
+  Колонка                  Тип           Описание
+  ------------------------ ------------- --------------------------------------------------
+  id                       uuid          **PK**.
 
-  user_id              uuid          Кто.
+  user_id                  uuid          Кто.
 
-  card_id              uuid          Какую карточку.
+  card_id                  uuid          Какую карточку.
 
-  session_id           uuid          В рамках какой сессии.
+  session_id               uuid          В рамках какой сессии.
 
-  rating               int2          Оценка: 1 (Again), 2 (Hard), 3 (Good), 4 (Easy).
+  rating                   int2          Оценка: 1 (Again), 2 (Hard), 3 (Good), 4 (Easy).
 
-  state_before         int2          Состояние FSRS до ответа.
+  state_before             int2          Состояние FSRS до ответа.
 
-  state_after          int2          Состояние FSRS после ответа.
+  state_after              int2          Состояние FSRS после ответа.
 
-  due_before           timestamptz   Срок до.
+  due_before               timestamptz   Срок до.
 
-  due_after            timestamptz   Срок после.
+  due_after                timestamptz   Срок после.
 
-  review_duration_ms   int4          Время раздумий (в мс).
+  review_duration_ms       int4          Время раздумий (в мс).
 
-  created_at           timestamptz   Время события.
+  user_answer              text          Опциональный текстовый ответ пользователя (для валидации).
+
+  answer_validation_result jsonb         Результат проверки ответа (JSON, если user_answer был передан).
+
+  created_at               timestamptz   Время события.
   -------------------------------------------------------------------------------------
 
 **DDL:**
@@ -560,6 +564,10 @@ due_before timestamptz NOT NULL,
 due_after timestamptz NOT NULL,
 
 review_duration_ms int4 NOT NULL,
+
+user_answer text,
+
+answer_validation_result jsonb,
 
 created_at timestamptz NOT NULL DEFAULT now(),
 
