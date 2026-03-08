@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Bugfix TDD Rule
 
-For every bug fix, use a regression-first TDD flow.
+For every bug fix, use a regression-first TDD flow on top of the general Detroit TDD rule.
 
 ## Mandatory Sequence
 
@@ -21,6 +21,7 @@ For every bug fix, use a regression-first TDD flow.
 - Name tests by defect scenario: `should_<expected>_when_<bug_condition>`.
 - Include at least one nearby edge case if the bug is boundary-related.
 - Do not delete the regression test after fixing the bug.
+- Reproduce the bug at the highest useful public boundary first.
 
 ## Fix Scope Rules
 

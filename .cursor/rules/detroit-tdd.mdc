@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Detroit TDD (Classicist) Rule
 
-Use Detroit TDD for new features and bug fixes.
+Use Detroit TDD by default for new behavior. For defects, follow the separate bugfix TDD rule on top of this one.
 
 ## Core Loop
 
@@ -13,14 +13,18 @@ Use Detroit TDD for new features and bug fixes.
 2. **Green**: implement the smallest change to pass.
 3. **Refactor**: improve design without changing behavior.
 
-## What To Test
+## Scope
 
-- Test through public API/use-case boundaries (controller/service/hook), not private methods.
+- Prefer one small red-green-refactor cycle at a time.
+- Drive behavior through a public boundary: controller, service, hook, use case, or component behavior.
+- Do not test private methods directly.
+
+## Assertions
+
 - Prefer state/output assertions over interaction-only checks.
-- Cover happy path, edge cases, and one meaningful failure path.
-- For bugs: first add a regression test that fails on current behavior.
+- Start with the smallest happy path, then add edge cases only when needed.
 
-## Test Design
+## Test Quality
 
 - Keep tests deterministic: no real time/network/randomness without control.
 - Use real domain objects when cheap; mock only external boundaries (DB, HTTP, queue, file system).
