@@ -75,6 +75,14 @@ Keep the first line under ~72 characters. Add a blank line and body only when ex
 5. Commit root repo with updated child repo references.
 6. Push root repo.
 
+### 6. Multi-repo requirement
+
+- If changes exist in multiple child repos, do not collapse them into a root-only commit.
+- Create a real commit in each changed child repo first.
+- Then create one root commit that records the updated child repo references.
+- If the user asked to push, push child repos first, then push root last.
+- When reporting completion, list the commit SHA for each child repo and the root repo.
+
 ## Shell notes
 
 - **PowerShell:** Use `;` to chain commands, not `&&`.
