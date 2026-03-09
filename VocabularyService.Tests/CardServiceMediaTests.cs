@@ -289,11 +289,17 @@ public class CardServiceMediaTests
     {
         public Task<Guid> UploadImageAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
             Task.FromResult(Guid.NewGuid());
+
         public Task<Guid> UploadAudioAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
             Task.FromResult(Guid.NewGuid());
+
         public Task<string> GetMediaUrlAsync(Guid mediaId, string prefix, CancellationToken cancellationToken = default) =>
             Task.FromResult(string.Empty);
-        public Task FillCardMediaUrlsAsync(JsonTypes.CardMedia? media, CancellationToken cancellationToken = default) =>
+
+        public Task<string> GetMediaUrlForServerFetchAsync(Guid mediaId, string prefix, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
+        public Task FillCardMediaUrlsAsync(CardMedia? media, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }
 }
