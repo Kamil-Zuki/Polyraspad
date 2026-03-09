@@ -1,4 +1,8 @@
 .vs
 
+# .NET build output (e.g. AggregatorService.Tests)
+**/bin/
+**/obj/
+
 # Temporary TDD task files (created by detroit-tdd-orchestrator, deleted when done)
 .cursor/tasks/
