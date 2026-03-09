@@ -1,32 +1,42 @@
 ---
 name: regression-tdd-bugfix
-description: Fixes bugs with regression-first TDD. Use when the user reports a bug, failing scenario, edge-case defect, or asks for a safe bug fix.
+description: Defines the regression-first TDD policy for defects and broken behavior. Use when triage classifies the next increment as a bug, regression, production issue, or incorrect edge case.
 ---
 
-# Regression-First Bugfix TDD
+# Regression-First Bugfix Playbook
 
 ## When to use
 
-Use for defects, regressions, production issues, and incorrect edge-case behavior.
+Use only when `tdd-triage` classifies the next increment as previously broken behavior.
 
-## Workflow
+## Entry
 
-1. Reproduce the bug at the highest useful public boundary.
-2. Add a regression test that fails on current behavior.
-3. Narrow the failure to the root cause if needed.
-4. Implement the smallest fix.
-5. Re-run the regression and nearby tests.
-6. Refactor only after the suite is green.
+Enter from `tdd-triage` with:
 
-## Rules
+- the broken scenario
+- the expected behavior
+- the highest useful reproduction boundary
 
+## Policy
+
+- Reproduce the bug at the highest useful public boundary.
 - Keep the regression test permanently.
 - Fix the root cause, not only the visible symptom.
-- If the bug is a boundary issue, add one adjacent edge-case test too.
-- Do not mix large refactors into the fix commit.
-- If reproduction is ambiguous, first clarify the expected behavior.
+- If the bug is boundary-related, add one adjacent edge-case scenario when needed.
+- Keep the increment narrow and avoid broad refactors before green.
 
-## Good outcomes
+## Output
 
-- The original bug becomes impossible to reintroduce silently.
-- The test name describes the broken scenario and expected behavior.
+Produce a concise bugfix policy handoff for the next stage:
+
+- what scenario is broken
+- what correct behavior must be protected
+- what boundary should reproduce it
+
+Then route to `tdd-test-strategy`.
+
+## Guardrails
+
+- Do not implement the fix before `tdd-red` proves the regression is red.
+- Do not delete or weaken the regression test after the fix.
+- If reproduction is ambiguous, clarify expected behavior before proceeding.

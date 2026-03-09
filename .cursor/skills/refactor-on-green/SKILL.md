@@ -1,13 +1,16 @@
 ---
 name: refactor-on-green
-description: Performs safe refactoring after tests are green in a TDD workflow. Use when simplifying design, removing duplication, or cleaning code without changing behavior.
+description: Performs safe refactoring after the current TDD increment is green. Use when duplication, naming, or structure should be improved without changing behavior, then hand control back to validation.
 ---
 
 # Refactor on Green
 
 ## Entry condition
 
-Only use this skill when the relevant tests are already green.
+Enter only after the current red test is green.
+
+Typical entry point:
+- from `tdd-green`
 
 ## Refactoring priorities
 
@@ -19,9 +22,19 @@ Only use this skill when the relevant tests are already green.
 ## Rules
 
 - Do not change behavior during refactor.
-- Re-run tests after every meaningful refactor step.
+- Re-run the narrowest useful tests after each meaningful refactor step.
 - Prefer several tiny refactors over one large rewrite.
-- If a refactor changes behavior, stop and go back to TDD red-green.
+- If a refactor changes behavior, stop and go back to `tdd-red` or `tdd-green` through the orchestrator.
+
+## Output
+
+Produce a brief handoff with:
+
+- what was simplified
+- what tests remained green
+- any residual cleanup intentionally deferred
+
+Then route to `tdd-validation`.
 
 ## Exit condition
 

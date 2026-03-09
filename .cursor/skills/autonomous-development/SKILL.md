@@ -1,44 +1,63 @@
 ---
 name: autonomous-development
-description: Executes full-cycle autonomous development with iterative plan, implementation, validation, fixes, and final verification. Use when the user wants the agent to keep going until the task is fully done, especially for end-to-end delivery, autonomous execution, or "don't stop until it works" requests.
+description: Coordinates autonomous delivery loops with sequencing, validation gates, retries, escalation, and verified stop conditions. Use when the user wants the agent to keep going until done, especially for autonomous Detroit TDD or end-to-end verified delivery.
 ---
 
 # Autonomous Development
 
 ## When to use
 
-Use when the user wants the agent to keep going until the task is fully done: implement, validate, fix, repeat, and stop only at a verified outcome.
+Use when the user wants autonomous execution until the task is fully implemented and verified.
 
-## Core loop
+Canonical launch phrase:
+`Run autonomous Detroit TDD for <task>. Keep going until verified.`
 
-1. Define goal, scope, and done criteria.
-2. Break work into the smallest meaningful next step.
-3. Execute that step.
-4. Validate immediately with the narrowest useful check.
-5. Fix the next discovered problem before continuing.
+## Responsibility
+
+This skill owns the outer loop only:
+
+- define scope, constraints, and done criteria
+- keep work moving in small validated increments
+- require explicit validation before progress or completion
+- route failures into the next bounded task
+- stop only at a verified outcome
+
+Do not use this skill as the detailed TDD stage playbook. Route that work to `tdd-orchestrator`.
+
+## Outer loop
+
+1. Define goal, scope, constraints, and done criteria.
+2. Route the current increment to `tdd-orchestrator`.
+3. Require a validation result before advancing scope.
+4. If validation fails, route to `tdd-failure-recovery`.
+5. If broader proof is needed, route to `tdd-integration-verifier` or `tdd-docs-contract-check`.
 6. Repeat until done criteria are satisfied.
 
-## Validation
+## Validation gate
 
-After each meaningful change:
+After each meaningful change require:
 
-- run targeted tests first
-- run broader validation when needed
-- check lints for edited files
-- confirm behavior, not just compilation
+- the narrowest useful test to pass
+- nearby tests to stay green when relevant
+- lints on edited files to stay clean
+- behavior confirmation, not only compilation
 
-If validation fails, treat that failure as the next task and re-run the relevant checks after the fix.
+If validation fails, treat that failure as the next scoped task instead of moving forward.
 
 ## Routing
 
-- For TDD execution -> use `tdd-orchestrator`
+- For Detroit TDD stage routing -> use `tdd-orchestrator`
+- For failed validation recovery -> use `tdd-failure-recovery`
+- For user-visible or cross-layer verification -> use `tdd-integration-verifier`
+- For API, entity, or navigation alignment with `Docs/` -> use `tdd-docs-contract-check`
 - For commit/push requests -> use `commit`
 
 ## Stop only when
 
 - all requested work is implemented
 - acceptance criteria are satisfied
-- relevant tests/checks are green, or blocked for a stated reason
+- relevant tests and checks are green, or blocked for a stated reason
+- required integration or contract checks are complete
 - no known loose ends remain inside current scope
 
 ## Escalate when
@@ -54,4 +73,5 @@ If validation fails, treat that failure as the next task and re-run the relevant
 - Do not expand scope just because adjacent improvements exist.
 - Prefer small validated loops over large speculative edits.
 - Do not stop at "implemented"; stop at "implemented and verified".
+- Do not skip routing just because one stage seems obvious.
 - If blocked, report the exact blocker and the furthest verified state.

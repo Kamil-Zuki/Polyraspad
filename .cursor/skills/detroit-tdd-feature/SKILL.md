@@ -1,39 +1,44 @@
 ---
 name: detroit-tdd-feature
-description: Drives new feature work with Detroit TDD. Use when implementing a feature, adding behavior, or building a new use case through red-green-refactor.
+description: Defines the Detroit TDD policy for new behavior and feature increments. Use when triage classifies the next increment as a feature, use case, API addition, or new user-visible behavior.
 ---
 
-# Detroit TDD Feature Flow
+# Detroit TDD Feature Playbook
 
 ## When to use
 
-Use for new behavior, feature work, and API/UI use cases.
+Use only when `tdd-triage` classifies the next increment as new behavior.
+
 If the task is a defect in existing behavior, route to `regression-tdd-bugfix`.
 
-## Workflow
+## Entry
 
-1. Define the next observable behavior.
-2. Write one failing test through the highest useful public boundary.
-3. Run the smallest relevant test scope and confirm red.
-4. Implement the minimum code to turn green.
-5. Refactor only after tests are green.
-6. Repeat in small increments.
+Enter from `tdd-triage` with:
 
-## Test target
+- the next smallest behavior
+- the highest useful public boundary
+- done criteria for this increment
 
-- Prefer controller/service/hook/use-case boundaries.
-- Assert outputs, state, and user-visible behavior.
+## Policy
+
+- Prefer controller, service, hook, use-case, or component behavior boundaries.
+- Start with the smallest happy path that proves the new behavior exists.
+- Assert outputs, state, or user-visible behavior.
 - Avoid testing private methods directly.
-- Default to one test for one behavior.
+- Keep one increment focused on one behavior.
 
-## Constraints
+## Output
 
-- Do not write production code before a failing test exists.
-- Do not solve multiple behaviors in one step.
-- Keep each cycle small enough to explain in 1-2 sentences.
+Produce a concise feature policy handoff for the next stage:
 
-## Done
+- what new behavior is being added
+- which public boundary should express it
+- what should not be included in this increment
 
-- New behavior is covered by tests.
-- Relevant tests pass.
-- Duplication introduced during green step is cleaned up.
+Then route to `tdd-test-strategy`.
+
+## Guardrails
+
+- Do not write production code before `tdd-red` proves a failing test.
+- Do not mix multiple new behaviors into one increment.
+- Do not turn feature work into a broad implementation batch.

@@ -1,9 +1,9 @@
 ---
 name: commit
-description: Stages changes, writes conventional commit messages, commits and pushes in the correct repository, including child repositories and git submodules, then updates parent repo references. Use when the user asks to commit, push, make a commit, or save changes to git.
+description: Stages changes, writes conventional commit messages, commits and pushes in ALL subrepositories (submodules) and root. Each child repo is committed and pushed; then root is updated and pushed. Use when the user asks to commit, push, make a commit, or save changes to git.
 ---
 
-# Commit and Push
+# Commit and Push (All Subrepositories)
 
 ## When to use
 
@@ -12,6 +12,11 @@ Apply this skill when the user asks to:
 - push
 - make a commit
 - save changes to git
+
+## Mandatory behavior
+
+- **Commit all subrepositories**: Every submodule with changes must be committed and pushed.
+- **Push after each commit**: Never leave a repo committed without pushing. Push child repos first, then root.
 
 ## Commit message format
 
@@ -66,22 +71,19 @@ Keep the first line under ~72 characters. Add a blank line and body only when ex
   - `git push`
 - If several child repos changed, stage all of them in the same root commit when they belong to one logical change.
 
-### 5. Order of operations
+### 5. Order of operations (commit then push each; all subrepos)
 
-1. Commit child repo A.
-2. Push child repo A.
-3. Commit child repo B.
-4. Push child repo B.
-5. Commit root repo with updated child repo references.
-6. Push root repo.
+1. For each child repo with changes: commit, then push immediately.
+2. Commit root repo with updated child repo references, then push root.
+3. Never commit without pushing — push after every commit.
 
-### 6. Multi-repo requirement
+### 6. Multi-repo requirement (all subrepos, push always)
 
-- If changes exist in multiple child repos, do not collapse them into a root-only commit.
-- Create a real commit in each changed child repo first.
-- Then create one root commit that records the updated child repo references.
-- If the user asked to push, push child repos first, then push root last.
-- When reporting completion, list the commit SHA for each child repo and the root repo.
+- **All** subrepos with changes must be committed and pushed — never skip a changed child repo.
+- Do not collapse multiple child repos into a root-only commit.
+- Create a real commit in each changed child repo first, push immediately after each.
+- Then create one root commit that records the updated child repo references, then push root.
+- Push is mandatory: push child repos first, then push root. Report completion with commit SHAs for each.
 
 ## Shell notes
 
@@ -92,5 +94,5 @@ Keep the first line under ~72 characters. Add a blank line and body only when ex
 
 - [ ] Commit message follows conventional format (type + optional scope + description).
 - [ ] Only intended source/config files staged (no bin, obj, .next, node_modules).
-- [ ] Every changed child repo/submodule was committed and pushed before the root repo.
+- [ ] **All** changed child repos/submodules were committed and pushed (each pushed right after its commit).
 - [ ] Parent repo references to child repos/submodules were updated and pushed.
