@@ -125,6 +125,16 @@ services:
       AggregatorService__AuthorizationModuleBaseUrl: "http://authorization-module:5027"
       DOTNET_RUNNING_IN_CONTAINER: "true"
 
+  ollama:
+    container_name: ollama
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - backend
+
   polyraspad-frontend:
     container_name: polyraspad-frontend
     build:
@@ -141,6 +151,8 @@ services:
       - aggregator-service
     environment:
       NODE_ENV: production
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
 
 networks:
   backend:
@@ -149,3 +161,4 @@ networks:
 volumes:
   postgres-data:
   minio-data:
+  ollama-data:
