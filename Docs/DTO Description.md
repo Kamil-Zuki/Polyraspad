@@ -1398,6 +1398,8 @@ expand_less
 
 **Структура DTO HeatmapDto**
 
+Поля: projectId, year, totalReviews, activity, totalTimeSpentSeconds (опционально, число, секунды — общее время учёбы за год).
+
 **Пример JSON**
 
 code JSON
@@ -1413,6 +1415,8 @@ expand_less
 \"year\": 2025,
 
 \"totalReviews\": 1540,
+
+\"totalTimeSpentSeconds\": 45600,
 
 \"activity\": {
 
