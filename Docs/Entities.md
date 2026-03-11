@@ -267,6 +267,8 @@ source_meta jsonb,
 
 media jsonb,
 
+synonyms jsonb,
+
 lemma_id uuid, \-- FK добавим после создания таблицы project_lemmas
 
 external_id text,
@@ -356,6 +358,8 @@ card_id uuid NOT NULL,
 project_id uuid NOT NULL, \-- Денормализация
 
 state int2 NOT NULL DEFAULT 0,
+
+step int4 NOT NULL DEFAULT 0,
 
 stability float4 NOT NULL DEFAULT 0,
 
@@ -484,6 +488,8 @@ duration_sec int4 NOT NULL DEFAULT 0,
 
 new_learned int4 NOT NULL DEFAULT 0,
 
+status varchar(20) NOT NULL DEFAULT 'ACTIVE',
+
 CONSTRAINT fk_sessions_projects FOREIGN KEY (project_id)
 
 REFERENCES internal.projects(id) ON DELETE CASCADE
@@ -562,6 +568,14 @@ state_after int2 NOT NULL,
 due_before timestamptz NOT NULL,
 
 due_after timestamptz NOT NULL,
+
+stability_before float4 NOT NULL DEFAULT 0,
+
+stability_after float4 NOT NULL DEFAULT 0,
+
+difficulty_before float4 NOT NULL DEFAULT 0,
+
+difficulty_after float4 NOT NULL DEFAULT 0,
 
 review_duration_ms int4 NOT NULL,
 
