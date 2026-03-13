@@ -1,22 +1,33 @@
 ---
-description: Detroit TDD workflow for behavior-first development
+description: "Strict adherence to Detroit TDD (Inside-Out) methodology"
+globs: "**/*.cs"
 alwaysApply: true
 ---
 
-# Detroit TDD (Classicist) Rule
+# Detroit TDD (Core Methodology)
 
-Use Detroit TDD by default for new behavior. For defects, follow the separate bugfix TDD rule on top of this one.
+**When fixing bugs**, additionally follow the `bugfix-tdd.mdc` rule (Red Test Verification).
 
-## Core Loop
+1. **RED**: Write state-based tests (Unit/Integration) first. Run `dotnet test`. DO NOT write implementation before the test fails.
+2. **GREEN**: Write the minimal necessary code to make the test pass. Run `dotnet test`.
+3. **REFACTOR**: Improve code design, enforce domain language, ensure compliance with MD specifications. Apply standards from `dotnet-standards.mdc`.
 
-1. **Red**: write a failing test for observable behavior.
-2. **Green**: implement the smallest change to pass.
-3. **Refactor**: improve design without changing behavior.
+## Strict Constraints
+
+- **NO MOCKS**: It is strictly forbidden to use Moq, NSubstitute, or similar for domain/application logic. Use fakes, in-memory collections, or Testcontainers (PostgreSql, Redis, RabbitMQ) for DB/Cache/Message Brokers.
+- **LAYER INTEGRITY**: Never write Transport layer code (gRPC/REST/Socket) until the Application/Domain layer tests are 100% green.
+
+## Terminal & Agent Workflow
+
+1. Always run `dotnet build` after creating or modifying files.
+2. Always run `dotnet test` to verify assumptions. Use background tasks for long-running tests.
+3. Use MCP tools to verify infrastructure state (DB schemas, RabbitMQ queues) if necessary.
+4. Read terminal output carefully. You must fix errors autonomously.
 
 ## Scope
 
 - Prefer one small red-green-refactor cycle at a time.
-- Drive behavior through a public boundary: controller, service, hook, use case, or component behavior.
+- Drive behavior through a public boundary: use case, service, or controller.
 - Do not test private methods directly.
 
 ## Assertions
@@ -27,19 +38,11 @@ Use Detroit TDD by default for new behavior. For defects, follow the separate bu
 ## Test Quality
 
 - Keep tests deterministic: no real time/network/randomness without control.
-- Use real domain objects when cheap; mock only external boundaries (DB, HTTP, queue, file system).
-- Avoid over-mocking internal collaborators just to mirror implementation.
-- Name tests by behavior: `should_<outcome>_when_<condition>`.
-
-## Implementation Constraints
-
-- Do not write production code before a failing test exists.
-- Do not broaden scope while green; ship minimal passing change.
-- Refactor only with green test suite.
-- Keep tests fast and isolated so they can run continuously.
+- Domain and Application: use real objects and real infrastructure (Testcontainers), no mocks.
+- Test names: based on behavior and traceability (see `traceability.mdc`). Style: `Should_<Outcome>_When_<Condition>` or with an SR-ID prefix (see `dotnet-standards.mdc` -> Naming).
 
 ## Done Criteria
 
-- New/changed behavior is covered by tests.
+- New/changed behavior is fully covered by tests.
 - All related tests pass locally.
-- Refactor step completed (remove duplication, clarify names, simplify flow).
+- Refactoring is completed (duplication removed, names are clear).

@@ -1,6 +1,6 @@
 ---
 name: 13-commit
-description: Stages changes, writes conventional commit messages, commits and pushes in all repositories (child repos and root). Use when the user asks to commit, push, make a commit, or save changes to git.
+description: Stages changes, writes conventional commit messages in English, commits and pushes in all repositories (child repos and root). Use when the user asks to commit, push, make a commit, or save changes to git.
 ---
 
 # Commit and Push (All Repositories)
@@ -17,15 +17,16 @@ Apply this skill when the user asks to:
 
 - **Commit all repositories**: Every repo with changes must be committed and pushed.
 - **Push after each commit**: Never leave a repo committed without pushing. Push child repos first, then root.
+- **English Only**: All commit messages MUST be written strictly in English, regardless of the language used in the codebase or prompts.
 
 ## Commit message format
 
-Use **Conventional Commits**:
+Use **Conventional Commits** in English:
 
 ```
-<type>(<scope>): <short description>
+<type>(<scope>): <short description in English>
 
-Optional body: one or more lines with details.
+Optional body: one or more lines with details in English.
 ```
 
 **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`
@@ -57,7 +58,7 @@ Keep the first line under ~72 characters. Add a blank line and body only when ex
 ### 3. Stage, commit, push (inside each repo that has direct file changes)
 
 - Stage the files that belong to the commit (avoid build artifacts: `bin/`, `obj/`, `.next/`, `node_modules/`).
-- Commit with a message following the format above.
+- Commit with a message following the format above. MUST BE IN ENGLISH.
 - Push (e.g. `git push`). Use `git_write` and `network` permissions when running git commands.
 
 ### 4. Order of operations (commit then push each; all repos)
@@ -80,6 +81,7 @@ Keep the first line under ~72 characters. Add a blank line and body only when ex
 
 ## Checklist
 
+- [ ] Commit message is strictly in English.
 - [ ] Commit message follows conventional format (type + optional scope + description).
 - [ ] Only intended source/config files staged (no bin, obj, .next, node_modules).
 - [ ] **All** changed child repos were committed and pushed (each pushed right after its commit).

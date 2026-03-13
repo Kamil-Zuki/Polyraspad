@@ -1,5 +1,9 @@
 ---
-alwaysApply: true
+description: "Avoid redundant explicit mapping (complements dotnet-standards)"
+globs: "**/*.cs"
+alwaysApply: false
 ---
 
-Avoid explicit mapping for same-name fields (auto-mapped).
+# DTO Mapping
+
+Avoid explicit mapping for fields with the exact same names — rely on auto-mapping. Place full DTO mapping configurations in the `AutoMapProfiles/` directory (see `dotnet-standards.mdc`).

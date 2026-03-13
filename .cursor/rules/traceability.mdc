@@ -1,0 +1,12 @@
+---
+description: "Requirement traceability and SR-ID standards"
+globs: "**/*"
+alwaysApply: true
+---
+
+# Requirement Traceability (SR-ID)
+
+- **For functional requirements**: The test name and git commit MUST contain the requirement identifier (e.g., `SR-CORE-API-01`). Commit format: `feat: implement SR-ID`. Test name format: see `dotnet-standards.mdc` -> Naming (`Should_<Outcome>_When_<Condition>` with SR-ID in the name or DisplayName).
+- **For regression tests (bugfixes)**: The name should follow the scenario `Should_<Outcome>_When_<Condition>` linked to the document/method in the CONTEXT. Mention the bug scenario in the commit message.
+- Do not implement logic that is not tied to a specific SR-ID from `@Docs/` (or an explicit Bug Report during a bugfix).
+- When referencing a requirement in code or tests, use the SR-ID from the documentation cluster (01–04).
