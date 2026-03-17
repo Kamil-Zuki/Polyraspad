@@ -1,54 +1,54 @@
-# Агенты: порядок и группы
+# Agents: Order and Groups
 
-Нумерация по **логической важности** в потоке Detroit TDD. Вызов в Task tool — по `name` из frontmatter (без номера).
+Numbered by **logical importance** in the Detroit TDD flow. When invoking via the Task tool, use the `name` from the frontmatter (without numbers).
 
 ---
 
-## 00 — Координация (Orchestration)
+## 00 — Orchestration
 
-| №  | Файл | name | Роль |
+| #  | File | name | Role |
 |----|------|------|------|
-| 00 | `detroit-tdd-orchestrator.md` | `detroit-tdd-orchestrator` | Координатор: ставит задачи в `.cursor/tasks/`, делегирует воркерам, управляет этапами TDD и запускает architect / infra-verifier при необходимости. |
+| 00 | `detroit-tdd-orchestrator.md` | `detroit-tdd-orchestrator` | Coordinator: composes tasks in `.cursor/tasks/`, delegates to workers, manages TDD stages, and launches architect / infra-verifier when necessary. |
 
-**Когда вызывать:** реализация фичи/модуля, автономный TDD до верификации.
+**When to invoke:** Implementing a feature/module, **fixing bugs/regressions**, or running autonomous TDD until verified complete.
 
 ---
 
-## 01 — Исполнение (Execution)
+## 01 — Execution
 
-| №  | Файл | name | Роль |
+| #  | File | name | Role |
 |----|------|------|------|
-| 01 | `worker.md` | `worker` | Исполнитель: выполняет red/green/refactor по задаче, пишет код и тесты, возвращает структурированный отчёт. |
+| 01 | `worker.md` | `worker` | Executor: performs red/green/refactor for a given task, writes code and tests, returns a structured report. |
 
-**Когда вызывать:** делегирование конкретной задачи (stage) от оркестратора.
+**When to invoke:** Delegating a specific task (stage) from the orchestrator.
 
 ---
 
-## 02 — Валидация (Validation / Review)
+## 02 — Validation / Review
 
-| №  | Файл | name | Роль |
+| #  | File | name | Role |
 |----|------|------|------|
-| 02 | `architect.md` | `architect` | Ревьюер (read-only): проверка слоёв, отсутствие transport bleeding, транзакции, контракты. Запускается после green/refactor. |
+| 02 | `architect.md` | `architect` | Reviewer (read-only): verifies architectural layers, ensures no transport bleeding, checks transactions and contracts. Runs after green/refactor. |
 
-**Когда вызывать:** после завершения этапа воркером — проверка архитектуры перед переходом к следующему инкременту.
+**When to invoke:** After a worker completes a stage — architectural review before advancing to the next increment.
 
 ---
 
-## 03 — Инфраструктура и восстановление (Infrastructure / Recovery)
+## 03 — Infrastructure / Recovery
 
-| №  | Файл | name | Роль |
+| #  | File | name | Role |
 |----|------|------|------|
-| 03 | `infra-verifier.md` | `infra-verifier` | Диагностика Docker, RabbitMQ, Redis, портов; устранение сбоев Testcontainers и интеграционных тестов. |
+| 03 | `infra-verifier.md` | `infra-verifier` | Diagnoses Docker, RabbitMQ, Redis, and ports; resolves Testcontainers and integration test failures. |
 
-**Когда вызывать:** падения из-за окружения или интеграционных зависимостей; оркестратор делегирует сюда перед повторной попыткой воркера.
+**When to invoke:** Environment or integration dependency failures; the orchestrator delegates here before a worker retries.
 
 ---
 
-## Порядок в потоке
+## Flow Order
 
-1. **00** — оркестратор получает цель, создаёт задачи.
-2. **01** — воркер выполняет triage → strategy → red → green → refactor.
-3. **02** — архитектор проверяет код после green/refactor.
-4. **03** — при сбоях инфраструктуры оркестратор вызывает infra-verifier, затем снова 01.
+1. **00** — Orchestrator receives the goal, classifies it (feature or bugfix), and composes tasks.
+2. **01** — Worker executes the specific assigned TDD stage (e.g., *only* red, or *only* green) and returns the result.
+3. **02** — Architect reviews the code after green/refactor.
+4. **03** — On infrastructure failures, the orchestrator launches infra-verifier, then delegates back to 01.
 
-Имена для вызова в коде/командах не меняются: `detroit-tdd-orchestrator`, `worker`, `architect`, `infra-verifier`.
+Names for invocation in code/commands remain unchanged: `detroit-tdd-orchestrator`, `worker`, `architect`, `infra-verifier`.
