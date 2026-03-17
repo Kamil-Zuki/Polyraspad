@@ -2314,7 +2314,9 @@ expand_less
 
     - Загружается текущее состояние (S, D) из user_card_progress.
 
-    - Применяется формула FSRS v5 с учетом оценки (rating) и весов проекта.
+    - При включённом микросервисе **inclusive** (Inclusive:UseForFsrs) VocabularyService передаёт в запросе ReviewCard по gRPC настройки проекта: request_retention, maximum_interval и массив весов (w). Микросервис inclusive создаёт планировщик py-fsrs с этими параметрами и выполняет расчёт (соответствие Anki/FSRS). При недоступности inclusive используется встроенный калькулятор (fallback).
+
+    - Применяется формула FSRS с учетом оценки (rating) и весов проекта.
 
 2.  **Сохранение (Транзакция):**
 
