@@ -1,0 +1,74 @@
+---
+description: "Context management and documentation clusters"
+globs: "**/*"
+alwaysApply: true
+---
+
+# Context and Documentation
+
+## Docs/ Clusters to Code Mapping (Strict Hallucination Prevention)
+
+The `Docs/` folder directly maps to specific codebase directories. To prevent LLM hallucinations and maintain a factory-like consistency, the mapping must be strictly followed.
+
+### 01 - Функциональная спецификация & 02 - Архитектура
+- **Purpose**: System understanding, Epic/Feature level context, Architecture rules.
+- **Code Mapping**: No direct code mapping. Used purely as reference context.
+
+### 03 - Модель Данных
+- **`00 - Сущности - Общая информация.md`** and **`[Domain].md`**:
+  - **Code Maps to**: 
+    - `GrpcServiceName/Models/*.cs` (Entities and Value Objects)
+    - `GrpcServiceName/Data/*.cs` (DbContext, EF Core `IEntityTypeConfiguration`)
+    - `GrpcServiceName/Repositories/*.cs` (IRepository and specific repository implementations)
+
+### 04 - Бекенд, API и Контракты
+
+#### Algorithms and Backend Methods (`Алгоритмы и методы бекенда/`)
+- **`[Algorithm].md`**:
+  - **Code Maps to**: 
+    - `GrpcServiceName/Services/*.cs` (Application layer, Use Cases, pure Business Logic). 
+    - `GrpcServiceName/Validation/*.cs` (FluentValidation classes for business rules).
+    - `GrpcServiceName/Exceptions/*.cs` (Custom exceptions inheriting from `DomainException`).
+  - **Constraint**: This layer MUST NOT know about gRPC, RabbitMQ, Redis, or HTTP.
+
+#### Data Transfer Objects (`Методы API/DTO/`)
+- **`[DTO Group].md`**:
+  - **Code Maps to**: 
+    - `GrpcServiceName/Models/DTOs/*.cs` (or standard `Models/` depending on exact namespace).
+    - `GrpcServiceName/AutoMapProfiles/*.cs` (AutoMapper configurations transforming Entities to DTOs and vice-versa).
+
+#### gRPC Contracts (`Методы API/gRPC/`)
+- **`[service] proto.md`** & **`[Method Group].md`**:
+  - **Code Maps to**:
+    - `GrpcServiceName/Protos/*.proto` (The actual protobuf contracts).
+    - `GrpcServiceName/Grpc/*.cs` (Thin gRPC service implementations mapped to `Services/`).
+    - `GrpcServiceName/Interceptors/*.cs` (Global Exception Handlers mapping `DomainException` to gRPC Status Codes).
+  - **Constraint**: gRPC classes MUST NOT contain business logic. They only map data and call `Services`. REST Controllers (`[ApiController]`) are STRICTLY FORBIDDEN.
+
+#### Integrations & External Services (`Интеграции со сторонними сервисами/`)
+- **`[Integration Service].md`**:
+  - **Code Maps to**:
+    - `GrpcServiceName/Services/External/*.cs` (or specific Adapters folders).
+    - Uses `IHttpClientFactory` configured in `Program.cs`.
+
+#### RabbitMQ Events & Messaging (`Работа с Rabbit MQ/`)
+- **`[Messaging Group].md`**:
+  - **Code Maps to (Events/Contracts)**: 
+    - `GrpcServiceName.Contracts/*.cs` (POCO/Record definitions for events to be shared via NuGet).
+  - **Code Maps to (Processing)**:
+    - `GrpcServiceName.Worker/Consumers/*.cs` (MassTransit consumers listening to queues).
+    - Publisher logic injected into `GrpcServiceName/Services/` (using generic abstractions).
+
+#### Redis Caching (`Работа с Redis/`)
+- **`[Caching Policy].md`**:
+  - **Code Maps to**:
+    - Redis integration inside `GrpcServiceName/Services/` or caching decorators in `GrpcServiceName/Extensions/`.
+
+Only include documents via `@` from the specific cluster needed for the current phase. Do not load the entire knowledge base at once.
+
+## Context Management Rules
+
+- **Session Isolation**: One task (vertical slice) = one Agent session. Start a new chat for a new task.
+- **Directive Invocation**: In the prompt, explicitly specify which folder/documents to use. Example: `Use @03 - Data Model to implement entities`.
+- **Actualization**: If an inaccuracy in the specification is discovered during TDD, update the corresponding MD document (Documentation as Code).
+- **Architecture Enforcement**: Remember that this is a Microservice, NOT an API Gateway. It does NOT contain REST controllers. All API mapping goes through the `Grpc/` layer.
