@@ -2089,3 +2089,10 @@ expand_less
 \"failed_card_ids\": [ \"card-uuid-1\", \"card-uuid-2\" ]
 
 }
+
+---
+
+## Aggregator: автоматизация — джобы импорта (REST)
+
+- **POST** `/api/automation/jobs` — тело `CreateAutomationJobDto`: `type` (поддерживается `IMPORT`), `projectId`, `deckId`, `itemsCount` (1–100, по умолчанию 25). Создаёт демо-карточки в колоде через gRPC BulkCreate. Ответ `AutomationJobDto`: `status` `COMPLETED` или `FAILED` (+`lastError`).
+- **GET** `/api/automation/jobs/{id}` — состояние джоба (хранение в памяти процесса Aggregator).

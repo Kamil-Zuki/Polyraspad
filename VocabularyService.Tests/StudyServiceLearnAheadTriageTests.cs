@@ -1,0 +1,159 @@
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Moq;
+using VocabularyService.Data;
+using VocabularyService.Data.Entities;
+using VocabularyService.Data.Entities.JsonTypes;
+using VocabularyService.Dtos.Study;
+using VocabularyService.Services;
+using Xunit;
+
+namespace VocabularyService.Tests;
+
+/// <summary>
+/// Тесты для проверки логики Learn Ahead (обучение заранее).
+/// Проверяем, что карточки в состоянии LEARNING, которые скоро станут доступными,
+/// включаются в сессию обучения.
+/// </summary>
+public class StudyServiceLearnAheadTriageTests
+{
+    [Fact]
+    public async Task StartStudySessionAsync_Should_IncludeLearningCard_When_DueIn5Minutes()
+    {
+        // Arrange
+        var dbName = Guid.NewGuid().ToString("N");
+        var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
+            .UseInMemoryDatabase(dbName)
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options;
+
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var deckId = Guid.NewGuid();
+        var cardId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        await using (var arrangeContext = new TestVocabularyServiceContext(options))
+        {
+            arrangeContext.Projects.Add(new Project
+            {
+                Id = projectId,
+                UserId = userId,
+                Title = "P",
+                SourceLang = "en",
+                TargetLang = "ru",
+                FsrsSettings = new FsrsSettings(),
+                Stats = new ProjectStats(),
+                IsArchived = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            arrangeContext.Decks.Add(new Deck
+            {
+                Id = deckId,
+                ProjectId = projectId,
+                OwnerId = userId,
+                Title = "Deck",
+                ContributionPolicy = "OPEN",
+                LicenseType = "PRIVATE",
+                CardCount = 1,
+                IsPublic = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            arrangeContext.Cards.Add(new Card
+            {
+                Id = cardId,
+                DeckId = deckId,
+                CreatorId = userId,
+                Sentence = "Hello world",
+                Translation = "Привет мир",
+                TargetWord = "Hello",
+                TargetIndex = new TargetIndex { Start = 0, Len = 5 },
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            // Карточка в состоянии LEARNING, due через 5 минут
+            // По умолчанию LearnAheadLimitMinutes обычно 20 минут,
+            // поэтому карточка должна попасть в очередь.
+            arrangeContext.UserCardProgresses.Add(new UserCardProgress
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                CardId = cardId,
+                ProjectId = projectId,
+                State = 1, // LEARNING
+                Step = 0,
+                Stability = 0,
+                Difficulty = 0,
+                Due = now.AddMinutes(5), // Через 5 минут
+                ElapsedDays = 0,
+                ScheduledDays = 0,
+                Reps = 1,
+                Lapses = 0,
+                IsSuspended = false,
+                LastReview = now
+            });
+
+            await arrangeContext.SaveChangesAsync();
+        }
+
+        await using var actContext = new TestVocabularyServiceContext(options);
+        var userSettingsMock = new Mock<IUserSettingsService>(MockBehavior.Strict);
+        userSettingsMock
+            .Setup(s => s.GetUserSettingsAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserSetting
+            {
+                UserId = userId,
+                DailyGoalNew = 20,
+                DailyGoalReview = 100,
+                InterfaceLanguage = "en",
+                UpdatedAt = now
+            });
+
+        var mediaStorageMock = new Mock<IMediaStorageService>(MockBehavior.Strict);
+        mediaStorageMock
+            .Setup(s => s.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var cardService = new CardService(
+            actContext,
+            mediaStorageMock.Object,
+            Mock.Of<ILogger<CardService>>());
+
+        var sut = new StudyService(
+            actContext,
+            Mock.Of<ILogger<StudyService>>(),
+            cardService,
+            Mock.Of<IDeckService>(),
+            userSettingsMock.Object,
+            Mock.Of<IFsrsScheduler>(),
+            Mock.Of<IAnswerValidationService>(),
+            mediaStorageMock.Object);
+
+        // Act
+        // Запуск сессии по колоде с одной LEARNING-карточкой, которая будет доступна через 5 минут
+        var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);
+
+        // Assert
+        session.Should().NotBeNull();
+        session.QueueStats.Learning.Should().Be(1, "карточка LEARNING, доступная через 5 минут, должна быть включена в сессию (Learn Ahead)");
+    }
+
+    private sealed class TestVocabularyServiceContext : VocabularyServiceContext
+    {
+        public TestVocabularyServiceContext(DbContextOptions<VocabularyServiceContext> options)
+            : base(options) { }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<Card>().Ignore(c => c.SearchVector);
+        }
+    }
+}

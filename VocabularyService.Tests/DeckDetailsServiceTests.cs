@@ -23,11 +23,12 @@ public class DeckDetailsServiceTests
     [Fact]
     public async Task GetDeckDetails_ShouldCalculateStatsCorrectly()
     {
-        // Arrange: колода с 4 карточками
+        // Arrange: колода с 5 карточками
         var deckId = Guid.NewGuid();
         var now = DateTime.UtcNow;
         var yesterday = now.AddDays(-1);
         var tomorrow = now.AddDays(1);
+        var in5Minutes = now.AddMinutes(5);
 
         var deckWithCards = new DeckWithCards
         {
@@ -46,7 +47,7 @@ public class DeckDetailsServiceTests
                     Interval = 0,
                     NextReviewDate = tomorrow
                 },
-                // Карточка B: Learning (Repetitions > 0 и Interval < 1 день)
+                // Карточка B: Learning (Repetitions > 0 и Interval < 1 день), но не Due скоро (> 20 мин)
                 new()
                 {
                     Id = Guid.NewGuid(),
@@ -72,6 +73,15 @@ public class DeckDetailsServiceTests
                     Repetitions = 10,
                     Interval = 14,
                     NextReviewDate = tomorrow
+                },
+                // Карточка E: Learning, Due скоро (через 5 минут)
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    DeckId = deckId,
+                    Repetitions = 1,
+                    Interval = 0.1,
+                    NextReviewDate = in5Minutes
                 }
             }
         };
@@ -83,13 +93,12 @@ public class DeckDetailsServiceTests
         // Act
         var result = await _sut.GetDeckDetailsAsync(deckId);
 
-        // Assert: New=1, Learning=1, Due=1, Total=4 (Learning и Due считаем раздельно)
-        // Red state: сервис выбрасывает NotImplementedException — тест падает до этих проверок
+        // Assert: New=1 (A), Learning=1 (E, B — отфильтрована по времени), Due=1 (C), Total=5
         result.Should().NotBeNull();
         result!.Id.Should().Be(deckId);
         result.Stats.NewCardsCount.Should().Be(1, "карточка A: Repetitions == 0");
-        result.Stats.LearningCardsCount.Should().Be(1, "карточка B: Repetitions > 0 и Interval < 1");
+        result.Stats.LearningCardsCount.Should().Be(1, "карточка E: Repetitions > 0, Interval < 1 и Due в течение 20 мин (B не попадает)");
         result.Stats.DueCardsCount.Should().Be(1, "карточка C: NextReviewDate <= UtcNow");
-        result.Stats.TotalCardsCount.Should().Be(4);
+        result.Stats.TotalCardsCount.Should().Be(5);
     }
 }

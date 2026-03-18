@@ -24,9 +24,11 @@ public class DeckDetailsService : IDeckDetailsService
 
         var cards = deckWithCards.Cards;
         var now = DateTime.UtcNow;
+        var cutoff = now.AddMinutes(20);
 
         var newCount = cards.Count(c => c.Repetitions == 0);
-        var learningCount = cards.Count(c => c.Repetitions > 0 && c.Interval < 1);
+        // Learning: карточки в процессе изучения, доступные в течение 20 минут
+        var learningCount = cards.Count(c => c.Repetitions > 0 && c.Interval < 1 && c.NextReviewDate <= cutoff);
         var dueCount = cards.Count(c => c.NextReviewDate <= now);
         var totalCount = cards.Count;
 
