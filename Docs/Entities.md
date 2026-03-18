@@ -125,7 +125,7 @@ source_lang varchar(5) NOT NULL,
 
 target_lang varchar(5) NOT NULL,
 
-fsrs_settings jsonb NOT NULL DEFAULT \'{\"request_retention\": 0.9, \"maximum_interval\": 36500}\'::jsonb,
+fsrs_settings jsonb NOT NULL DEFAULT \'{\"request_retention\": 0.9, \"maximum_interval\": 36500, \"w\": []}\'::jsonb,
 
 stats jsonb NOT NULL DEFAULT \'{\"total_lemmas\": 0, \"mature_lemmas\": 0}\'::jsonb,
 
