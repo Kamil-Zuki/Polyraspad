@@ -95,11 +95,12 @@ classification: feature
 - Create task file: `tasks/tdd-{n}-{stage}.md` (e.g. `tdd-001-red.md`).
 - Launch worker via Task tool:
   - `subagent_type: worker`
-  - `prompt`: Include full path to task file and instruction to execute it. Example:
+  - `prompt`: Include full path to task file, instruction to execute it, **and the specific skill file the worker must use**. Example:
 
     ```
     Execute the task defined in .cursor/tasks/tdd-001-red.md.
     Read the file, follow Scope, Done criteria, and Instructions.
+    CRITICAL: Before starting, read the policy in .cursor/skills/06-tdd-red/SKILL.md and strictly follow it.
     Report back with Summary, Changes, Verification, Blockers.
     ```
 
@@ -119,7 +120,8 @@ classification: feature
 
 After each meaningful worker completion (specifically after a `green` or `refactor` stage that completes a feature):
 
-- Launch the `architect` subagent to review the code against architectural constraints.
+- **CRITICAL STEP:** You MUST launch the `architect` subagent (`subagent_type: architect`) to review the code against architectural constraints. Do not skip this!
+- Pass the context of what was just implemented to the architect.
 - Require tests to pass.
 - Require nearby tests and lints to stay green.
 - If validation or architectural review fails → create recovery/fix task, assign to worker, loop.

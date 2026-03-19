@@ -18,19 +18,24 @@ If the user wants full autonomous delivery until completion, pair this skill wit
 
 This skill is the Detroit TDD dispatcher. It decides which stage skill should act next and what output that stage must hand back.
 
-## Routing map
+## Routing map (Delegation via Worker)
 
-- `02-tdd-triage` -> classify the task, choose boundary, define the next increment
-- `03-detroit-tdd-feature` -> feature playbook when the next increment is new behavior
-- `04-regression-tdd-bugfix` -> bugfix playbook when the next increment is broken behavior
-- `05-tdd-test-strategy` -> design one test, its assertions, and doubles policy
-- `06-tdd-red` -> add the failing test and prove red
-- `07-tdd-green` -> implement the smallest passing change
-- `08-refactor-on-green` -> clean up only after green
-- `09-tdd-validation` -> run the next validation gate and decide whether scope can advance
-- `10-tdd-failure-recovery` -> turn failed validation into the next bounded task
-- `11-tdd-integration-verifier` -> verify user-visible or cross-layer behavior when narrow tests are insufficient
-- `12-tdd-docs-contract-check` -> align API, entity, and navigation changes with `Docs/`
+Skills are not subagents. To execute these stages, the Orchestrator MUST launch a `worker` subagent and instruct it to read the corresponding skill file.
+
+- `02-tdd-triage` -> Assign to worker. Task: classify the task, choose boundary, define the next increment.
+- `03-detroit-tdd-feature` -> Assign to worker. Task: feature playbook when the next increment is new behavior.
+- `04-regression-tdd-bugfix` -> Assign to worker. Task: bugfix playbook when the next increment is broken behavior.
+- `05-tdd-test-strategy` -> Assign to worker. Task: design one test, its assertions, and doubles policy.
+- `06-tdd-red` -> Assign to worker. Task: add the failing test and prove red.
+- `07-tdd-green` -> Assign to worker. Task: implement the smallest passing change.
+- `08-refactor-on-green` -> Assign to worker. Task: clean up only after green.
+- `09-tdd-validation` -> Assign to worker. Task: run the next validation gate and decide whether scope can advance.
+- `10-tdd-failure-recovery` -> Assign to worker. Task: turn failed validation into the next bounded task.
+- `11-tdd-integration-verifier` -> Assign to worker. Task: verify user-visible or cross-layer behavior.
+- `12-tdd-docs-contract-check` -> Assign to worker. Task: align API, entity, and navigation changes with `Docs/`.
+
+## Architectural Gate
+After the `07-tdd-green` or `08-refactor-on-green` stage is successful, you MUST launch the `architect` subagent (`subagent_type: architect`) to verify layer integrity before continuing.
 
 ## Default flow
 
