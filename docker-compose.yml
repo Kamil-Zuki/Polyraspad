@@ -53,6 +53,22 @@ services:
     networks:
       - backend
 
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   inclusive:
     container_name: inclusive
     build:
@@ -88,13 +104,20 @@ services:
     networks:
       - backend
     depends_on:
-      - postgres
-      - inclusive
-      - minio
-      - minio-init
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      inclusive:
+        condition: service_started
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
     environment:
       APP_UID: "0"
       ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=vocabulary_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-123}"
+      ConnectionStrings__Redis: "redis:6379"
       Inclusive__GrpcAddress: "http://inclusive:40051"
       Inclusive__UseForFsrs: "true"
       DOTNET_RUNNING_IN_CONTAINER: "true"
@@ -161,4 +184,5 @@ networks:
 volumes:
   postgres-data:
   minio-data:
+  redis-data:
   ollama-data:

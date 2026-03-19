@@ -37,19 +37,22 @@ The `Docs/` folder directly maps to specific codebase directories. To prevent LL
     - `GrpcServiceName/Models/DTOs/*.cs` (or standard `Models/` depending on exact namespace).
     - `GrpcServiceName/AutoMapProfiles/*.cs` (AutoMapper configurations transforming Entities to DTOs and vice-versa).
 
-#### gRPC Contracts (`Методы API/gRPC/`)
-- **`[service] proto.md`** & **`[Method Group].md`**:
-  - **Code Maps to**:
-    - `GrpcServiceName/Protos/*.proto` (The actual protobuf contracts).
-    - `GrpcServiceName/Grpc/*.cs` (Thin gRPC service implementations mapped to `Services/`).
-    - `GrpcServiceName/Interceptors/*.cs` (Global Exception Handlers mapping `DomainException` to gRPC Status Codes).
-  - **Constraint**: gRPC classes MUST NOT contain business logic. They only map data and call `Services`. REST Controllers (`[ApiController]`) are STRICTLY FORBIDDEN.
+#### gRPC Contracts & API Endpoints (`Методы API/gRPC/`)
+- **`[Method Group].md`** (e.g., `02 - Движок верификации и доверия.md`):
+  - **Code Maps to (DUAL MAPPING)**:
+    - **API Layer**: `GrpcServiceName/Grpc/[Name]GrpcService.cs` (e.g., `VerificationEngineGrpcService.cs`). Receives requests from API-Gateway.
+    - **Business Layer**: `GrpcServiceName/Services/[Name]Service.cs` (e.g., `VerificationEngineService.cs`). Contains the actual business logic algorithm.
+    - **Protobuf**: `GrpcServiceName/Protos/*.proto` (The actual protobuf contracts).
+  - **STRICT MAPPING RULE (MANDATORY)**: 
+    - Every logical group defined in a `.md` file inside `04 - Бекенд, API и Контракты/Методы API/gRPC/` MUST map to exactly one `*GrpcService.cs` in the `Grpc/` folder AND exactly one `*Service.cs` in the `Services/` folder.
+    - **Agent Instruction**: BEFORE creating or modifying classes in `Grpc/` or `Services/`, you MUST read the corresponding semantic `.md` file from `Методы API/gRPC/`. The naming of the classes MUST logically reflect the name of the documentation file (e.g., "Движок верификации" -> `VerificationEngineGrpcService` and `VerificationEngineService`).
+  - **Constraint**: `*GrpcService.cs` classes MUST NOT contain business logic. They only map data and call `*Service.cs`. REST Controllers (`[ApiController]`) are STRICTLY FORBIDDEN.
 
 #### Integrations & External Services (`Интеграции со сторонними сервисами/`)
 - **`[Integration Service].md`**:
   - **Code Maps to**:
     - `GrpcServiceName/Services/External/*.cs` (or specific Adapters folders).
-    - Uses `IHttpClientFactory` configured in `Program.cs`.
+    - **Constraint**: Calls to the Integration Service MUST be made via gRPC (configured in `Program.cs`). Do not use HTTP/REST (`IHttpClientFactory`) for this communication.
 
 #### RabbitMQ Events & Messaging (`Работа с Rabbit MQ/`)
 - **`[Messaging Group].md`**:
