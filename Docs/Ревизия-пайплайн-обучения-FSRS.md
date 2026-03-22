@@ -35,9 +35,9 @@
 | Приоритеты Lapses → Review → New | Да | `StudyService.StartStudySessionAsync`: сбор deck IDs, запрос к `user_card_progress`, сортировка (Learning/Relearning, Review, New) | ✅ |
 | Дневные лимиты (new/review) | Да | Учитываются через `_userSettingsService` (daily goals) при формировании очереди | ✅ |
 | Иерархия колод (рекурсия) | Да | `_deckService` / рекурсивный сбор дочерних колод | ✅ |
-| Хранение очереди | Redis (Docs) | **In-memory** `Dictionary<Guid, Queue<Guid>>` (комментарий: «can be upgraded to Redis later») | ⚠️ Отклонение от Docs |
+| Хранение очереди | Redis (Docs) | **Redis List** `study:session:{sessionId}:queue` (StackExchange.Redis), TTL 24 ч; при пустом списке — пересборка очереди из БД (`RebuildSessionQueueAsync`) | ✅ |
 
-**Итог:** Логика очереди реализована; расхождение только в хранении (память вместо Redis). Для одного инстанса и одного пользователя этого достаточно; для масштабирования и TTL сессий позже нужен Redis.
+**Итог:** Логика очереди и хранение в Redis соответствуют описанию в Docs (SR-PERF / кэш очереди).
 
 ---
 
@@ -59,9 +59,9 @@
 | Алгоритм FSRS (S, D, интервал, retention) | Да | `IFsrsScheduler` → `InclusiveFsrsScheduler` (gRPC к inclusive/py-fsrs) с fallback на `FsrsCalculatorScheduler` | ✅ |
 | Настройки проекта (request_retention, maximum_interval, w) | Да | `project.FsrsSettings` передаются в `GetNextStateAsync` | ✅ |
 | Обновление user_card_progress (state, stability, difficulty, due) | Да | `SubmitReviewAsync` вызывает `_fsrsScheduler.GetNextStateAsync`, затем обновляет progress и пишет `ReviewLog` | ✅ |
-| Fuzzing интервала (документ) | Упомянут в «Основные возможности» | В коде не искал отдельно; при необходимости может быть внутри inclusive/fsrs | ⚠️ Уточнить |
+| Fuzzing интервала (документ) | Упомянут в «Основные возможности» | После ответа inclusive: `InclusiveFsrsScheduler` применяет `FsrsCalculator.ApplyFuzzing` для состояний REVIEW (2) и MATURE (3), если интервал ≥ 1 дня | ✅ |
 
-**Итог:** Ядро FSRS реализовано (inclusive + fallback), поведение соответствует описанию в Docs.
+**Итог:** Ядро FSRS реализовано (inclusive + fallback + fuzzing на стороне VocabularyService после gRPC), поведение соответствует описанию в Docs.
 
 ---
 
@@ -69,7 +69,7 @@
 
 | Аспект | Документ | Реализация | Статус |
 |--------|----------|------------|--------|
-| Не показывать одну лемму дважды в сессии | Да | `_sessionSeenLemmas` (HashSet по lemmaId); при совпадении карта откладывается (due += 1 день), берётся следующая из очереди | ✅ |
+| Не показывать одну лемму дважды в сессии | Да | **Redis Set** `study:session:{sessionId}:seen_lemmas` (`SetContains` / `SetAdd`); при совпадении карта откладывается (due = завтра в БД), берётся следующая из очереди | ✅ |
 
 **Итог:** Реализовано.
 
@@ -115,7 +115,7 @@
 | Аспект | Документ | Реализация | Статус |
 |--------|----------|------------|--------|
 | Откат последнего ответа (review_log, user_card_progress) | Да | `UndoReviewAsync`: последняя запись в `ReviewLogs`, откат progress, удаление лога, возврат cardId в очередь | ✅ |
-| Возврат карты в очередь сессии | Да | CardId снова в начало очереди (in-memory) | ✅ |
+| Возврат карты в очередь сессии | Да | `ListLeftPush` в Redis `study:session:{sessionId}:queue` | ✅ |
 | Кнопка Undo на фронте | IA / UX | Есть `handleUndo`, кнопка «Undo (Ctrl+Z)» в `StudyControls`, `canUndo` по `session.cardsReviewed > 0` | ✅ |
 
 **Итог:** Полностью реализовано.
@@ -136,20 +136,22 @@
 
 | Аспект | Документ | Реализация | Статус |
 |--------|----------|------------|--------|
-| Карточка с рейтингом Again возвращается в сессию | REST API | В `SubmitReviewAsync`: при rating == 1 карта добавляется в начало `_sessionQueues[sessionId]` | ✅ |
+| Карточка с рейтингом Again возвращается в сессию | REST API | В `SubmitReviewAsync`: при rating == 1 — `ListLeftPush` в Redis `study:session:{sessionId}:queue` | ✅ |
 
 **Итог:** Реализовано.
 
 ---
 
-### Redis vs in-memory
+### Redis: очередь, леммы, TTL
 
 | Аспект | Документ | Реализация | Статус |
 |--------|----------|------------|--------|
-| Очередь сессии в Redis | REST API (SR-LRN-01, SR-PERF) | In-memory словарь | ⚠️ Отклонение |
-| TTL сессий, переживание рестартов | Подразумевается при Redis | Сессии в БД; очередь теряется при рестарте (есть комментарий про rebuild) | ⚠️ Ограничение |
+| Очередь сессии | Redis List (SR-LRN-01, SR-PERF) | `study:session:{sessionId}:queue` | ✅ |
+| Увиденные леммы (sibling burying) | — | `study:session:{sessionId}:seen_lemmas` (Set) | ✅ |
+| TTL | Низкая задержка + ограничение жизни кэша | `SessionDataTtl` = 24 ч на ключи очереди и seen_lemmas | ✅ |
+| Потеря ключей / пустая очередь | — | Пересборка из БД; learn ahead; счётчики сессии (`cardsReviewed`, `newLearned`) в **PostgreSQL** (`study_sessions`) | ✅ |
 
-**Итог:** Для «как в Anki» поведение достигнуто; для продакшена с несколькими инстансами и надёжным TTL позже стоит вынести очередь в Redis.
+**Итог:** Очередь и набор лемм в Redis соответствуют целевой архитектуре; метаданные активной сессии и статистика ответов сохраняются в БД. При общем Redis для нескольких инстансов VocabularyService очередь сессии доступна с любого пода (при условии sticky-сессии или того же sessionId).
 
 ---
 
@@ -157,9 +159,9 @@
 
 | Требование | Реализовано | Не реализовано / частично | Примечание |
 |------------|-------------|---------------------------|------------|
-| SR-LRN-01  | ✅          | ⚠️ Redis                 | Логика очереди есть; хранилище — память |
+| SR-LRN-01  | ✅          | —                         | Очередь в Redis List + пересборка |
 | SR-LRN-02  | ✅          | —                         | Cloze + интервалы на кнопках |
-| SR-LRN-03  | ✅          | —                         | FSRS (inclusive + fallback) |
+| SR-LRN-03  | ✅          | —                         | FSRS (inclusive + fallback + fuzzing после ответа inclusive) |
 | SR-LRN-04  | ✅          | —                         | Sibling Burying |
 | SR-LRN-05  | ✅          | —                         | Leech: бэкенд + UI (уведомление) |
 | SR-LRN-06  | ✅          | —                         | Ввод ответа + fuzzy, userAnswer передаётся с фронта |
@@ -174,8 +176,6 @@
 
 - **Ядро пайплайна (старт сессии → следующая карта → оценка → FSRS → следующая карта) закрыто и соответствует документации.** Очередь, приоритеты, FSRS, Sibling Burying, Leech, Undo, Learn ahead и Re-queue при Again реализованы.
 - **Сценарий ввода ответа (SR-LRN-06/07):** закрыт. Фронт передаёт `userAnswer` (поле ввода в study-card, payload в submitReview); бэкенд проверяет ответ (точное / fuzzy / синонимы) и при неверном ответе понижает оценку до Again.
-- **Отклонения от Docs:**  
-  - Очередь сессии в памяти, а не в Redis (приемлемо для одного инстанса).  
-  - Опционально: fuzzing интервала (если не внутри inclusive) — при необходимости уточнить в коде/inclusive.
+- **Отклонения от Docs:** на уровне пайплайна обучения (SR-LRN + Redis + FSRS) существенных расхождений нет. Дополнительные улучшения (например, единый префикс ключей в документации REST и в коде — см. `study:session:…`) носят косметический характер.
 
-**Оценка:** пайплайн изучения слов в стиле Anki FSRS реализован примерно на **90–95%** от описанного в Docs. Оставшиеся пробелы: вынос очереди в Redis (для масштабирования и TTL) и при желании уточнение fuzzing интервала.
+**Оценка:** пайплайн изучения слов в стиле Anki FSRS **соответствует** описанному в Docs по очереди (Redis), FSRS (inclusive + fallback), fuzzing, Sibling Burying, Leech, Undo, Learn ahead и Re-queue при Again.

@@ -2134,7 +2134,7 @@ expand_less
 
 6.  
 
-7.  **Кэширование (Redis):** Список ID карточек сохраняется в Redis List (session:{id}:queue).
+7.  **Кэширование (Redis):** Список ID карточек сохраняется в Redis List `study:session:{sessionId}:queue` (TTL 24 ч). Инициализируется пустой Redis Set `study:session:{sessionId}:seen_lemmas` для Sibling Burying (SR-LRN-04).
 
 8.  **Создание записи:** В таблицу study_sessions добавляется запись со статусом ACTIVE.
 
@@ -2219,9 +2219,9 @@ expand_less
 
 1.  **Извлечение из очереди (Redis):**
 
-    - Сервис делает LPOP из списка session:{id}:queue.
+    - Сервис делает LPOP (`ListLeftPop`) из списка `study:session:{sessionId}:queue`.
 
-    - *Если очередь пуста:* Возвращает 204 No Content (Сессия завершена).
+    - *Если список пуст:* выполняется пересборка очереди из БД; при отсутствии карт — режим **learn ahead** (карты в LEARNING с due в пределах ~20 минут); если карты по-прежнему нет — клиент получает **204 No Content** (сессия активна, но карты для показа нет).
 
 2.  
 
@@ -2233,7 +2233,7 @@ expand_less
 
 5.  **Проверка Sibling Burying (SR-LRN-04):**
 
-    - Проверяет, не была ли эта лемма уже показана в текущей сессии (через Redis Set session:{id}:seen_lemmas).
+    - Проверяет, не была ли эта лемма уже показана в текущей сессии (через Redis Set `study:session:{sessionId}:seen_lemmas`).
 
     - Если да --- карточка откладывается (Push back to DB with due = tomorrow) и берется следующая из очереди.
 
@@ -2281,7 +2281,7 @@ expand_less
 
 **Ошибки**
 
-- 404 Not Found: Сессия не найдена или истекла (TTL).
+- 404 Not Found: Сессия не найдена или не принадлежит пользователю.
 
 ### **SR-LRN-03: Отправка оценки (FSRS): /study/session/{id}/review**
 
@@ -2316,7 +2316,7 @@ expand_less
 
     - При включённом микросервисе **inclusive** (Inclusive:UseForFsrs) VocabularyService передаёт в запросе ReviewCard по gRPC настройки проекта: request_retention, maximum_interval и массив весов (w). Микросервис inclusive создаёт планировщик py-fsrs с этими параметрами и выполняет расчёт (соответствие Anki/FSRS). При недоступности inclusive используется встроенный калькулятор (fallback).
 
-    - Применяется формула FSRS с учетом оценки (rating) и весов проекта.
+    - Применяется расчёт FSRS (inclusive/py-fsrs с параметрами проекта или встроенный fallback). После ответа inclusive для интервалов ≥ 1 дня в состояниях REVIEW/MATURE может применяться **fuzzing** интервала на стороне VocabularyService.
 
 2.  **Сохранение (Транзакция):**
 
@@ -2324,7 +2324,7 @@ expand_less
 
     - Добавляется запись в review_logs (для Undo и Истории).
 
-    - Обновляется статистика сессии в Redis.
+    - Обновляется запись **study_sessions** в БД (например, `cards_reviewed`, `new_learned`); при оценке **Again** карточка возвращается в начало Redis-очереди `study:session:{sessionId}:queue` (`LPUSH` / `ListLeftPush`).
 
 3.  **Валидация ответа (опционально):**
 
@@ -2433,11 +2433,11 @@ expand_less
 
 4.  **Коррекция статистики:**
 
-    - Декрементируются счетчики сессии (cardsReviewed) и дневные лимиты в user_settings (если карточка была New или Review).
+    - Декрементируется `cards_reviewed` у записи **study_sessions** в БД.
 
 5.  **Возврат в очередь (Redis):**
 
-    - Сервис выполняет LPUSH session:{id}:queue {cardId}. Карточка становится первой в списке на выдачу.
+    - Сервис выполняет LPUSH в `study:session:{sessionId}:queue` с идентификатором карточки. Карточка становится первой в списке на выдачу.
 
 6.  **Формирование ответа:** Возвращается ID восстановленной карточки.
 
