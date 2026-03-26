@@ -36,7 +36,7 @@ cp .env.example .env
 
 ### Ollama и AI-фичи
 
-Для работы AI в редакторе (генерация примеров, перевод, грамматика) нужен запущенный [Ollama](https://ollama.com) и модель. По умолчанию в проекте задана **qwen2.5:1.5b** (меньше по размеру, чем qwen3.5:2b; без облачного API-ключа).
+Для работы AI в редакторе (генерация примеров, перевод, грамматика) нужен запущенный [Ollama](https://ollama.com) и модель. Имя модели задаётся через переменную `OLLAMA_MODEL` (фронт) и `Ollama:Model` (AggregatorService).
 
 **Локальный запуск (без Docker):**
 
@@ -44,14 +44,14 @@ cp .env.example .env
    ```bash
    ollama serve
    ```
-2. Скачайте модель:
+2. Скачайте нужную модель:
    ```bash
-   ollama pull qwen2.5:1.5b
+   ollama pull <model-name>
    ```
 3. Для фронта при локальной разработке задайте (по желанию):
    - `OLLAMA_BASE_URL=http://localhost:11434` (по умолчанию так и есть)
-   - `OLLAMA_MODEL=qwen2.5:1.5b` — модель по умолчанию для generate
+   - `OLLAMA_MODEL=<model-name>` — модель для generate
 
-**Проверка:** список моделей — `GET http://localhost:11434/api/tags` или через приложение: запрос к `/api/ollama/models`. Генерация — `POST /api/ollama/generate` с телом `{ "prompt": "Hello", "model": "qwen2.5:1.5b" }`.
+**Проверка:** список моделей — `GET http://localhost:11434/api/tags` или через приложение: запрос к `/api/ollama/models`. Генерация — `POST /api/ollama/generate` с телом `{ "prompt": "Hello", "model": "<model-name>" }`.
 
-В Docker образ Ollama уже входит (`docker compose up`), по умолчанию используется модель **qwen2.5:1.5b** (переменные `OLLAMA_MODEL` и `Ollama__Model`).
+В Docker образ Ollama уже входит (`docker compose up`), а модель задаётся переменными `OLLAMA_MODEL` и `Ollama__Model`.
