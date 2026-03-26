@@ -146,6 +146,9 @@ services:
       ASPNETCORE_URLS: "http://0.0.0.0:5206"
       AggregatorService__VocabularyServiceBaseUrl: "http://vocabulary-service:5117"
       AggregatorService__AuthorizationModuleBaseUrl: "http://authorization-module:5027"
+      Ollama__BaseUrl: "http://ollama:11434"
+      Ollama__Model: "qwen2.5:1.5b"
+      Ollama__Enabled: "true"
       DOTNET_RUNNING_IN_CONTAINER: "true"
 
   ollama:
@@ -175,7 +178,7 @@ services:
     environment:
       NODE_ENV: production
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
 
 networks:
   backend:
