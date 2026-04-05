@@ -5,26 +5,54 @@
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
-# Inclusive FSRS (gRPC, http://localhost:40051). Используем venv, чтобы один и тот же Python имел пакеты.
+# MinIO for media uploads (VocabularyService Storage:Endpoint = http://localhost:9000)
+# Start only MinIO-related containers; other infra can be managed separately.
+Write-Host "Starting MinIO (docker compose: minio + minio-init)..."
+Push-Location $Root
+try {
+    docker compose up -d minio minio-init | Out-Host
+}
+finally {
+    Pop-Location
+}
+
+# Wait until MinIO API is reachable to avoid first-upload races.
+$minioReady = $false
+for ($i = 0; $i -lt 20; $i++) {
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:9000/minio/health/live" -TimeoutSec 2 | Out-Null
+        $minioReady = $true
+        break
+    }
+    catch {
+        Start-Sleep -Milliseconds 750
+    }
+}
+if (-not $minioReady) {
+    throw "MinIO is not reachable at http://localhost:9000. Check Docker Desktop / docker compose logs."
+}
+
+# Inclusive FSRS (gRPC, http://localhost:40051). Use venv so the same Python has required packages.
 $InclusiveDir = "$Root\inclusive"
 $VenvPython = "$InclusiveDir\.venv\Scripts\python.exe"
 $VenvPip = "$InclusiveDir\.venv\Scripts\pip.exe"
 
 if (-not (Test-Path $VenvPython)) {
     Write-Host "Creating venv in inclusive using CPython..."
-    
-    # Явный запуск лаунчера py.exe для версии 3.12
+
+    # Prefer Python 3.12 via py launcher.
     & py -3.12 -m venv "$InclusiveDir\.venv"
-    
+
     if (-not (Test-Path $VenvPython)) {
         Write-Host "Fallback to standard python..."
         & python -m venv "$InclusiveDir\.venv"
     }
 
-    # Ставим зависимости
+    # Install dependencies.
     if (Test-Path $VenvPip) {
         & "$VenvPip" install -r "$InclusiveDir\requirements.txt"
-    } else {
+    }
+    else {
         Write-Host "Error: Failed to create venv." -ForegroundColor Red
     }
 }
@@ -42,4 +70,4 @@ Start-Sleep -Seconds 2
 # AggregatorService (BFF, http://localhost:5206)
 Start-Process -FilePath "cmd" -ArgumentList "/k", "title AggregatorService BFF (5206) && dotnet run --launch-profile http" -WorkingDirectory "$Root\AggregatorService"
 
-Write-Host "Started: Inclusive FSRS (40051), VocabularyService (5117), authorization-module (5027), AggregatorService (5206). Close each window to stop."
+Write-Host "Started: MinIO (9000/9001), Inclusive FSRS (40051), VocabularyService (5117), authorization-module (5027), AggregatorService (5206). Close each window to stop."
