@@ -6,3 +6,7 @@
 
 # Temporary TDD task files (created by detroit-tdd-orchestrator, deleted when done)
 .cursor/tasks/
+
+# Local run artifacts
+.artifacts/
+.dotnet-home/
