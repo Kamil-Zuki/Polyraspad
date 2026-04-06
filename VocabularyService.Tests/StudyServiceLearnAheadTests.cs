@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Moq;
+using StackExchange.Redis;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
@@ -117,7 +118,8 @@ public class StudyServiceLearnAheadTests
             userSettingsMock.Object,
             fsrsMock.Object,
             Mock.Of<IAnswerValidationService>(),
-            mediaStorageMock.Object);
+            mediaStorageMock.Object,
+            RedisTestHelper.CreateConnectionMultiplexer());
 
         // 2. Act
         // Start session

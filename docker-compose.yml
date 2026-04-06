@@ -147,8 +147,10 @@ services:
       AggregatorService__VocabularyServiceBaseUrl: "http://vocabulary-service:5117"
       AggregatorService__AuthorizationModuleBaseUrl: "http://authorization-module:5027"
       Ollama__BaseUrl: "http://ollama:11434"
-      Ollama__Model: "qwen3.5:0.8B"
+      Ollama__Model: "phi3:mini"
       Ollama__Enabled: "true"
+      Ollama__ProxyApiKey: ${OLLAMA_PROXY_API_KEY:-dev-ollama-proxy-shared-secret}
+      Ollama__AllowClientModelOverride: "false"
       DOTNET_RUNNING_IN_CONTAINER: "true"
 
   ollama:
@@ -178,7 +180,9 @@ services:
     environment:
       NODE_ENV: production
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:0.8B}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:mini}
+      OLLAMA_PROXY_API_KEY: ${OLLAMA_PROXY_API_KEY:-dev-ollama-proxy-shared-secret}
+      AGGREGATOR_INTERNAL_URL: http://aggregator-service:5206
 
 networks:
   backend:

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Moq;
+using StackExchange.Redis;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
@@ -130,7 +131,8 @@ public class StudyServiceLearningCardsInQueueTests
             userSettingsMock.Object,
             Mock.Of<IFsrsScheduler>(),
             Mock.Of<IAnswerValidationService>(),
-            mediaStorageMock.Object);
+            mediaStorageMock.Object,
+            RedisTestHelper.CreateConnectionMultiplexer());
 
         // Запуск сессии по колоде с одной LEARNING-карточкой
         var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);

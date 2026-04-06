@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
+using StackExchange.Redis;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
@@ -150,7 +151,8 @@ public class StudyServiceStartSessionMissingStatusColumnTests
             userSettingsServiceMock.Object,
             Mock.Of<IFsrsScheduler>(),
             Mock.Of<IAnswerValidationService>(),
-            Mock.Of<IMediaStorageService>());
+            Mock.Of<IMediaStorageService>(),
+            RedisTestHelper.CreateConnectionMultiplexer());
 
         var result = await sut.StartStudySessionAsync(userId, projectId, null, CancellationToken.None);
 
