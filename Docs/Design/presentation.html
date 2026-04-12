@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PVS.ai Design Presentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["Inter", "sans-serif"],
+                    },
+                    colors: {
+                        dark: {
+                            950: "#070b12",
+                            900: "#0b0f19",
+                            800: "#111625",
+                            700: "#1c2339",
+                        },
+                        brand: {
+                            purple: "#8B5CF6",
+                            blue: "#3B82F6",
+                            pink: "#EC4899",
+                            green: "#10B981",
+                        },
+                    },
+                    boxShadow: {
+                        glow: "0 18px 40px -18px rgba(139, 92, 246, 0.45)",
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(139, 92, 246, 0.18), transparent 28%),
+                radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 24%),
+                linear-gradient(180deg, #0b0f19 0%, #070b12 100%);
+        }
+
+        .glass-panel {
+            background: rgba(17, 22, 37, 0.74);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .preview-surface {
+            position: relative;
+            overflow: hidden;
+            background:
+                linear-gradient(145deg, rgba(139, 92, 246, 0.16), rgba(59, 130, 246, 0.1)),
+                #101626;
+        }
+
+        .preview-surface::before {
+            content: "";
+            position: absolute;
+            inset: 14px;
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+                rgba(11, 15, 25, 0.84);
+        }
+
+        .preview-grid {
+            position: absolute;
+            inset: 28px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            opacity: 0.85;
+        }
+
+        .preview-grid span {
+            border-radius: 0.8rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .preview-grid span:nth-child(1),
+        .preview-grid span:nth-child(4) {
+            grid-column: span 2;
+        }
+
+        .preview-grid span:nth-child(5) {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(236, 72, 153, 0.22));
+        }
+
+        .text-gradient {
+            background: linear-gradient(90deg, #8B5CF6 0%, #EC4899 52%, #3B82F6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body class="font-sans text-gray-200">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+        <div class="absolute -top-24 left-[8%] h-72 w-72 rounded-full bg-brand-purple/20 blur-3xl"></div>
+        <div class="absolute top-40 right-[10%] h-80 w-80 rounded-full bg-brand-blue/15 blur-3xl"></div>
+        <div class="absolute bottom-0 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-brand-pink/10 blur-3xl"></div>
+    </div>
+
+    <header class="sticky top-0 z-30 border-b border-white/5 bg-dark-900/75 backdrop-blur-xl">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+            <a href="../../landing_page.html" class="flex items-center gap-3 text-white">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-purple to-brand-blue font-bold shadow-glow">P</div>
+                <div>
+                    <div class="text-sm font-semibold tracking-wide text-white/70">Design Demo</div>
+                    <div class="text-lg font-bold">PVS.ai Presentation</div>
+                </div>
+            </a>
+            <div class="hidden items-center gap-3 md:flex">
+                <a href="#screens" class="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:text-white">Экраны</a>
+                <a href="https://app.polyraspad.online/auth" class="rounded-full bg-white px-4 py-2 text-sm font-bold text-dark-900 transition hover:bg-gray-100">Открыть приложение</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="relative z-10">
+        <section class="px-6 pb-12 pt-16 md:pb-16 md:pt-20">
+            <div class="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+                <div>
+                    <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-purple/30 bg-brand-purple/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.24em] text-brand-purple">
+                        <i class="fas fa-layer-group"></i>
+                        Design Folder Overview
+                    </div>
+                    <h1 class="max-w-3xl text-4xl font-extrabold leading-tight text-white md:text-6xl">
+                        Презентация макетов
+                        <span class="text-gradient">из папки Design</span>
+                    </h1>
+                    <p class="mt-5 max-w-2xl text-base leading-relaxed text-gray-400 md:text-lg">
+                        Здесь собраны основные экраны продукта: старт, dashboard, library, editor, marketplace и учебная сессия.
+                        Это обзор дизайн-направления без лишнего скролла по отдельным HTML-файлам.
+                    </p>
+                    <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                        <a href="#screens" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-brand-purple to-brand-blue px-6 py-3.5 text-sm font-bold text-white shadow-glow transition hover:brightness-110">
+                            Смотреть экраны
+                            <i class="fas fa-arrow-down text-xs"></i>
+                        </a>
+                        <a href="./layout.html" target="_blank" rel="noreferrer" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-3.5 text-sm font-bold text-white transition hover:border-white/20 hover:bg-white/10">
+                            Открыть layout
+                            <i class="fas fa-up-right-from-square text-xs"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="glass-panel rounded-[2rem] p-5 shadow-glow">
+                    <div class="preview-surface h-[360px] rounded-[1.6rem]">
+                        <div class="absolute left-8 top-8 z-10 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-white/70">
+                            <i class="fas fa-play"></i>
+                            Product Walkthrough
+                        </div>
+                        <div class="preview-grid z-10">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <div class="absolute bottom-8 left-8 right-8 z-10 rounded-2xl border border-white/10 bg-dark-900/80 p-5">
+                            <div class="flex items-center justify-between gap-4">
+                                <div>
+                                    <div class="text-xs font-bold uppercase tracking-[0.24em] text-brand-blue">Flow</div>
+                                    <div class="mt-2 text-xl font-bold text-white">Projects -> Dashboard -> Study -> Marketplace</div>
+                                </div>
+                                <div class="hidden h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-pink to-brand-purple text-white md:flex">
+                                    <i class="fas fa-wand-magic-sparkles"></i>
+                                </div>
+                            </div>
+                            <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-gray-400 sm:grid-cols-4">
+                                <div class="rounded-xl border border-white/5 bg-white/5 px-3 py-2">8 экранов</div>
+                                <div class="rounded-xl border border-white/5 bg-white/5 px-3 py-2">1 стиль</div>
+                                <div class="rounded-xl border border-white/5 bg-white/5 px-3 py-2">App shell</div>
+                                <div class="rounded-xl border border-white/5 bg-white/5 px-3 py-2">UX flow</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="px-6 pb-16">
+            <div class="mx-auto grid max-w-7xl gap-4 md:grid-cols-3">
+                <div class="glass-panel rounded-3xl p-5">
+                    <div class="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-brand-purple">Entry</div>
+                    <div class="text-xl font-bold text-white">Projects</div>
+                    <p class="mt-2 text-sm leading-relaxed text-gray-400">Выбор языкового проекта и вход в основной пользовательский сценарий.</p>
+                </div>
+                <div class="glass-panel rounded-3xl p-5">
+                    <div class="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-brand-blue">Learning</div>
+                    <div class="text-xl font-bold text-white">Dashboard + Study</div>
+                    <p class="mt-2 text-sm leading-relaxed text-gray-400">Ежедневная активность, метрики, продолжение сессии и интерфейс повторения карточек.</p>
+                </div>
+                <div class="glass-panel rounded-3xl p-5">
+                    <div class="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-brand-pink">Commerce</div>
+                    <div class="text-xl font-bold text-white">Marketplace</div>
+                    <p class="mt-2 text-sm leading-relaxed text-gray-400">Витрина колод, карточка продукта и сценарий для авторов и покупателей.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="screens" class="px-6 pb-20">
+            <div class="mx-auto max-w-7xl">
+                <div class="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <div class="text-xs font-bold uppercase tracking-[0.26em] text-white/45">Design Screens</div>
+                        <h2 class="mt-2 text-3xl font-bold text-white md:text-4xl">Основные экраны</h2>
+                    </div>
+                    <p class="max-w-2xl text-sm leading-relaxed text-gray-400 md:text-base">
+                        Каждый экран открывается отдельно и показывает конкретную часть продукта. Карточки ниже собраны как короткий walkthrough по папке `Docs/Design`.
+                    </p>
+                </div>
+
+                <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Projects</div>
+                                <div class="mt-1 text-sm text-gray-400">Стартовая точка и переключение между проектами.</div>
+                            </div>
+                            <span class="rounded-full border border-brand-blue/30 bg-brand-blue/10 px-3 py-1 text-xs font-bold text-brand-blue">Start</span>
+                        </div>
+                        <a href="./projects.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-blue">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Layout</div>
+                                <div class="mt-1 text-sm text-gray-400">Базовый shell приложения: sidebar, header и общая сетка.</div>
+                            </div>
+                            <span class="rounded-full border border-brand-purple/30 bg-brand-purple/10 px-3 py-1 text-xs font-bold text-brand-purple">Shell</span>
+                        </div>
+                        <a href="./layout.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-purple">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Dashboard</div>
+                                <div class="mt-1 text-sm text-gray-400">Активность, heatmap, цель дня и быстрый вход в изучение.</div>
+                            </div>
+                            <span class="rounded-full border border-brand-green/30 bg-brand-green/10 px-3 py-1 text-xs font-bold text-brand-green">Daily</span>
+                        </div>
+                        <a href="./dashboard.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-green">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Library</div>
+                                <div class="mt-1 text-sm text-gray-400">Работа с колодами, структура библиотеки и учебным контентом.</div>
+                            </div>
+                            <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-white/80">Content</span>
+                        </div>
+                        <a href="./library.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-blue">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Editor</div>
+                                <div class="mt-1 text-sm text-gray-400">Создание карточек, медиа и AI-помощник в рабочем режиме.</div>
+                            </div>
+                            <span class="rounded-full border border-brand-pink/30 bg-brand-pink/10 px-3 py-1 text-xs font-bold text-brand-pink">Create</span>
+                        </div>
+                        <a href="./editor_page.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-pink">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Study Session</div>
+                                <div class="mt-1 text-sm text-gray-400">Карточка, контекст, оценки FSRS и сценарий активного повторения.</div>
+                            </div>
+                            <span class="rounded-full border border-brand-purple/30 bg-brand-purple/10 px-3 py-1 text-xs font-bold text-brand-purple">Review</span>
+                        </div>
+                        <a href="./study_session.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-purple">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Marketplace</div>
+                                <div class="mt-1 text-sm text-gray-400">Лента продуктов, фильтры, поиск и коммерческая витрина.</div>
+                            </div>
+                            <span class="rounded-full border border-brand-blue/30 bg-brand-blue/10 px-3 py-1 text-xs font-bold text-brand-blue">Browse</span>
+                        </div>
+                        <a href="./marketplace.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-blue">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+
+                    <article class="glass-panel rounded-[1.75rem] p-5">
+                        <div class="preview-surface mb-5 h-44 rounded-[1.4rem]">
+                            <div class="preview-grid z-10">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-lg font-bold text-white">Product Page</div>
+                                <div class="mt-1 text-sm text-gray-400">Карточка курса с обзорами, ценой и CTA для покупки.</div>
+                            </div>
+                            <span class="rounded-full border border-brand-pink/30 bg-brand-pink/10 px-3 py-1 text-xs font-bold text-brand-pink">Detail</span>
+                        </div>
+                        <a href="./product_page.html" target="_blank" rel="noreferrer" class="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition hover:text-brand-pink">
+                            Открыть экран <i class="fas fa-arrow-right text-xs"></i>
+                        </a>
+                    </article>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
