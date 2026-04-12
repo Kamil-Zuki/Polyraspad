@@ -42,7 +42,7 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      until /usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin}; do sleep 1; done;
       until /usr/bin/mc ready myminio; do sleep 1; done;
       /usr/bin/mc mb myminio/polyraspad-media 2>/dev/null || true;
       /usr/bin/mc anonymous set download myminio/polyraspad-media;
