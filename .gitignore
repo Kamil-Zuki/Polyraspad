@@ -10,3 +10,4 @@
 # Local run artifacts
 .artifacts/
 .dotnet-home/
+.env
