@@ -229,14 +229,21 @@ export default async function LocalizedHomePage({
           </div>
 
           <div className="relative mx-auto mt-12 max-w-4xl md:mt-14">
-            <div className="absolute inset-0 z-10 bg-gradient-to-t from-[#0b0f19] via-transparent to-transparent" />
+            {/* unoptimized: загрузка напрямую в браузере, без /_next/image — иначе частые таймауты к Unsplash на сервере */}
             <Image
               src="https://images.unsplash.com/photo-1618761714954-0b8cd0026356?q=80&w=2070&auto=format&fit=crop"
               alt={content.heroImageAlt}
               width={2070}
               height={1380}
               priority
-              className="rounded-2xl border border-white/10 opacity-60 shadow-2xl"
+              unoptimized
+              sizes="(max-width: 896px) 100vw, 896px"
+              className="relative z-0 h-auto w-full max-w-full rounded-2xl border border-white/10 opacity-60 shadow-2xl"
+            />
+            {/* Градиент поверх фото; pointer-events — чтобы не перехватывать клики */}
+            <div
+              className="pointer-events-none absolute inset-0 z-10 rounded-2xl bg-gradient-to-t from-[#0b0f19] via-transparent to-transparent"
+              aria-hidden
             />
           </div>
         </section>
@@ -312,7 +319,8 @@ export default async function LocalizedHomePage({
                   alt={content.marketplaceTitle}
                   width={800}
                   height={520}
-                  className="mb-3 rounded-xl opacity-80"
+                  unoptimized
+                  className="mb-3 h-auto w-full rounded-xl opacity-80"
                 />
                 <div className="flex items-center justify-between px-2">
                   <div>
