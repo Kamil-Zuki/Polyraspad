@@ -213,6 +213,22 @@ services:
       OLLAMA_PROXY_API_KEY: "${OLLAMA_PROXY_API_KEY:-}"
       AGGREGATOR_INTERNAL_URL: http://aggregator-service:5206
 
+  polyraspad-landing:
+    container_name: polyraspad-landing
+    build:
+      context: ./polyraspad-landing
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${LANDING_NEXT_PUBLIC_APP_URL:-https://app.polyraspad.online}
+        NEXT_PUBLIC_SITE_URL: ${LANDING_NEXT_PUBLIC_SITE_URL:-https://polyraspad.online}
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    networks:
+      - backend
+    environment:
+      NODE_ENV: production
+
 networks:
   backend:
     driver: bridge
