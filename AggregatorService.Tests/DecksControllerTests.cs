@@ -96,6 +96,8 @@ public class DecksControllerTests : IClassFixture<AggregatorWebApplicationFactor
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         capturedRequest.Should().NotBeNull();
         capturedRequest!.IsPublic.Should().BeNull();
+        // Title должен передаваться как обычная строка (без JSON-кавычек от StringValue.ToString())
+        capturedRequest.Title.Should().Be("New Title");
     }
 
     [Fact]
