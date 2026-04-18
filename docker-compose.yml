@@ -173,7 +173,7 @@ services:
       Jwt__Issuer: "${JWT_ISSUER:-polyraspad.local}"
       Jwt__Audience: "${JWT_AUDIENCE:-polyraspad.local}"
       Ollama__BaseUrl: "http://ollama:11434"
-      Ollama__Model: "phi3:mini"
+      Ollama__Model: "${OLLAMA_MODEL:-phi3:mini}"
       Ollama__Enabled: "true"
       Ollama__ProxyApiKey: "${OLLAMA_PROXY_API_KEY:-}"
       Ollama__AllowClientModelOverride: "false"
