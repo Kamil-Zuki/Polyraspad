@@ -151,7 +151,7 @@ public class StudyServiceStartSessionMissingStatusColumnTests
             userSettingsServiceMock.Object,
             Mock.Of<IFsrsScheduler>(),
             Mock.Of<IAnswerValidationService>(),
-            Mock.Of<IMediaStorageService>(),
+            Mock.Of<IMediaService>(),
             RedisTestHelper.CreateConnectionMultiplexer());
 
         var result = await sut.StartStudySessionAsync(userId, projectId, null, CancellationToken.None);

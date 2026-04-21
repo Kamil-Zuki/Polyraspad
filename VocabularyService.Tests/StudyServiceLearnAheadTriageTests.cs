@@ -117,14 +117,15 @@ public class StudyServiceLearnAheadTriageTests
                 UpdatedAt = now
             });
 
-        var mediaStorageMock = new Mock<IMediaStorageService>(MockBehavior.Strict);
-        mediaStorageMock
+        var mediaServiceMock = new Mock<IMediaService>(MockBehavior.Strict);
+        mediaServiceMock
             .Setup(s => s.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         var cardService = new CardService(
             actContext,
-            mediaStorageMock.Object,
+            Mock.Of<ILemmaService>(),
+            mediaServiceMock.Object,
             Mock.Of<ILogger<CardService>>());
 
         var sut = new StudyService(
@@ -135,7 +136,7 @@ public class StudyServiceLearnAheadTriageTests
             userSettingsMock.Object,
             Mock.Of<IFsrsScheduler>(),
             Mock.Of<IAnswerValidationService>(),
-            mediaStorageMock.Object,
+            mediaServiceMock.Object,
             RedisTestHelper.CreateConnectionMultiplexer());
 
         // Act

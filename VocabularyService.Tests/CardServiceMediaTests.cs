@@ -34,7 +34,11 @@ public class CardServiceMediaTests
 
         await using (var actContext = CreateContext(dbName))
         {
-            var sut = new CardService(actContext, new MockMediaStorage(), NullLogger<CardService>.Instance);
+            var sut = new CardService(
+                actContext,
+                Mock.Of<ILemmaService>(),
+                new MockMediaStorage(),
+                NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
             {
@@ -77,7 +81,11 @@ public class CardServiceMediaTests
         Guid createdCardId;
         await using (var actContext = CreateContext(dbName))
         {
-            var sut = new CardService(actContext, new MockMediaStorage(), NullLogger<CardService>.Instance);
+            var sut = new CardService(
+                actContext,
+                Mock.Of<ILemmaService>(),
+                new MockMediaStorage(),
+                NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
             {
@@ -122,7 +130,11 @@ public class CardServiceMediaTests
         List<Guid> createdIds;
         await using (var actContext = CreateContext(dbName))
         {
-            var sut = new CardService(actContext, new MockMediaStorage(), NullLogger<CardService>.Instance);
+            var sut = new CardService(
+                actContext,
+                Mock.Of<ILemmaService>(),
+                new MockMediaStorage(),
+                NullLogger<CardService>.Instance);
 
             var dtos = new List<CreateCardDto>
             {
@@ -192,12 +204,16 @@ public class CardServiceMediaTests
         Guid createdCardId;
         await using (var actContext = CreateContext(dbName))
         {
-            var mockStorage = new Mock<IMediaStorageService>();
+            var mockStorage = new Mock<IMediaService>();
             mockStorage
                 .Setup(s => s.UploadImageAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(expectedImageId);
 
-            var sut = new CardService(actContext, mockStorage.Object, NullLogger<CardService>.Instance);
+            var sut = new CardService(
+                actContext,
+                Mock.Of<ILemmaService>(),
+                mockStorage.Object,
+                NullLogger<CardService>.Instance);
 
             var dto = new CaptureCardDto
             {
@@ -285,22 +301,12 @@ public class CardServiceMediaTests
         });
     }
 
-    private sealed class MockMediaStorage : IMediaStorageService
+    private sealed class MockMediaStorage : IMediaService
     {
         public Task<Guid> UploadImageAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
             Task.FromResult(Guid.NewGuid());
-
-        public Task<Guid> UploadAudioAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Guid.NewGuid());
-
-        public Task<string> GetMediaUrlAsync(Guid mediaId, string prefix, CancellationToken cancellationToken = default) =>
-            Task.FromResult(string.Empty);
-
-        public Task<string> GetMediaUrlForServerFetchAsync(Guid mediaId, string prefix, CancellationToken cancellationToken = default) =>
-            Task.FromResult(string.Empty);
 
         public Task FillCardMediaUrlsAsync(CardMedia? media, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }
 }
-
