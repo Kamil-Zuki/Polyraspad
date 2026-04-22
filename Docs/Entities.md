@@ -1,3 +1,10 @@
+---
+title: "PVS — схема базы данных"
+aliases: ["Entities", "PVS-DB-Schema"]
+tags: [polyraspad, docs, database, postgresql]
+doc_id: PVS-DB-Schema-2025-1
+---
+
 # **Personal Vocabulary Service**
 
 **Описание схемы базы данных**
@@ -18,7 +25,7 @@
   **Утверждено**      
   ------------------------------------------
 
-\* \* \*
+---
 
 ## **Введение**
 
@@ -98,7 +105,7 @@
 
 - **5.2. deleted_objects** --- \"Надгробия\" (Tombstones) для Delta Sync.
 
-\* \* \*
+---
 
 ## **1. Ядро: Контент и Иерархия (Content Core)**
 
@@ -111,7 +118,6 @@
 
 **DDL:**
 
-code SQL
 
 CREATE TABLE internal.projects (
 
@@ -148,11 +154,8 @@ CREATE INDEX idx_projects_user_id ON internal.projects (user_id);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.decks (
 
@@ -241,11 +244,8 @@ CREATE INDEX idx_decks_public ON internal.decks (is_public) WHERE is_public = tr
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.cards (
 
@@ -299,11 +299,8 @@ CREATE INDEX idx_cards_search ON internal.cards USING GIN (search_vector);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.deck_versions (
 
@@ -341,11 +338,8 @@ CREATE INDEX idx_deck_versions_deck_id ON internal.deck_versions (deck_id);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.user_card_progress (
 
@@ -408,11 +402,8 @@ CREATE INDEX idx_progress_card_id ON internal.user_card_progress (card_id);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.project_lemmas (
 
@@ -462,11 +453,8 @@ REFERENCES internal.project_lemmas(id) ON DELETE SET NULL;
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.study_sessions (
 
@@ -543,11 +531,8 @@ CREATE INDEX idx_sessions_heatmap ON internal.study_sessions (user_id, project_i
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.review_logs (
 
@@ -612,11 +597,8 @@ CREATE INDEX idx_logs_user_date ON internal.review_logs (user_id, created_at);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.products (
 
@@ -669,11 +651,8 @@ CREATE INDEX idx_products_author ON internal.products (author_id);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.user_entitlements (
 
@@ -735,11 +714,8 @@ WHERE is_active = true;
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.product_reviews (
 
@@ -780,11 +756,8 @@ CREATE INDEX idx_reviews_product ON internal.product_reviews (product_id, create
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.contributions (
 
@@ -837,11 +810,8 @@ CREATE INDEX idx_contributions_author ON internal.contributions (author_id);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.deck_subscriptions (
 
@@ -896,11 +866,8 @@ CREATE INDEX idx_subs_deck ON internal.deck_subscriptions (deck_id);
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.author_profiles (
 
@@ -933,11 +900,8 @@ updated_at timestamptz NOT NULL DEFAULT now()
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.user_settings (
 
@@ -968,11 +932,8 @@ updated_at timestamptz NOT NULL DEFAULT now()
 
 **DDL:**
 
-code SQL
 
-downloadcontent_copy
 
-expand_less
 
 CREATE TABLE internal.deleted_objects (
 

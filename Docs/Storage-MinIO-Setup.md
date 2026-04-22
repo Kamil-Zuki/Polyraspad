@@ -1,3 +1,8 @@
+---
+title: "Локальное хранилище медиа (MinIO / S3)"
+tags: [polyraspad, docs, minio, s3, media]
+---
+
 # Локальное хранилище медиа (MinIO / S3)
 
 VocabularyService сохраняет изображения и аудио в S3-совместимом хранилище. Для локальной разработки используется **MinIO**.
@@ -42,9 +47,10 @@ VocabularyService при первом обращении к хранилищу (
 ## Использование в коде
 
 - **Загрузка:** `IMediaStorageService.UploadImageAsync` / `UploadAudioAsync` возвращают media ID (Guid), который сохраняется в `Card.Media.ImageId` / `AudioId`.
+- **Reader (PDF):** через шлюз доступны `POST /api/Media/upload-document` и операции библиотеки (`/api/Media/library/...`); бинарники по-прежнему уходят в S3-совместимое хранилище (см. `MediaController` + MediaService).
 - **Отдача URL:** при возврате карточки клиенту (GetCard, GetNextCard, список карточек и т.д.) сервис заполняет `Media.ImageUrl` и `Media.AudioUrl` через `FillCardMediaUrlsAsync` (по `PublicBaseUrl` или presigned URL).
 
 ## См. также
 
-- [Описание REST API](Описание%20REST%20API.md) — Capture Card, медиа в ответах.
-- [Основные возможности](Основные%20возможности.md) — Media Service (S3), SR-BG-02 (очистка медиа).
+- [[Описание REST API]] — Capture Card, медиа в ответах
+- [[Основные возможности]] — Media Service (S3), SR-BG-02 (очистка медиа)

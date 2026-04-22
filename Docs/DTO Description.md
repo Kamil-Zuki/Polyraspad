@@ -1,3 +1,10 @@
+---
+title: "PVS — описание DTO"
+aliases: ["DTO Description", "PVS-DTO"]
+tags: [polyraspad, docs, api, dto]
+doc_id: PVS-DTO-2025-1
+---
+
 # **Personal Vocabulary Service**
 
 ## Описание DTO
@@ -18,7 +25,7 @@
   **Утверждено**      
   ------------------------------------
 
-\* \* \*
+---
 
 ## **Введение**
 
@@ -28,9 +35,7 @@
 
 Документ разработан на основе функциональных требований (версия 7.0 Golden Master) и схемы базы данных сервиса и предназначен для использования разработчиками и тестировщиками.
 
-\* \* \*
-
-##  
+---
 
 ## **Общая структура API-запросов**
 
@@ -44,7 +49,7 @@
   **Ответ с ошибкой (Error Response)**    В случае любой ошибки API возвращает стандартизированный объект **ProblemDetails** (RFC 7807), который предоставляет унифицированную структуру для обработки ошибок на стороне клиента.
   --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-\* \* \*
+---
 
 ## **Содержание DTO**
 
@@ -274,19 +279,14 @@
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"success\": true,
-
-\"message\": \"Operation completed successfully.\"
-
+  "success": true,
+  "message": "Operation completed successfully."
 }
+```
+
+
 
 ### **DTO: ProblemDetails**
 
@@ -302,11 +302,8 @@ expand_less
 
 **Пример JSON (Ошибка валидации 400)**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -342,25 +339,17 @@ expand_less
 
 **Пример JSON (Системная ошибка 500)**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"type\": \"https://pvs.app/errors/internal\",
-
-\"title\": \"An unexpected error occurred.\",
-
-\"status\": 500,
-
-\"detail\": \"Database connection timed out.\",
-
-\"instance\": \"/api/v1/projects/prj-123/stats\"
-
+  "type": "https://pvs.app/errors/internal",
+  "title": "An unexpected error occurred.",
+  "status": 500,
+  "detail": "Database connection timed out.",
+  "instance": "/api/v1/projects/prj-123/stats"
 }
+```
+
+
 
 ### **DTO: UserDto**
 
@@ -376,23 +365,16 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"userId\": \"d73d7019-4624-4a2c-9d1e-8e5a7a7b7a5a\",
-
-\"displayName\": \"Elena English Teacher\",
-
-\"avatarUrl\": \"https://cdn.pvs.app/avatars/elena.jpg\",
-
-\"isVerified\": true
-
+  "userId": "d73d7019-4624-4a2c-9d1e-8e5a7a7b7a5a",
+  "displayName": "Elena English Teacher",
+  "avatarUrl": "https://cdn.pvs.app/avatars/elena.jpg",
+  "isVerified": true
 }
+```
+
+
 
 ### **DTO: PaginatedResponseDto\<T\>**
 
@@ -408,11 +390,8 @@ expand_less
 
 **Пример JSON (Список колод)**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -470,27 +449,18 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"title\": \"Японский для начинающих\",
-
-\"sourceLang\": \"ru\",
-
-\"targetLang\": \"ja\",
-
-\"settings\": {
-
-\"requestRetention\": 0.85
-
+  "title": "Японский для начинающих",
+  "sourceLang": "ru",
+  "targetLang": "ja",
+  "settings": {
+    "requestRetention": 0.85
+  }
 }
+```
 
-}
+
 
 ### **DTO: UpdateProjectRequestDto**
 
@@ -506,27 +476,18 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"title\": \"Японский (Средний уровень)\",
-
-\"isArchived\": false,
-
-\"settings\": {
-
-\"requestRetention\": 0.90,
-
-\"maximumInterval\": 365
-
+  "title": "Японский (Средний уровень)",
+  "isArchived": false,
+  "settings": {
+    "requestRetention": 0.9,
+    "maximumInterval": 365
+  }
 }
+```
 
-}
+
 
 ### **DTO: UserSettingsDto**
 
@@ -542,29 +503,19 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"userId\": \"d73d7019-4624-4a2c-9d1e-8e5a7a7b7a5a\",
-
-\"rolloverHour\": 4,
-
-\"dailyGoalNew\": 20,
-
-\"dailyGoalReview\": 150,
-
-\"interfaceLanguage\": \"ru\",
-
-\"currentStreak\": 15,
-
-\"maxStreak\": 42
-
+  "userId": "d73d7019-4624-4a2c-9d1e-8e5a7a7b7a5a",
+  "rolloverHour": 4,
+  "dailyGoalNew": 20,
+  "dailyGoalReview": 150,
+  "interfaceLanguage": "ru",
+  "currentStreak": 15,
+  "maxStreak": 42
 }
+```
+
+
 
 ## **3. Колоды (Decks)**
 
@@ -584,39 +535,24 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"id\": \"deck-555\",
-
-\"projectId\": \"prj-123\",
-
-\"parentDeckId\": null,
-
-\"ownerId\": \"user-999\",
-
-\"title\": \"IT Slang\",
-
-\"description\": \"Сленг разработчиков Кремниевой долины\",
-
-\"coverImageUrl\": \"https://cdn.pvs.app/covers/it.jpg\",
-
-\"isPublic\": true,
-
-\"contributionPolicy\": \"OPEN\",
-
-\"licenseType\": \"FREE_ATTRIBUTION\",
-
-\"cardCount\": 150,
-
-\"forkedFromId\": null
-
+  "id": "deck-555",
+  "projectId": "prj-123",
+  "parentDeckId": null,
+  "ownerId": "user-999",
+  "title": "IT Slang",
+  "description": "Сленг разработчиков Кремниевой долины",
+  "coverImageUrl": "https://cdn.pvs.app/covers/it.jpg",
+  "isPublic": true,
+  "contributionPolicy": "OPEN",
+  "licenseType": "FREE_ATTRIBUTION",
+  "cardCount": 150,
+  "forkedFromId": null
 }
+```
+
+
 
 ### **DTO: CreateDeckRequestDto**
 
@@ -632,25 +568,17 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"projectId\": \"prj-123\",
-
-\"parentDeckId\": \"deck-root-1\",
-
-\"title\": \"Урок 1: Знакомство\",
-
-\"description\": \"Базовые фразы приветствия\",
-
-\"isPublic\": false
-
+  "projectId": "prj-123",
+  "parentDeckId": "deck-root-1",
+  "title": "Урок 1: Знакомство",
+  "description": "Базовые фразы приветствия",
+  "isPublic": false
 }
+```
+
+
 
 ### **DTO: UpdateDeckRequestDto**
 
@@ -684,25 +612,17 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"title\": \"Урок 1: Приветствие (Обновлено)\",
-
-\"description\": \"Расширенный список фраз для знакомства\",
-
-\"isPublic\": true,
-
-\"contributionPolicy\": \"RESTRICTED\",
-
-\"parentDeckId\": null
-
+  "title": "Урок 1: Приветствие (Обновлено)",
+  "description": "Расширенный список фраз для знакомства",
+  "isPublic": true,
+  "contributionPolicy": "RESTRICTED",
+  "parentDeckId": null
 }
+```
+
+
 
 ### **DTO: DeckTreeItemDto**
 
@@ -722,11 +642,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -816,59 +733,34 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"id\": \"card-123\",
-
-\"deckId\": \"deck-555\",
-
-\"creatorId\": \"user-999\",
-
-\"sentence\": \"The quick brown fox jumps over the lazy dog.\",
-
-\"translation\": \"Шустрая бурая лиса перепрыгивает через ленивую собаку.\",
-
-\"targetWord\": \"jumps\",
-
-\"targetIndex\": {
-
-\"start\": 20,
-
-\"len\": 5
-
-},
-
-\"sourceMeta\": {
-
-\"type\": \"book\",
-
-\"title\": \"English for Kids\",
-
-\"page\": 12
-
-},
-
-\"media\": {
-
-\"audioId\": \"media-audio-uuid\",
-
-\"imageId\": null
-
-},
-
-\"lemmaId\": \"lemma-jump-uuid\",
-
-\"srsStatus\": \"LEARNING\",
-
-\"createdAt\": \"2025-12-03T10:00:00Z\"
-
+  "id": "card-123",
+  "deckId": "deck-555",
+  "creatorId": "user-999",
+  "sentence": "The quick brown fox jumps over the lazy dog.",
+  "translation": "Шустрая бурая лиса перепрыгивает через ленивую собаку.",
+  "targetWord": "jumps",
+  "targetIndex": {
+    "start": 20,
+    "len": 5
+  },
+  "sourceMeta": {
+    "type": "book",
+    "title": "English for Kids",
+    "page": 12
+  },
+  "media": {
+    "audioId": "media-audio-uuid",
+    "imageId": null
+  },
+  "lemmaId": "lemma-jump-uuid",
+  "srsStatus": "LEARNING",
+  "createdAt": "2025-12-03T10:00:00Z"
 }
+```
+
+
 
 ### **DTO: CreateCardRequestDto**
 
@@ -884,33 +776,21 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"deckId\": \"deck-555\",
-
-\"sentence\": \"I have a dream.\",
-
-\"translation\": \"У меня есть мечта.\",
-
-\"targetWord\": \"dream\",
-
-\"sourceMeta\": {
-
-\"type\": \"youtube\",
-
-\"url\": \"https://youtu.be/vP4iY1TtS3s\",
-
-\"time\": 105
-
+  "deckId": "deck-555",
+  "sentence": "I have a dream.",
+  "translation": "У меня есть мечта.",
+  "targetWord": "dream",
+  "sourceMeta": {
+    "type": "youtube",
+    "url": "https://youtu.be/vP4iY1TtS3s",
+    "time": 105
+  }
 }
+```
 
-}
+
 
 ### **DTO: CaptureCardRequestDto**
 
@@ -926,11 +806,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -970,29 +847,19 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"sentence\": \"The engine failed immediately after takeoff.\",
-
-\"translation\": \"Двигатель отказал сразу после взлета.\",
-
-\"targetWord\": \"takeoff\",
-
-\"targetIndex\": {
-
-\"start\": 36,
-
-\"len\": 7
-
+  "sentence": "The engine failed immediately after takeoff.",
+  "translation": "Двигатель отказал сразу после взлета.",
+  "targetWord": "takeoff",
+  "targetIndex": {
+    "start": 36,
+    "len": 7
+  }
 }
+```
 
-}
+
 
 ### **DTO: CardPreviewDto**
 
@@ -1008,11 +875,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -1050,35 +914,22 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"id\": \"sess-abc-123\",
-
-\"projectId\": \"prj-eng-001\",
-
-\"status\": \"ACTIVE\",
-
-\"startTime\": \"2025-12-03T18:30:00Z\",
-
-\"cardsReviewed\": 15,
-
-\"queueStats\": {
-
-\"new\": 5,
-
-\"review\": 40,
-
-\"learning\": 2
-
+  "id": "sess-abc-123",
+  "projectId": "prj-eng-001",
+  "status": "ACTIVE",
+  "startTime": "2025-12-03T18:30:00Z",
+  "cardsReviewed": 15,
+  "queueStats": {
+    "new": 5,
+    "review": 40,
+    "learning": 2
+  }
 }
+```
 
-}
+
 
 ### **DTO: CardStudyDto**
 
@@ -1094,47 +945,31 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"id\": \"card-555\",
-
-\"type\": \"SENTENCE_MINING\",
-
-\"content\": {
-
-\"sentence\": \"She whispered a secret.\",
-
-\"targetIndex\": { \"start\": 4, \"len\": 9 },
-
-\"targetLemma\": \"whisper\",
-
-\"translation\": \"Она прошептала секрет.\"
-
-},
-
-\"media\": {
-
-\"audioId\": \"audio-uuid-1\"
-
-},
-
-\"srsState\": {
-
-\"state\": \"REVIEW\",
-
-\"currentInterval\": 21
-
-},
-
-\"siblingsCount\": 1
-
+  "id": "card-555",
+  "type": "SENTENCE_MINING",
+  "content": {
+    "sentence": "She whispered a secret.",
+    "targetIndex": {
+      "start": 4,
+      "len": 9
+    },
+    "targetLemma": "whisper",
+    "translation": "Она прошептала секрет."
+  },
+  "media": {
+    "audioId": "audio-uuid-1"
+  },
+  "srsState": {
+    "state": "REVIEW",
+    "currentInterval": 21
+  },
+  "siblingsCount": 1
 }
+```
+
+
 
 ### **DTO: ReviewCardRequestDto**
 
@@ -1164,25 +999,17 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"sessionId\": \"sess-abc-123\",
-
-\"cardId\": \"card-555\",
-
-\"rating\": 3,
-
-\"durationMs\": 4500,
-
-\"userAnswer\": \"whisper\"
-
+  "sessionId": "sess-abc-123",
+  "cardId": "card-555",
+  "rating": 3,
+  "durationMs": 4500,
+  "userAnswer": "whisper"
 }
+```
+
+
 
 **Примечание:** Поле **userAnswer** (опционально) — текстовый ответ пользователя для проверки (например, целевое слово). Если передано, сервис выполняет валидацию (точное совпадение, fuzzy match, синонимы) и возвращает результат в **ReviewResponseDto.answerValidation**.
 
@@ -1214,25 +1041,17 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"isCorrect\": false,
-
-\"isFuzzyMatch\": true,
-
-\"matchedSynonym\": null,
-
-\"similarityScore\": 0.85,
-
-\"suggestion\": \"whisper\"
-
+  "isCorrect": false,
+  "isFuzzyMatch": true,
+  "matchedSynonym": null,
+  "similarityScore": 0.85,
+  "suggestion": "whisper"
 }
+```
+
+
 
 ### **DTO: ReviewResponseDto**
 
@@ -1268,43 +1087,26 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"cardId\": \"card-555\",
-
-\"nextReviewDate\": \"2025-12-08T10:00:00Z\",
-
-\"interval\": \"5d\",
-
-\"state\": \"REVIEW\",
-
-\"stability\": 4.8,
-
-\"isLeech\": false,
-
-\"buriedSiblingsCount\": 2,
-
-\"answerValidation\": {
-
-\"isCorrect\": true,
-
-\"isFuzzyMatch\": false,
-
-\"matchedSynonym\": null,
-
-\"similarityScore\": 1.0,
-
-\"suggestion\": null
-
+  "cardId": "card-555",
+  "nextReviewDate": "2025-12-08T10:00:00Z",
+  "interval": "5d",
+  "state": "REVIEW",
+  "stability": 4.8,
+  "isLeech": false,
+  "buriedSiblingsCount": 2,
+  "answerValidation": {
+    "isCorrect": true,
+    "isFuzzyMatch": false,
+    "matchedSynonym": null,
+    "similarityScore": 1.0,
+    "suggestion": null
+  }
 }
+```
 
-}
+
 
 ### **DTO: UndoReviewRequestDto**
 
@@ -1320,17 +1122,13 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"sessionId\": \"sess-abc-123\"
-
+  "sessionId": "sess-abc-123"
 }
+```
+
+
 
 ### **DTO: UndoResponseDto**
 
@@ -1346,21 +1144,15 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"success\": true,
-
-\"restoredCardId\": \"card-555\",
-
-\"message\": \"Previous review reverted. Card returned to queue.\"
-
+  "success": true,
+  "restoredCardId": "card-555",
+  "message": "Previous review reverted. Card returned to queue."
 }
+```
+
+
 
 ### **DTO: SrsParamsDto**
 
@@ -1376,11 +1168,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -1418,37 +1207,23 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"projectId\": \"prj-eng-123\",
-
-\"totalLemmas\": 2500,
-
-\"matureCount\": 1800,
-
-\"learningCount\": 500,
-
-\"newCount\": 200,
-
-\"cefrLevel\": {
-
-\"code\": \"A2\",
-
-\"title\": \"Elementary\",
-
-\"progressPercent\": 75
-
-},
-
-\"estimatedFluency\": 60
-
+  "projectId": "prj-eng-123",
+  "totalLemmas": 2500,
+  "matureCount": 1800,
+  "learningCount": 500,
+  "newCount": 200,
+  "cefrLevel": {
+    "code": "A2",
+    "title": "Elementary",
+    "progressPercent": 75
+  },
+  "estimatedFluency": 60
 }
+```
+
+
 
 ### **DTO: HeatmapDto**
 
@@ -1466,35 +1241,34 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"projectId\": \"prj-eng-123\",
-
-\"year\": 2025,
-
-\"totalReviews\": 1540,
-
-\"totalTimeSpentSeconds\": 45600,
-
-\"activity\": {
-
-\"2025-01-01\": { \"count\": 10, \"level\": 1 },
-
-\"2025-01-02\": { \"count\": 150, \"level\": 4 },
-
-\"2025-01-03\": { \"count\": 45, \"level\": 2 },
-
-\"2025-05-20\": { \"count\": 5, \"level\": 1 }
-
+  "projectId": "prj-eng-123",
+  "year": 2025,
+  "totalReviews": 1540,
+  "totalTimeSpentSeconds": 45600,
+  "activity": {
+    "2025-01-01": {
+      "count": 10,
+      "level": 1
+    },
+    "2025-01-02": {
+      "count": 150,
+      "level": 4
+    },
+    "2025-01-03": {
+      "count": 45,
+      "level": 2
+    },
+    "2025-05-20": {
+      "count": 5,
+      "level": 1
+    }
+  }
 }
+```
 
-}
+
 
 ### **DTO: DailySummaryDto**
 
@@ -1510,43 +1284,26 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"date\": \"2025-12-03\",
-
-\"currentStreak\": 12,
-
-\"isStreakExtendedToday\": true,
-
-\"timeSpentSeconds\": 945,
-
-\"newCards\": {
-
-\"current\": 20,
-
-\"target\": 20,
-
-\"isCompleted\": true
-
-},
-
-\"reviews\": {
-
-\"current\": 45,
-
-\"target\": 100,
-
-\"isCompleted\": false
-
+  "date": "2025-12-03",
+  "currentStreak": 12,
+  "isStreakExtendedToday": true,
+  "timeSpentSeconds": 945,
+  "newCards": {
+    "current": 20,
+    "target": 20,
+    "isCompleted": true
+  },
+  "reviews": {
+    "current": 45,
+    "target": 100,
+    "isCompleted": false
+  }
 }
+```
 
-}
+
 
 ## **7. Коллаборация (Collaboration)**
 
@@ -1566,11 +1323,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -1622,31 +1376,20 @@ expand_less
 
 **Пример JSON (Предложение новой карточки)**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"deckId\": \"deck-pub-555\",
-
-\"type\": \"ADD\",
-
-\"content\": {
-
-\"sentence\": \"Hello world!\",
-
-\"targetWord\": \"world\",
-
-\"translation\": \"Привет, мир!\"
-
-},
-
-\"comment\": \"Adding a basic example.\"
-
+  "deckId": "deck-pub-555",
+  "type": "ADD",
+  "content": {
+    "sentence": "Hello world!",
+    "targetWord": "world",
+    "translation": "Привет, мир!"
+  },
+  "comment": "Adding a basic example."
 }
+```
+
+
 
 ### **DTO: ContributionDiffDto**
 
@@ -1662,11 +1405,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -1716,35 +1456,25 @@ expand_less
 
 **Пример JSON (Принятие)**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"status\": \"MERGED\",
-
-\"resolutionComment\": \"Спасибо за исправление опечатки!\"
-
+  "status": "MERGED",
+  "resolutionComment": "Спасибо за исправление опечатки!"
 }
+```
+
+
 
 **Пример JSON (Отклонение)**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"status\": \"REJECTED\",
-
-\"resolutionComment\": \"В данном контексте слово используется в переносном значении, ошибки нет.\"
-
+  "status": "REJECTED",
+  "resolutionComment": "В данном контексте слово используется в переносном значении, ошибки нет."
 }
+```
+
+
 
 ## **8. Маркетплейс (Marketplace)**
 
@@ -1764,11 +1494,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -1820,11 +1547,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -1856,11 +1580,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -1904,19 +1625,14 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"rating\": 4,
-
-\"comment\": \"Материал хороший, но в некоторых аудиозаписях есть посторонний шум.\"
-
+  "rating": 4,
+  "comment": "Материал хороший, но в некоторых аудиозаписях есть посторонний шум."
 }
+```
+
+
 
 ## **9. Синхронизация (Sync)**
 
@@ -1936,19 +1652,14 @@ expand_less
 
 **Пример JSON**
 
-code JSON
-
-downloadcontent_copy
-
-expand_less
-
+```json
 {
-
-\"lastSyncToken\": 1735660800,
-
-\"projectId\": \"prj-eng-123\"
-
+  "lastSyncToken": 1735660800,
+  "projectId": "prj-eng-123"
 }
+```
+
+
 
 ### **DTO: SyncResponseDto**
 
@@ -1964,11 +1675,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -2018,11 +1726,8 @@ expand_less
 
 **Пример JSON**
 
-code JSON
 
-downloadcontent_copy
 
-expand_less
 
 {
 
@@ -2080,15 +1785,18 @@ expand_less
 
 **Пример JSON**
 
+```json
 {
-
-\"processed_count\": 8,
-
-\"failed_count\": 2,
-
-\"failed_card_ids\": [ \"card-uuid-1\", \"card-uuid-2\" ]
-
+  "processed_count": 8,
+  "failed_count": 2,
+  "failed_card_ids": [
+    "card-uuid-1",
+    "card-uuid-2"
+  ]
 }
+```
+
+
 
 ---
 

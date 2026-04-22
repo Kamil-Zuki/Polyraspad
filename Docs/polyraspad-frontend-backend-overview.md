@@ -1,8 +1,16 @@
+---
+title: "Polyraspad frontend for backend developers"
+tags: [polyraspad, docs, frontend, api, integration]
+lang: en
+---
+
 # Polyraspad frontend — guide for backend developers
+
+> Связь с контрактами: [[Описание REST API]], [[DTO Description]].
 
 This document describes how the **polyraspad-frontend** app (Next.js) talks to your HTTP API, what it expects from responses, and which parts are **not** the .NET backend. Use it when changing contracts, CORS, auth, or error shapes.
 
-**Canonical REST contract** for routes and payloads remains in `Docs/Описание REST API.md` (and related specs). This file is the **integration view** from the browser app.
+**Canonical REST contract** for routes and payloads: [[Описание REST API]] (и связанные спецификации). Этот файл — **интеграционный** взгляд со стороны браузера.
 
 ---
 
@@ -11,10 +19,11 @@ This document describes how the **polyraspad-frontend** app (Next.js) talks to y
 | Item | Detail |
 |------|--------|
 | Location | Git submodule `polyraspad-frontend/` at monorepo root |
-| UI framework | Next.js **16** (App Router), React **19**, TypeScript |
-| Styling | Tailwind CSS |
+| UI framework | Next.js **^16.1** (App Router), React **19**, TypeScript (см. `package.json`) |
+| Styling | Tailwind CSS **4** (PostCSS) |
 | Server state | TanStack React Query (`@tanstack/react-query`) — caching, refetch, mutations |
 | Build | `output: "standalone"` in `next.config.ts` (container-friendly production build) |
+| Редиректы | `next.config`: `/settings` → `/profile` (см. также `ROUTES.SETTINGS` в `constants.ts`) |
 
 The frontend is a **separate origin** from the API in typical setups (e.g. `http://localhost:3000` vs `http://localhost:5000`). All vocabulary/product calls are made **from the browser** with `fetch`, unless noted otherwise.
 
@@ -44,7 +53,7 @@ flowchart LR
 ```
 
 - **Business API**: browser → `NEXT_PUBLIC_API_URL` + path (see below).
-- **Editor AI**: browser → Next.js **Route Handlers** under `src/app/api/ollama/` (and Gemini via server env). These calls **do not** go to the .NET stack by default.
+- **Editor AI**: same-origin `fetch` к путям **`/api/ollama/generate`**, **`/api/ollama/models`** (см. `src/lib/api/ollama-client.ts`; провайдер Ollama/Gemini задаётся env на стороне Next, если маршруты реализованы). Эти вызовы **не** идут в Aggregator, пока вы явно не проксируете их туда. В репозитории фронта **может не быть** папки `src/app/api/ollama/` — тогда в dev вернётся 404, пока не добавлены Route Handlers.
 
 ---
 
@@ -108,43 +117,35 @@ The UI centralizes parsing in `BaseApiClient`. Backend should prefer consistent 
 
 Some Aggregator exception strings are post-processed into **Russian** user-facing messages in the client (login failures). Prefer stable, structured error codes or `detail` from the API to avoid relying on substring matching.
 
-### Multipart (media)
+### Media (image, PDF, Reader)
 
-- **Endpoint**: `POST /api/Media/upload-image` (see `API_ENDPOINTS.MEDIA`).
-- **Client**: `src/lib/api/media-client.ts` — does **not** set `Content-Type` (browser sets `multipart/form-data` + boundary).
-- **Auth**: same Bearer token as JSON calls.
+- **Images**: `POST /api/Media/upload-image` (multipart, поле файла в клиенте — как в `media-client.ts`).
+- **Документы (Reader)**: `POST /api/Media/upload-document` (PDF, до 50 MB на стороне шлюза), `GET /api/Media/serve-document?url=...`, библиотека: `GET /api/Media/library/{projectId}`, `PUT`/`DELETE` `/api/Media/library/{projectId}/books/{bookId}`; также `GET /api/Media/serve-image` (см. `MediaController` в Aggregator).
+- **Client**: `src/lib/api/media-client.ts` — для multipart **не** задавать `Content-Type` вручную.
+- **Auth**: тот же Bearer, что и для JSON.
 
 ---
 
 ## API surface used by the frontend (path reference)
 
-Paths below are exactly as in `src/lib/constants.ts` (`API_ENDPOINTS`). They are relative to `NEXT_PUBLIC_API_URL`.
+Ниже пути **буквально** как в `src/lib/constants.ts` (`API_ENDPOINTS`), относительно `NEXT_PUBLIC_API_URL` (у шлюза ASP.NET сегменты в стиле `api/Controller/...`).
 
-**Auth** — `/api/Auth/login`, `register`, `me`, `refresh-token`, `logout`, `username`, `password`, `confirm-email`.
+| Область | Методы (кратко) |
+|--------|-----------------|
+| **Auth** | `POST` `/api/Auth/login`, `register`; `GET` `me`, `confirm-email`; `POST` `refresh-token`, `logout`; `PUT` `username`, `avatar-url`, `password` |
+| **Projects** | `GET`/`POST` `/api/Projects`, `GET`/`PUT` `/api/Projects/{id}` |
+| **Decks** | `GET` `/api/Decks/tree/{projectId}`, `GET`/`POST` `/api/Decks`, `PUT`/`DELETE` `/api/Decks/{id}` |
+| **Cards** | `POST` `/api/Cards`, `capture`, `check-duplicates`, `import`; `GET` `search`, `/api/Cards/{id}`; `PUT` `/api/Cards/{id}` |
+| **Media** | `POST` `upload-image`, `upload-document`; `GET` `serve-document`, `serve-image`; `GET` `/api/Media/library/{projectId}`; `PUT`/`DELETE` `library/{projectId}/books/{bookId}` |
+| **User settings** | `GET`/`PUT` `/api/settings` |
+| **Analytics** | `GET` `/api/analytics/vocabulary?projectId=…`; `heatmap` — query `projectId`, `year` (см. `ANALYTICS.HEATMAP`); `daily` — в клиенте в query уходит `projectId` (на стороне Aggregator для `daily` в первую очередь поддержан `timezoneOffset` — см. `AnalyticsController` и [[Описание REST API]]) |
+| **Text** | `POST` `/api/text/analyze` |
+| **Study** | `POST` `/api/study/session`; `GET` `/api/study/session/{sessionId}/next`; `POST` `…/review`, `…/undo` |
+| **Marketplace** | `GET` `/api/marketplace/products`, `…/products/{id}`, `…/preview`, `…/reviews` |
+| **Subscriptions** | `GET` `/api/subscriptions`; `POST` и `DELETE` `/api/subscriptions/{deckId}` |
+| **Automation** | `autopilot`, `recommendations`, `notifications/preferences`, `jobs`, `jobs/{id}`, `…/retry`, `…/resume`, `mining/suggest`, `mining/approve`, `copilot/review-feedback`, `experiments/assignment`, `experiments/events` (префикс `/api/automation/…`) |
 
-**Projects** — `/api/Projects`, `/api/Projects/{id}`.
-
-**Decks** — `/api/Decks/tree/{projectId}`, `/api/Decks`, `/api/Decks/{id}`.
-
-**Cards** — `/api/Cards`, `capture`, `search`, `/{id}`, `import` (bulk).
-
-**Media** — `/api/Media/upload-image`.
-
-**User settings** — `/api/settings`.
-
-**Analytics** — `/api/analytics/vocabulary?projectId=…`, `heatmap`, `daily` (query params as built in code).
-
-**Text** — `/api/text/analyze`.
-
-**Study** — `/api/study/session`, `/api/study/session/{sessionId}/next`, `review`, `undo`.
-
-**Marketplace** — `/api/marketplace/products`, `…/products/{id}`, `preview`, `reviews`.
-
-**Subscriptions** — `/api/subscriptions`, `/api/subscriptions/{deckId}`.
-
-**Automation** — `/api/automation/autopilot`, `recommendations`, `notifications/preferences`, `jobs`, `jobs/{id}`, `retry`, `resume`, `mining/suggest`, `mining/approve`, `copilot/review-feedback`, `experiments/assignment`, `experiments/events`.
-
-If you add or rename a route, update **`API_ENDPOINTS`** and the corresponding `*-client.ts` / React Query hooks, or the UI will keep calling the old path.
+При смене маршрута обновляйте **`API_ENDPOINTS`**, `*-client.ts` и React Query, иначе UI продолжит дергать старые пути.
 
 ---
 
@@ -163,7 +164,7 @@ Shared TypeScript DTO shapes used by the UI live mainly in `src/lib/api/types.ts
 
 ## Quick checklist when you change the API
 
-1. Update OpenAPI / `Docs/Описание REST API.md` (or your source of truth).
+1. Update OpenAPI / [[Описание REST API]] (or your source of truth).
 2. Ensure **CORS** and **401** behavior still match SPA expectations.
 3. Prefer **JSON errors** with `detail` (or ProblemDetails) so `BaseApiClient` does not depend on fragile string parsing.
 4. Align **204 / 202** semantics with study and other flows that expect empty bodies.

@@ -1,3 +1,9 @@
+---
+title: "React + Next.js in this project"
+tags: [polyraspad, docs, frontend, nextjs, react]
+lang: en
+---
+
 # React + Next.js Through This Project
 
 This guide teaches the frontend stack of `polyraspad-frontend` by following the real app structure.
@@ -170,12 +176,25 @@ This project currently leans heavily client-side, which is a totally normal stag
 
 ## 6. Routing in this project
 
-Next.js routing is filesystem-based here:
+Next.js routing is filesystem-based here (проверяйте `src/app` — список растёт).
 
-- `src/app/projects/page.tsx` -> `/projects`
-- `src/app/projects/[id]/page.tsx` -> `/projects/:id`
-- `src/app/study/[deckId]/session/page.tsx` -> `/study/:deckId/session`
-- `src/app/api/ollama/generate/route.ts` -> `/api/ollama/generate`
+Примеры:
+
+- `src/app/projects/page.tsx` → `/projects`
+- `src/app/projects/[id]/page.tsx` → `/projects/:id`
+- `src/app/dashboard/page.tsx` → `/dashboard`
+- `src/app/library/page.tsx` → `/library`
+- `src/app/browser/page.tsx` → `/browser`
+- `src/app/editor/page.tsx` → `/editor`
+- `src/app/reader/page.tsx` → `/reader`
+- `src/app/import/page.tsx` → `/import`
+- `src/app/marketplace/page.tsx` → `/marketplace`
+- `src/app/study/[deckId]/session/page.tsx` → `/study/:deckId/session`
+- `src/app/profile/page.tsx` → `/profile` (настройки профиля; `ROUTES.SETTINGS` в коде ведёт сюда же)
+- `src/app/settings/page.tsx` → `/settings` — в `next.config` редирект на `/profile`
+- `src/app/auth/page.tsx` → `/auth`
+
+Редактор AI вызывает `fetch` к **`/api/ollama/generate`** и **`/api/ollama/models`** (`ollama-client.ts`). Реализация в виде `src/app/api/ollama/**/route.ts` в репозитории **может отсутствовать**; без неё маршруты дадут 404.
 
 Two key navigation patterns appear in your code:
 
