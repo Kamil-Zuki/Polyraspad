@@ -128,24 +128,41 @@ Some Aggregator exception strings are post-processed into **Russian** user-facin
 
 ## API surface used by the frontend (path reference)
 
-Ниже пути **буквально** как в `src/lib/constants.ts` (`API_ENDPOINTS`), относительно `NEXT_PUBLIC_API_URL` (у шлюза ASP.NET сегменты в стиле `api/Controller/...`).
+Пути **как в** `src/lib/constants.ts` → `API_ENDPOINTS`, относительно `NEXT_PUBLIC_API_URL` (шлюз: `api/Controller/...`).
 
-| Область | Методы (кратко) |
-|--------|-----------------|
-| **Auth** | `POST` `/api/Auth/login`, `register`; `GET` `me`, `confirm-email`; `POST` `refresh-token`, `logout`; `PUT` `username`, `avatar-url`, `password` |
-| **Projects** | `GET`/`POST` `/api/Projects`, `GET`/`PUT` `/api/Projects/{id}` |
-| **Decks** | `GET` `/api/Decks/tree/{projectId}`, `GET`/`POST` `/api/Decks`, `PUT`/`DELETE` `/api/Decks/{id}` |
-| **Cards** | `POST` `/api/Cards`, `capture`, `check-duplicates`, `import`; `GET` `search`, `/api/Cards/{id}`; `PUT` `/api/Cards/{id}` |
-| **Media** | `POST` `upload-image`, `upload-document`; `GET` `serve-document`, `serve-image`; `GET` `/api/Media/library/{projectId}`; `PUT`/`DELETE` `library/{projectId}/books/{bookId}` |
-| **User settings** | `GET`/`PUT` `/api/settings` |
-| **Analytics** | `GET` `/api/analytics/vocabulary?projectId=…`; `heatmap` — query `projectId`, `year` (см. `ANALYTICS.HEATMAP`); `daily` — в клиенте в query уходит `projectId` (на стороне Aggregator для `daily` в первую очередь поддержан `timezoneOffset` — см. `AnalyticsController` и [[Описание REST API]]) |
-| **Text** | `POST` `/api/text/analyze` |
-| **Study** | `POST` `/api/study/session`; `GET` `/api/study/session/{sessionId}/next`; `POST` `…/review`, `…/undo` |
-| **Marketplace** | `GET` `/api/marketplace/products`, `…/products/{id}`, `…/preview`, `…/reviews` |
-| **Subscriptions** | `GET` `/api/subscriptions`; `POST` и `DELETE` `/api/subscriptions/{deckId}` |
-| **Automation** | `autopilot`, `recommendations`, `notifications/preferences`, `jobs`, `jobs/{id}`, `…/retry`, `…/resume`, `mining/suggest`, `mining/approve`, `copilot/review-feedback`, `experiments/assignment`, `experiments/events` (префикс `/api/automation/…`) |
+### Auth, проекты, настройки
 
-При смене маршрута обновляйте **`API_ENDPOINTS`**, `*-client.ts` и React Query, иначе UI продолжит дергать старые пути.
+| Область | Эндпоинты (кратко) |
+| ------- | ------------------ |
+| Auth | `POST` `/api/Auth/login`, `/register`; `GET` `/api/Auth/me`, `confirm-email`; `POST` `refresh-token`, `logout`; `PUT` `username`, `avatar-url`, `password` |
+| Projects | `GET` / `POST` `/api/Projects`, `GET` / `PUT` `/api/Projects/{id}` |
+| User settings | `GET` / `PUT` `/api/settings` |
+
+### Контент и медиа
+
+| Область | Эндпоинты (кратко) |
+| ------- | ------------------ |
+| Decks | `GET` `/api/Decks/tree/{projectId}`; `GET` / `POST` `/api/Decks`; `PUT` / `DELETE` `/api/Decks/{id}` |
+| Cards | `POST` `/api/Cards`, `…/capture`, `…/check-duplicates`, `…/import`; `GET` `…/search`, `…/{id}`; `PUT` `…/{id}` |
+| Media | `upload-image`, `upload-document`; `serve-document`, `serve-image`; `GET` `/api/Media/library/{projectId}`; `PUT` / `DELETE` `…/library/…/books/{bookId}` |
+
+### Аналитика, текст, обучение
+
+| Область | Эндпоинты (кратко) |
+| ------- | ------------------ |
+| Analytics | `vocabulary`, `heatmap` (query: `projectId`, `year`), `daily` (на клиенте в query также `projectId`; на Aggregator для `daily` см. `timezoneOffset` в [[Описание REST API]]) |
+| Text | `POST` `/api/text/analyze` |
+| Study | `POST` `/api/study/session`; `GET` `…/session/{sessionId}/next`; `POST` `…/review`, `…/undo` |
+
+### Маркетплейс, подписки, автоматизация
+
+| Область | Эндпоинты (кратко) |
+| ------- | ------------------ |
+| Marketplace | `GET` `/api/marketplace/products`, `…/products/{id}`, `…/preview`, `…/reviews` |
+| Subscriptions | `GET` `/api/subscriptions`; `POST` / `DELETE` `/api/subscriptions/{deckId}` |
+| Automation | префикс `/api/automation/`: `autopilot`, `recommendations`, `notifications/preferences`, `jobs`, `jobs/{id}/retry` · `…/resume`, `mining/suggest`, `mining/approve`, `copilot/review-feedback`, `experiments/assignment`, `experiments/events` |
+
+При смене маршрута обновляйте `API_ENDPOINTS`, `*-client.ts` и React Query, иначе UI продолжит вызывать старые пути.
 
 ---
 

@@ -5,35 +5,28 @@ tags: [polyraspad, docs, database, postgresql]
 doc_id: PVS-DB-Schema-2025-1
 ---
 
-# **Personal Vocabulary Service**
+# Personal Vocabulary Service
 
-**Описание схемы базы данных**
+## Описание схемы базы данных
 
-  ------------------------------------------
-  Параметр            Значение
-  ------------------- ----------------------
-  **Код документа**   PVS-DB-Schema-2025-1
-
-  **Версия**          1.0
-
-  **СУБД**            PostgreSQL 15+
-
-  **Дата**            03/12/2025
-
-  **Автор**           Каратов К.А.
-
-  **Утверждено**      
-  ------------------------------------------
+| Параметр      | Значение             |
+| ------------- | -------------------- |
+| Код документа | PVS-DB-Schema-2025-1 |
+| Версия        | 1.0                  |
+| СУБД          | PostgreSQL 15+       |
+| Дата          | 03/12/2025           |
+| Автор         | Каратов К.А.         |
+| Утверждено    | —                    |
 
 ---
 
-## **Введение**
+## Введение
 
 Настоящий документ содержит детальное техническое описание схемы базы данных (схема internal) для микросервиса **Personal Vocabulary Service (PVS)**.
 
 База данных спроектирована в соответствии со стандартом **Steos-DB-WhiteBook** и обеспечивает реализацию функциональных требований версии **7.0 (Golden Master)**. Архитектура хранилища адаптирована под иерархическую структуру проектов, методику Sentence Mining, работу в офлайн-режиме и поддержку маркетплейса контента.
 
-### **Ключевые принципы проектирования**
+### Ключевые принципы проектирования
 
 1.  **Изоляция сервиса:** База данных принадлежит исключительно микросервису PVS. Прямой доступ из других сервисов запрещен.
 
@@ -51,9 +44,8 @@ doc_id: PVS-DB-Schema-2025-1
 
 5.  **Производительность:** Использование GIN-индексов для полнотекстового поиска и JSONB-запросов.
 
-## **Содержание**
-
-### **1. Ядро: Контент и Иерархия (Content Core)**
+## Содержание
+### 1. Ядро: Контент и Иерархия (Content Core)
 
 Таблицы, отвечающие за хранение учебных материалов и их организацию.
 
@@ -65,7 +57,7 @@ doc_id: PVS-DB-Schema-2025-1
 
 - **1.4. deck_versions** --- История версий колод (Снэпшоты).
 
-### **2. Движок Обучения и Лингвистика (Learning & NLP)**
+### 2. Движок Обучения и Лингвистика (Learning & NLP)
 
 Таблицы, отвечающие за алгоритмы FSRS, прогресс пользователя и словарный запас.
 
@@ -77,7 +69,7 @@ doc_id: PVS-DB-Schema-2025-1
 
 - **2.4. review_logs** --- Детальный лог ответов.
 
-### **3. Маркетплейс и Права (Marketplace & Entitlements)**
+### 3. Маркетплейс и Права (Marketplace & Entitlements)
 
 Таблицы для реализации экономики авторов и защиты контента.
 
@@ -87,7 +79,7 @@ doc_id: PVS-DB-Schema-2025-1
 
 - **3.3. product_reviews** --- Отзывы и рейтинги.
 
-### **4. Коллаборация (Community)**
+### 4. Коллаборация (Community)
 
 Таблицы для совместной работы и социальных механик.
 
@@ -97,7 +89,7 @@ doc_id: PVS-DB-Schema-2025-1
 
 - **4.3. author_profiles** --- Публичные профили авторов.
 
-### **5. Системные и Служебные (System & Sync)**
+### 5. Системные и Служебные (System & Sync)
 
 Таблицы для синхронизации и настроек.
 
@@ -107,11 +99,11 @@ doc_id: PVS-DB-Schema-2025-1
 
 ---
 
-## **1. Ядро: Контент и Иерархия (Content Core)**
+## 1. Ядро: Контент и Иерархия (Content Core)
 
 Таблицы в схеме internal, отвечающие за хранение пользовательских данных и их структуру.
 
-### **1.1. Таблица projects (Проекты)**
+### 1.1. Таблица projects (Проекты)
 
 Корневая сущность. Реализует требования **SR-STR-01** и **SR-STR-02**.\
 Проект служит жестким разделителем: карточки, настройки алгоритмов и статистика одного проекта никак не влияют на другой.
@@ -147,7 +139,7 @@ updated_at timestamptz NOT NULL DEFAULT now()
 
 CREATE INDEX idx_projects_user_id ON internal.projects (user_id);
 
-### **1.2. Таблица decks (Колоды)**
+### 1.2. Таблица decks (Колоды)
 
 Тематические контейнеры. Реализует **SR-STR-03** (иерархия) и **SR-PUB-02** (клонирование).\
 Колоды могут быть вложенными (папки). Удаление родительской колоды каскадно удаляет все дочерние (или переносит их --- зависит от бизнес-логики, здесь выбран каскад для чистоты структуры).
@@ -205,7 +197,7 @@ CREATE INDEX idx_decks_parent_deck_id ON internal.decks (parent_deck_id);
 
 CREATE INDEX idx_decks_public ON internal.decks (is_public) WHERE is_public = true;
 
-### **1.3. Таблица cards (Карточки)**
+### 1.3. Таблица cards (Карточки)
 
 Единица обучения. Структура полностью переработана под **Sentence Mining** (SR-VOC-01).\
 Вместо Front/Back мы храним предложение и метаданные о целевом слове.
@@ -293,7 +285,7 @@ CREATE INDEX idx_cards_deck_id ON internal.cards (deck_id);
 
 CREATE INDEX idx_cards_search ON internal.cards USING GIN (search_vector);
 
-### **1.4. Таблица deck_versions (История версий)**
+### 1.4. Таблица deck_versions (История версий)
 
 Необходима для реализации **SR-MOD-03** (откат при бане) и **SR-VOC-07** (синхронизация обновлений). Хранит \"снимки\" состояния колоды.
 
@@ -326,9 +318,8 @@ REFERENCES internal.decks(id) ON DELETE CASCADE
 
 CREATE INDEX idx_deck_versions_deck_id ON internal.deck_versions (deck_id);
 
-## **Раздел 2. Движок Обучения и Лингвистика (Learning & NLP)**
-
-### **2.1. Таблица user_card_progress (Прогресс FSRS)**
+## Раздел 2. Движок Обучения и Лингвистика (Learning & NLP)
+### 2.1. Таблица user_card_progress (Прогресс FSRS)
 
 Хранит состояние памяти пользователя для каждой карточки. Реализует требования **SR-LRN-03** (FSRS) и **SR-LRN-05** (Leeches).
 
@@ -395,7 +386,7 @@ WHERE is_suspended = false;
 
 CREATE INDEX idx_progress_card_id ON internal.user_card_progress (card_id);
 
-### **2.2. Таблица project_lemmas (Словарь лемм)**
+### 2.2. Таблица project_lemmas (Словарь лемм)
 
 Глобальный реестр слов в рамках проекта. Реализует **SR-TXT-03** и **SR-ANL-01**.\
 Связывает разрозненные карточки (например, с формами \"go\", \"went\") в единую сущность для подсчета словарного запаса.
@@ -447,7 +438,7 @@ ADD CONSTRAINT fk_cards_lemmas FOREIGN KEY (lemma_id)
 
 REFERENCES internal.project_lemmas(id) ON DELETE SET NULL;
 
-### **2.3. Таблица study_sessions (Сессии)**
+### 2.3. Таблица study_sessions (Сессии)
 
 Журнал сессий обучения (статусы в т.ч. **ACTIVE** и завершённые). Используется для построения **Heatmap** (SR-ANL-02), истории активности и привязки **review_logs**. Очередь карточек текущей сессии хранится в **Redis** (см. `StudyService`), не в этой таблице.
 
@@ -488,7 +479,7 @@ REFERENCES internal.projects(id) ON DELETE CASCADE
 
 CREATE INDEX idx_sessions_heatmap ON internal.study_sessions (user_id, project_id, end_time);
 
-### **2.4. Таблица review_logs (Лог ответов)**
+### 2.4. Таблица review_logs (Лог ответов)
 
 Неизменяемый журнал («Append-only log») каждого действия пользователя.\
 Необходим для:
@@ -588,9 +579,8 @@ CREATE INDEX idx_logs_user_date ON internal.review_logs (user_id, created_at);
 
 Этот блок таблиц обеспечивает реализацию **Creator Economy**: позволяет авторам упаковывать колоды в товары, а системе --- контролировать доступ на основе покупок (интеграция с Billing Service).
 
-## **Раздел 3. Маркетплейс и Права (Marketplace & Entitlements)**
-
-### **3.1. Таблица products (Товары)**
+## Раздел 3. Маркетплейс и Права (Marketplace & Entitlements)
+### 3.1. Таблица products (Товары)
 
 Обертка над колодой для продажи в Маркетплейсе. Реализует **SR-MKT-01**.\
 Отделяет сущность \"Учебный материал\" (Колода) от сущности \"Товар на витрине\" (Цена, Маркетинг).
@@ -644,7 +634,7 @@ CREATE INDEX idx_products_status ON internal.products (status) WHERE status = \'
 
 CREATE INDEX idx_products_author ON internal.products (author_id);
 
-### **3.2. Таблица user_entitlements (Права доступа)**
+### 3.2. Таблица user_entitlements (Права доступа)
 
 Реестр прав. Реализует **SR-MKT-03** и **SR-COL-07**.\
 Это \"билет\", который разрешает пользователю доступ к приватной или платной колоде.
@@ -688,7 +678,7 @@ CREATE INDEX idx_entitlements_check ON internal.user_entitlements (user_id, deck
 
 WHERE is_active = true;
 
-### **3.3. Таблица product_reviews (Отзывы)**
+### 3.3. Таблица product_reviews (Отзывы)
 
 Реализует **SR-MKT-05**. Позволяет оставлять отзывы только при наличии записи в user_entitlements.
 
@@ -747,9 +737,8 @@ CREATE INDEX idx_reviews_product ON internal.product_reviews (product_id, create
 
 Этот блок таблиц превращает сервис из «одиночной игры» в социальную платформу. Здесь реализуется **Git-like механика** предложений (Contributions) и система подписок.
 
-## **Раздел 4. Коллаборация (Community)**
-
-### **4.1. Таблица contributions (Предложения)**
+## Раздел 4. Коллаборация (Community)
+### 4.1. Таблица contributions (Предложения)
 
 Аналог Pull Request. Реализует требования **SR-COL-01**, **SR-COL-02**, **SR-COL-03**.\
 Хранит предложенные изменения в статусе \"Черновик\", не затрагивая основные данные до момента утверждения (Merge).
@@ -803,7 +792,7 @@ CREATE INDEX idx_contributions_pending ON internal.contributions (target_deck_id
 
 CREATE INDEX idx_contributions_author ON internal.contributions (author_id);
 
-### **4.2. Таблица deck_subscriptions (Подписки)**
+### 4.2. Таблица deck_subscriptions (Подписки)
 
 Связь «Многие-ко-многим» между пользователями и публичными колодами.\
 Реализует **SR-DECK-05** и **SR-SYNC-01** (для получения обновлений).
@@ -841,7 +830,7 @@ CREATE INDEX idx_subs_user ON internal.deck_subscriptions (user_id);
 
 CREATE INDEX idx_subs_deck ON internal.deck_subscriptions (deck_id);
 
-### **4.3. Таблица author_profiles (Профили авторов)**
+### 4.3. Таблица author_profiles (Профили авторов)
 
 Публичная визитка автора в PVS. Реализует **SR-PUB-04**.\
 Хранит данные, специфичные для образовательной платформы (бейджи, статистика), которые не хранятся в общем Identity Service.
@@ -891,9 +880,8 @@ updated_at timestamptz NOT NULL DEFAULT now()
 
 Этот блок таблиц обеспечивает работу «невидимых» механизмов сервиса: синхронизации данных между устройствами (Delta Sync) и персонализации опыта.
 
-## **Раздел 5. Системные и Служебные (System & Sync)**
-
-### **5.1. Таблица user_settings (Настройки пользователя)**
+## Раздел 5. Системные и Служебные (System & Sync)
+### 5.1. Таблица user_settings (Настройки пользователя)
 
 Хранит глобальные настройки профиля в рамках PVS. Также используется для кэширования агрегатов активности (Streak), чтобы не пересчитывать их при каждом запросе.\
 Реализует требования **SR-ANL-03** (Streaks) и **SR-SETT-01** (Настройки).
@@ -925,7 +913,7 @@ updated_at timestamptz NOT NULL DEFAULT now()
 
 );
 
-### **5.2. Таблица deleted_objects (Надгробия / Tombstones)**
+### 5.2. Таблица deleted_objects (Надгробия / Tombstones)
 
 Критически важна для **SR-SNC-01 (Delta Sync)**.\
 Когда объект (карточка, колода) удаляется из БД физически (Hard Delete), мы должны оставить \"след\", чтобы клиентские приложения при следующей синхронизации узнали, что этот объект нужно удалить локально.
@@ -955,7 +943,7 @@ deleted_at timestamptz NOT NULL DEFAULT now()
 
 CREATE INDEX idx_deleted_sync ON internal.deleted_objects (user_id, deleted_at);
 
-## **Заключение**
+## Заключение
 
 Схема базы данных спроектирована с учетом следующих требований:
 

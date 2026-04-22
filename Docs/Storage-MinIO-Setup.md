@@ -17,8 +17,8 @@ docker compose up -d minio
 
 MinIO будет доступен:
 
-- **API:** http://localhost:9000  
-- **Console (опционально):** http://localhost:9001  
+- **API:** http://localhost:9000
+- **Console (опционально):** http://localhost:9001
 
 Учётные данные по умолчанию: `minioadmin` / `minioadmin` (переменные `MINIO_ROOT_USER` и `MINIO_ROOT_PASSWORD`).
 

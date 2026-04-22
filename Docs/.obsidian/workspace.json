@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Описание REST API.md",
+                "file": "Ревизия-пайплайн-обучения-FSRS.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Описание REST API"
+              "title": "Ревизия-пайплайн-обучения-FSRS"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Описание REST API.md",
+                "file": "Ревизия-пайплайн-обучения-FSRS.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Описание REST API"
+              "title": "Backlinks for Ревизия-пайплайн-обучения-FSRS"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Описание REST API.md",
+                "file": "Ревизия-пайплайн-обучения-FSRS.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from Описание REST API"
+              "title": "Outgoing links from Ревизия-пайплайн-обучения-FSRS"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Описание REST API.md",
+                "file": "Ревизия-пайплайн-обучения-FSRS.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Описание REST API"
+              "title": "Outline of Ревизия-пайплайн-обучения-FSRS"
             }
           }
         ]
@@ -185,17 +185,21 @@
   },
   "active": "180a14669dda9024",
   "lastOpenFiles": [
-    "Описание gRPC.md",
-    "Storage-MinIO-Setup.md",
-    "react-nextjs-by-project.md",
-    "polyraspad-frontend-backend-overview.md",
-    "Entities.md",
-    "Ревизия-пайплайн-обучения-FSRS.md",
     "Основные возможности.md",
     "Описание REST API.md",
+    "react-nextjs-by-project.md",
     "Docs-Index.md",
+    "Storage-MinIO-Setup.md",
+    "DTO Description.md",
+    "polyraspad-frontend-backend-overview.md",
+    "Entities.md",
+    "scripts/ascii_remaining_tables_to_gfm.py",
+    "scripts/ascii_param_value_tables_to_gfm.py",
+    "Описание gRPC.md",
+    "scripts/blankline_after_headings.py",
+    "scripts/normalize_doc_headings.py",
+    "Ревизия-пайплайн-обучения-FSRS.md",
     "scripts/obsidian_cleanup_export_artifacts.py",
-    "scripts",
-    "DTO Description.md"
+    "scripts"
   ]
 }

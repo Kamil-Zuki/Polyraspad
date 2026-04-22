@@ -15,7 +15,7 @@ Think of the frontend as 4 layers:
 1. Routes in `src/app`
 2. UI components in `src/components`
 3. State and data hooks in `src/contexts` and `src/lib/react-query`
-4. HTTP and server adapters in `src/lib/api` and `src/app/api`
+4. HTTP and server adapters in `src/lib/api`, plus optional `src/app/api/*` route handlers (e.g. editor / Ollama) when present
 
 If you understand those 4 layers, you understand most of this frontend.
 
