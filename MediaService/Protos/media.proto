@@ -14,6 +14,12 @@ service MediaService {
   rpc ListReaderLibraryBooks (ListReaderLibraryBooksRequest) returns (ListReaderLibraryBooksResponse);
   rpc SaveReaderLibraryBook (SaveReaderLibraryBookRequest) returns (SaveReaderLibraryBookResponse);
   rpc DeleteReaderLibraryBook (DeleteReaderLibraryBookRequest) returns (DeleteReaderLibraryBookResponse);
+  rpc ListReaderCollections (ListReaderCollectionsRequest) returns (ListReaderCollectionsResponse);
+  rpc SaveReaderCollection (SaveReaderCollectionRequest) returns (SaveReaderCollectionResponse);
+  rpc DeleteReaderCollection (DeleteReaderCollectionRequest) returns (DeleteReaderCollectionResponse);
+  rpc ShareReaderCollection (ShareReaderCollectionRequest) returns (ShareReaderCollectionResponse);
+  rpc UnshareReaderCollection (UnshareReaderCollectionRequest) returns (UnshareReaderCollectionResponse);
+  rpc ListSharedReaderCollections (ListSharedReaderCollectionsRequest) returns (ListSharedReaderCollectionsResponse);
 }
 
 message UploadImageRequest {
@@ -82,6 +88,35 @@ message ReaderLibraryBook {
   string last_opened_at = 8;
   string collection_id = 9;
   string collection_name = 10;
+  bool is_shared = 11;
+  string owner_user_id = 12;
+  string owner_user_name = 13;
+  string owner_email = 14;
+}
+
+message ReaderCollectionCollaborator {
+  string user_id = 1;
+  string user_name = 2;
+  string email = 3;
+  bool can_edit = 4;
+  string shared_at = 5;
+}
+
+message ReaderCollection {
+  string id = 1;
+  string project_id = 2;
+  string name = 3;
+  string description = 4;
+  string created_at = 5;
+  string updated_at = 6;
+  string owner_user_id = 7;
+  string owner_user_name = 8;
+  string owner_email = 9;
+  repeated ReaderCollectionCollaborator collaborators = 10;
+  int32 book_count = 11;
+  bool is_shared_with_me = 12;
+  bool can_edit = 13;
+  repeated ReaderLibraryBook books = 14;
 }
 
 message ListReaderLibraryBooksRequest {
@@ -107,3 +142,52 @@ message DeleteReaderLibraryBookRequest {
 }
 
 message DeleteReaderLibraryBookResponse {}
+
+message ListReaderCollectionsRequest {
+  string project_id = 1;
+}
+
+message ListReaderCollectionsResponse {
+  repeated ReaderCollection collections = 1;
+}
+
+message SaveReaderCollectionRequest {
+  ReaderCollection collection = 1;
+}
+
+message SaveReaderCollectionResponse {
+  ReaderCollection collection = 1;
+}
+
+message DeleteReaderCollectionRequest {
+  string project_id = 1;
+  string collection_id = 2;
+}
+
+message DeleteReaderCollectionResponse {}
+
+message ShareReaderCollectionRequest {
+  string project_id = 1;
+  string collection_id = 2;
+  ReaderCollectionCollaborator collaborator = 3;
+}
+
+message ShareReaderCollectionResponse {
+  ReaderCollection collection = 1;
+}
+
+message UnshareReaderCollectionRequest {
+  string project_id = 1;
+  string collection_id = 2;
+  string collaborator_user_id = 3;
+}
+
+message UnshareReaderCollectionResponse {
+  ReaderCollection collection = 1;
+}
+
+message ListSharedReaderCollectionsRequest {}
+
+message ListSharedReaderCollectionsResponse {
+  repeated ReaderCollection collections = 1;
+}

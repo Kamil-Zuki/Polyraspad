@@ -194,6 +194,120 @@ public class MediaGrpcService : MediaServiceBase
         return new DeleteReaderLibraryBookResponse();
     }
 
+    public override async Task<ListReaderCollectionsResponse> ListReaderCollections(ListReaderCollectionsRequest request, ServerCallContext context)
+    {
+        var userId = GetRequiredUserId(context);
+        var projectId = GetRequiredProjectId(request.ProjectId);
+        var collections = await _mediaStorage.ListReaderCollectionsAsync(userId, projectId, context.CancellationToken).ConfigureAwait(false);
+        var books = await _mediaStorage.ListReaderLibraryBooksAsync(userId, projectId, context.CancellationToken).ConfigureAwait(false);
+
+        var response = new ListReaderCollectionsResponse();
+        response.Collections.AddRange(await MapCollectionsAsync(collections, books, null, context.CancellationToken).ConfigureAwait(false));
+        return response;
+    }
+
+    public override async Task<SaveReaderCollectionResponse> SaveReaderCollection(SaveReaderCollectionRequest request, ServerCallContext context)
+    {
+        var userId = GetRequiredUserId(context);
+        if (request.Collection == null)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "collection is required"));
+        }
+
+        var collection = MapCollectionRecord(request.Collection, userId);
+        var saved = await _mediaStorage.SaveReaderCollectionAsync(userId, collection, context.CancellationToken).ConfigureAwait(false);
+        var books = await _mediaStorage.ListReaderLibraryBooksAsync(userId, saved.ProjectId, context.CancellationToken).ConfigureAwait(false);
+
+        return new SaveReaderCollectionResponse
+        {
+            Collection = await MapCollectionAsync(saved, books, null, context.CancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    public override async Task<DeleteReaderCollectionResponse> DeleteReaderCollection(DeleteReaderCollectionRequest request, ServerCallContext context)
+    {
+        var userId = GetRequiredUserId(context);
+        var projectId = GetRequiredProjectId(request.ProjectId);
+        if (string.IsNullOrWhiteSpace(request.CollectionId) || !Guid.TryParse(request.CollectionId, out var collectionId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid collection_id (UUID) is required"));
+        }
+
+        await _mediaStorage.DeleteReaderCollectionAsync(userId, projectId, collectionId, context.CancellationToken).ConfigureAwait(false);
+        return new DeleteReaderCollectionResponse();
+    }
+
+    public override async Task<ShareReaderCollectionResponse> ShareReaderCollection(ShareReaderCollectionRequest request, ServerCallContext context)
+    {
+        var userId = GetRequiredUserId(context);
+        var projectId = GetRequiredProjectId(request.ProjectId);
+        if (string.IsNullOrWhiteSpace(request.CollectionId) || !Guid.TryParse(request.CollectionId, out var collectionId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid collection_id (UUID) is required"));
+        }
+
+        if (request.Collaborator == null || string.IsNullOrWhiteSpace(request.Collaborator.UserId) || !Guid.TryParse(request.Collaborator.UserId, out var collaboratorUserId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid collaborator.user_id is required"));
+        }
+
+        var saved = await _mediaStorage.ShareReaderCollectionAsync(
+            userId,
+            projectId,
+            collectionId,
+            new ReaderCollectionCollaboratorRecord
+            {
+                UserId = collaboratorUserId,
+                UserName = request.Collaborator.UserName ?? string.Empty,
+                Email = request.Collaborator.Email ?? string.Empty,
+                CanEdit = request.Collaborator.CanEdit,
+                SharedAt = string.IsNullOrWhiteSpace(request.Collaborator.SharedAt) ? DateTimeOffset.UtcNow.ToString("O") : request.Collaborator.SharedAt
+            },
+            context.CancellationToken).ConfigureAwait(false);
+
+        var books = await _mediaStorage.ListReaderLibraryBooksAsync(userId, projectId, context.CancellationToken).ConfigureAwait(false);
+        return new ShareReaderCollectionResponse
+        {
+            Collection = await MapCollectionAsync(saved, books, null, context.CancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    public override async Task<UnshareReaderCollectionResponse> UnshareReaderCollection(UnshareReaderCollectionRequest request, ServerCallContext context)
+    {
+        var userId = GetRequiredUserId(context);
+        var projectId = GetRequiredProjectId(request.ProjectId);
+        if (string.IsNullOrWhiteSpace(request.CollectionId) || !Guid.TryParse(request.CollectionId, out var collectionId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid collection_id (UUID) is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CollaboratorUserId) || !Guid.TryParse(request.CollaboratorUserId, out var collaboratorUserId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid collaborator_user_id is required"));
+        }
+
+        var saved = await _mediaStorage.UnshareReaderCollectionAsync(userId, projectId, collectionId, collaboratorUserId, context.CancellationToken).ConfigureAwait(false);
+        var books = await _mediaStorage.ListReaderLibraryBooksAsync(userId, projectId, context.CancellationToken).ConfigureAwait(false);
+        return new UnshareReaderCollectionResponse
+        {
+            Collection = await MapCollectionAsync(saved, books, null, context.CancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    public override async Task<ListSharedReaderCollectionsResponse> ListSharedReaderCollections(ListSharedReaderCollectionsRequest request, ServerCallContext context)
+    {
+        var userId = GetRequiredUserId(context);
+        var sharedCollections = await _mediaStorage.ListSharedReaderCollectionsAsync(userId, context.CancellationToken).ConfigureAwait(false);
+
+        var response = new ListSharedReaderCollectionsResponse();
+        foreach (var item in sharedCollections)
+        {
+            response.Collections.Add(await MapCollectionAsync(item.Collection, item.Books, item.Access, context.CancellationToken).ConfigureAwait(false));
+        }
+
+        return response;
+    }
+
     private Guid GetRequiredUserId(ServerCallContext context)
     {
         var rawUserId = context.RequestHeaders.GetValue("user_id");
@@ -253,7 +367,10 @@ public class MediaGrpcService : MediaServiceBase
             UploadedAt = string.IsNullOrWhiteSpace(book.UploadedAt) ? DateTimeOffset.UtcNow.ToString("O") : book.UploadedAt,
             LastOpenedAt = string.IsNullOrWhiteSpace(book.LastOpenedAt) ? null : book.LastOpenedAt,
             CollectionId = string.IsNullOrWhiteSpace(book.CollectionId) ? null : book.CollectionId.Trim(),
-            CollectionName = string.IsNullOrWhiteSpace(book.CollectionName) ? null : book.CollectionName.Trim()
+            CollectionName = string.IsNullOrWhiteSpace(book.CollectionName) ? null : book.CollectionName.Trim(),
+            OwnerUserId = Guid.TryParse(book.OwnerUserId, out var ownerUserId) ? ownerUserId : Guid.Empty,
+            OwnerUserName = book.OwnerUserName ?? string.Empty,
+            OwnerEmail = book.OwnerEmail ?? string.Empty
         };
     }
 
@@ -287,7 +404,104 @@ public class MediaGrpcService : MediaServiceBase
             UploadedAt = book.UploadedAt,
             LastOpenedAt = book.LastOpenedAt ?? string.Empty,
             CollectionId = book.CollectionId ?? string.Empty,
-            CollectionName = book.CollectionName ?? string.Empty
+            CollectionName = book.CollectionName ?? string.Empty,
+            IsShared = book.IsShared,
+            OwnerUserId = book.OwnerUserId == Guid.Empty ? string.Empty : book.OwnerUserId.ToString(),
+            OwnerUserName = book.OwnerUserName,
+            OwnerEmail = book.OwnerEmail
         };
+    }
+
+    private static ReaderCollectionRecord MapCollectionRecord(ReaderCollection collection, Guid ownerUserId)
+    {
+        if (string.IsNullOrWhiteSpace(collection.Id) || !Guid.TryParse(collection.Id, out var collectionId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid collection.id (UUID) is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(collection.ProjectId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "collection.project_id is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(collection.Name))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "collection.name is required"));
+        }
+
+        return new ReaderCollectionRecord
+        {
+            Id = collectionId,
+            ProjectId = collection.ProjectId.Trim(),
+            Name = collection.Name.Trim(),
+            Description = string.IsNullOrWhiteSpace(collection.Description) ? null : collection.Description.Trim(),
+            CreatedAt = string.IsNullOrWhiteSpace(collection.CreatedAt) ? DateTimeOffset.UtcNow.ToString("O") : collection.CreatedAt,
+            UpdatedAt = string.IsNullOrWhiteSpace(collection.UpdatedAt) ? DateTimeOffset.UtcNow.ToString("O") : collection.UpdatedAt,
+            OwnerUserId = ownerUserId,
+            OwnerUserName = collection.OwnerUserName ?? string.Empty,
+            OwnerEmail = collection.OwnerEmail ?? string.Empty,
+            Collaborators = collection.Collaborators.Select(item => new ReaderCollectionCollaboratorRecord
+            {
+                UserId = Guid.TryParse(item.UserId, out var userId) ? userId : Guid.Empty,
+                UserName = item.UserName ?? string.Empty,
+                Email = item.Email ?? string.Empty,
+                CanEdit = item.CanEdit,
+                SharedAt = string.IsNullOrWhiteSpace(item.SharedAt) ? DateTimeOffset.UtcNow.ToString("O") : item.SharedAt
+            }).Where(item => item.UserId != Guid.Empty).ToList()
+        };
+    }
+
+    private async Task<IReadOnlyList<ReaderCollection>> MapCollectionsAsync(
+        IEnumerable<ReaderCollectionRecord> collections,
+        IReadOnlyList<ReaderLibraryBookRecord> books,
+        ReaderCollectionCollaboratorRecord? access,
+        CancellationToken cancellationToken)
+    {
+        var list = new List<ReaderCollection>();
+        foreach (var collection in collections)
+        {
+            list.Add(await MapCollectionAsync(collection, books, access, cancellationToken).ConfigureAwait(false));
+        }
+
+        return list;
+    }
+
+    private async Task<ReaderCollection> MapCollectionAsync(
+        ReaderCollectionRecord collection,
+        IEnumerable<ReaderLibraryBookRecord> books,
+        ReaderCollectionCollaboratorRecord? access,
+        CancellationToken cancellationToken)
+    {
+        var collectionBooks = books
+            .Where(book => string.Equals(book.CollectionId, collection.Id.ToString(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var mappedBooks = await MapBooksAsync(collectionBooks, cancellationToken).ConfigureAwait(false);
+        var response = new ReaderCollection
+        {
+            Id = collection.Id.ToString(),
+            ProjectId = collection.ProjectId,
+            Name = collection.Name,
+            Description = collection.Description ?? string.Empty,
+            CreatedAt = collection.CreatedAt,
+            UpdatedAt = collection.UpdatedAt,
+            OwnerUserId = collection.OwnerUserId.ToString(),
+            OwnerUserName = collection.OwnerUserName,
+            OwnerEmail = collection.OwnerEmail,
+            BookCount = mappedBooks.Count,
+            IsSharedWithMe = access != null,
+            CanEdit = access?.CanEdit ?? true
+        };
+
+        response.Collaborators.AddRange(collection.Collaborators.Select(item => new ReaderCollectionCollaborator
+        {
+            UserId = item.UserId.ToString(),
+            UserName = item.UserName,
+            Email = item.Email,
+            CanEdit = item.CanEdit,
+            SharedAt = item.SharedAt
+        }));
+        response.Books.AddRange(mappedBooks);
+        return response;
     }
 }

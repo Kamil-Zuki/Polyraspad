@@ -11,4 +11,8 @@ public sealed class ReaderLibraryBookRecord
     public string? LastOpenedAt { get; set; }
     public string? CollectionId { get; set; }
     public string? CollectionName { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string OwnerUserName { get; set; } = string.Empty;
+    public string OwnerEmail { get; set; } = string.Empty;
+    public bool IsShared { get; set; }
 }

@@ -12,4 +12,10 @@ public interface IMediaStorageService
     Task<IReadOnlyList<ReaderLibraryBookRecord>> ListReaderLibraryBooksAsync(Guid userId, string projectId, CancellationToken cancellationToken = default);
     Task<ReaderLibraryBookRecord> SaveReaderLibraryBookAsync(Guid userId, string projectId, ReaderLibraryBookRecord book, CancellationToken cancellationToken = default);
     Task DeleteReaderLibraryBookAsync(Guid userId, string projectId, Guid bookId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ReaderCollectionRecord>> ListReaderCollectionsAsync(Guid userId, string projectId, CancellationToken cancellationToken = default);
+    Task<ReaderCollectionRecord> SaveReaderCollectionAsync(Guid userId, ReaderCollectionRecord collection, CancellationToken cancellationToken = default);
+    Task DeleteReaderCollectionAsync(Guid userId, string projectId, Guid collectionId, CancellationToken cancellationToken = default);
+    Task<ReaderCollectionRecord> ShareReaderCollectionAsync(Guid userId, string projectId, Guid collectionId, ReaderCollectionCollaboratorRecord collaborator, CancellationToken cancellationToken = default);
+    Task<ReaderCollectionRecord> UnshareReaderCollectionAsync(Guid userId, string projectId, Guid collectionId, Guid collaboratorUserId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ReaderSharedCollectionRecord>> ListSharedReaderCollectionsAsync(Guid userId, CancellationToken cancellationToken = default);
 }
