@@ -9,15 +9,25 @@ const DEFAULT_SETTINGS: AnkiSettings = {
   deckName: "Default",
   modelName: "Basic",
   rewindMs: 1200,
+  translationMode: "after-capture",
+  translationSourceLang: "en",
+  translationTargetLang: "ru",
   tags: "inoriginal",
   fieldMapping: {
-    front: "Front",
-    back: "Back",
-    subtitle: "",
-    context: "",
-    source: "",
-    image: "",
-    audio: ""
+    expression: "Expression",
+    word: "Word",
+    image: "Image",
+    audio: "Audio",
+    transcription: "Transcription",
+    source: "Source field",
+    wordTypes: "Word Types",
+    definition: "Definition",
+    translation: "Translation",
+    mnemonic: "Mnemonic",
+    example: "Example",
+    antonyms: "Antonyms",
+    synonyms: "Synonyms",
+    url: "Url field"
   }
 };
 
@@ -158,6 +168,30 @@ function OptionsApp() {
           />
         </label>
 
+        <h2>Translation</h2>
+        <label>
+          <span>Translation mode</span>
+          <select value={settings.translationMode} onChange={(event) => setSettings({ ...settings, translationMode: event.target.value as AnkiSettings["translationMode"] })}>
+            <option value="after-capture">Auto after Capture</option>
+            <option value="before-send">Auto before Send</option>
+            <option value="manual">Manual only</option>
+          </select>
+        </label>
+        <div className="split-grid">
+          <label>
+            <span>Subtitle language</span>
+            <select value={settings.translationSourceLang} onChange={(event) => setSettings({ ...settings, translationSourceLang: event.target.value })}>
+              {languageOptions(settings.translationSourceLang)}
+            </select>
+          </label>
+          <label>
+            <span>Translation language</span>
+            <select value={settings.translationTargetLang} onChange={(event) => setSettings({ ...settings, translationTargetLang: event.target.value })}>
+              {languageOptions(settings.translationTargetLang)}
+            </select>
+          </label>
+        </div>
+
         <div className="actions">
           <button type="button" className="secondary" onClick={testConnection}>Test AnkiConnect</button>
           <button type="button" className="secondary" onClick={() => refreshChoices()}>Refresh decks and note types</button>
@@ -165,13 +199,20 @@ function OptionsApp() {
 
         <h2>Field Mapping</h2>
         <div className="split-grid">
-          {fieldSelector("Front field", "front", false)}
-          {fieldSelector("Back field", "back", false)}
-          {fieldSelector("Subtitle field", "subtitle", true)}
-          {fieldSelector("Context field", "context", true)}
-          {fieldSelector("Source field", "source", true)}
+          {fieldSelector("Expression field", "expression", false)}
+          {fieldSelector("Word field", "word", true)}
           {fieldSelector("Image field", "image", true)}
           {fieldSelector("Audio field", "audio", true)}
+          {fieldSelector("Transcription field", "transcription", true)}
+          {fieldSelector("Source field", "source", true)}
+          {fieldSelector("Word Types field", "wordTypes", true)}
+          {fieldSelector("Definition field", "definition", true)}
+          {fieldSelector("Translation field", "translation", true)}
+          {fieldSelector("Mnemonic field", "mnemonic", true)}
+          {fieldSelector("Example field", "example", true)}
+          {fieldSelector("Antonyms field", "antonyms", true)}
+          {fieldSelector("Synonyms field", "synonyms", true)}
+          {fieldSelector("Url field", "url", true)}
         </div>
 
         <div className="actions">
@@ -206,6 +247,29 @@ function renderOptions(values: string[], selectedValue: string) {
 
   return options.map((value) => (
     <option key={value} value={value}>{value}</option>
+  ));
+}
+
+function languageOptions(selectedValue: string) {
+  const languages = [
+    ["en", "English"],
+    ["ru", "Russian"],
+    ["es", "Spanish"],
+    ["fr", "French"],
+    ["de", "German"],
+    ["it", "Italian"],
+    ["ja", "Japanese"],
+    ["ko", "Korean"],
+    ["zh", "Chinese"],
+    ["uk", "Ukrainian"],
+    ["pl", "Polish"],
+    ["pt", "Portuguese"]
+  ];
+  const hasSelected = languages.some(([value]) => value === selectedValue);
+  const options = hasSelected ? languages : [[selectedValue, selectedValue], ...languages];
+
+  return options.map(([value, label]) => (
+    <option key={value} value={value}>{label}</option>
   ));
 }
 

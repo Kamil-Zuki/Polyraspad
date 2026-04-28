@@ -1,11 +1,18 @@
 export type FieldMapping = {
-  front: string;
-  back: string;
-  subtitle: string;
-  context: string;
-  source: string;
+  expression: string;
+  word: string;
   image: string;
   audio: string;
+  transcription: string;
+  source: string;
+  wordTypes: string;
+  definition: string;
+  translation: string;
+  mnemonic: string;
+  example: string;
+  antonyms: string;
+  synonyms: string;
+  url: string;
 };
 
 export type AnkiSettings = {
@@ -13,6 +20,9 @@ export type AnkiSettings = {
   deckName: string;
   modelName: string;
   rewindMs: number;
+  translationMode: "manual" | "after-capture" | "before-send";
+  translationSourceLang: string;
+  translationTargetLang: string;
   tags: string;
   fieldMapping: FieldMapping;
 };

@@ -625,6 +625,16 @@ button.secondary {
   gap: 8px;
 }
 
+.editor-card--wide {
+  grid-column: 1 / -1;
+}
+
+.field-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .footer-bar {
   display: flex;
   align-items: center;
@@ -1031,6 +1041,84 @@ button.secondary {
   min-width: 0;
 }
 
+.translator-panel {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.translator-panel h2,
+.translator-panel p {
+  margin: 0;
+}
+
+.translation-preview {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  grid-column: 1 / -1;
+  line-height: 1.45;
+  padding: 10px;
+}
+
+.warning-banner {
+  background: #fff3d8;
+  border: 1px solid #dcae53;
+  border-radius: 8px;
+  color: #684b17;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px;
+}
+
+.anki-preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.anki-preview summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.anki-preview__grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.anki-preview__row {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.anki-preview__row span,
+.anki-preview__row p {
+  margin: 0;
+}
+
+.anki-preview__row span {
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.anki-preview__row p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  max-height: 54px;
+  overflow: hidden;
+}
+
 .inline-action {
   width: auto;
   min-width: 0;
@@ -1064,6 +1152,16 @@ button.secondary {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.popup--sidepanel .translator-panel {
+  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.popup--sidepanel .field-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 @media (max-width: 700px) {
   .studio-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1076,6 +1174,16 @@ button.secondary {
   }
 
   .mapping-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .translator-panel {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-actions {
+    display: grid;
     grid-template-columns: minmax(0, 1fr);
   }
 }

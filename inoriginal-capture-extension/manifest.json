@@ -3,6 +3,12 @@
   "name": "InOriginal Capture Helper",
   "version": "1.0.0",
   "description": "Take screenshots with hotkeys and capture tab audio plus subtitles from inoriginal.cc.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
     "activeTab",
     "offscreen",
@@ -61,6 +67,12 @@
     }
   ],
   "action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
     "default_title": "InOriginal Capture Helper",
     "default_popup": "popup.html"
   },

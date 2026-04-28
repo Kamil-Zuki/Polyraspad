@@ -9,15 +9,25 @@ const DEFAULT_ANKI_SETTINGS = {
   deckName: "Default",
   modelName: "Basic",
   rewindMs: 1200,
+  translationMode: "after-capture",
+  translationSourceLang: "en",
+  translationTargetLang: "ru",
   tags: "inoriginal",
   fieldMapping: {
-    front: "Front",
-    back: "Back",
-    subtitle: "",
-    context: "",
-    source: "",
-    image: "",
-    audio: ""
+    expression: "Expression",
+    word: "Word",
+    image: "Image",
+    audio: "Audio",
+    transcription: "Transcription",
+    source: "Source field",
+    wordTypes: "Word Types",
+    definition: "Definition",
+    translation: "Translation",
+    mnemonic: "Mnemonic",
+    example: "Example",
+    antonyms: "Antonyms",
+    synonyms: "Synonyms",
+    url: "Url field"
   }
 };
 
@@ -163,6 +173,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "save-anki-settings") {
     void saveAnkiSettings(message.settings || {})
       .then((settings) => sendResponse({ ok: true, settings }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "translate-text") {
+    void translateText(message.text || "", message.options || {})
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "lookup-word") {
+    void lookupWord(message.word || "")
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "find-duplicate-expression") {
+    void findDuplicateExpression(message.expression || "")
+      .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -556,18 +587,19 @@ async function createAnkiCardFromActiveTab(overrides = {}) {
     latestCapture = await takeScreenshot();
   }
 
-  const subtitle = overrides.subtitle || subtitlePayload.currentSubtitle || latestCapture?.subtitle || "";
+  const draftExpression = overrides.draft?.expression?.trim() || "";
+  const subtitle = overrides.subtitle || draftExpression || latestCapture?.subtitle || subtitlePayload.currentSubtitle || "";
   if (!subtitle) {
     throw new Error("No subtitle text found in #pjs_playerjs_subtitle > span.");
   }
 
   await mergeLatestCapture({
     capturedAt: Date.now(),
-    pageTitle: tab.title || latestCapture?.pageTitle || "inoriginal",
-    pageUrl: tab.url || latestCapture?.pageUrl || "",
+    pageTitle: overrides.draft?.source || latestCapture?.pageTitle || tab.title || "inoriginal",
+    pageUrl: overrides.draft?.url || latestCapture?.pageUrl || tab.url || "",
     subtitle,
-    previousSubtitle: subtitlePayload.previousSubtitle || latestCapture?.previousSubtitle || "",
-    nextSubtitle: subtitlePayload.nextSubtitle || latestCapture?.nextSubtitle || ""
+    previousSubtitle: latestCapture?.previousSubtitle || subtitlePayload.previousSubtitle || "",
+    nextSubtitle: latestCapture?.nextSubtitle || subtitlePayload.nextSubtitle || ""
   });
 
   await mergeLatestCapture({
@@ -613,15 +645,21 @@ async function createAnkiNote(capture, overrides = {}) {
 
   const settings = await getMergedAnkiSettings(overrides.settings || {});
   await validateFieldMapping(settings);
-  const frontText = overrides.front ?? capture.subtitle ?? "";
-  const backText = overrides.back ?? buildBackText(capture);
+  const draft = buildSentenceMiningDraft(capture, overrides.draft || {});
 
   const fields = {};
-  setFieldValue(fields, settings.fieldMapping.front, frontText);
-  setFieldValue(fields, settings.fieldMapping.back, backText);
-  setFieldValue(fields, settings.fieldMapping.subtitle, capture.subtitle || "");
-  setFieldValue(fields, settings.fieldMapping.context, buildContextText(capture));
-  setFieldValue(fields, settings.fieldMapping.source, capture.pageUrl || "");
+  setFieldValue(fields, settings.fieldMapping.expression, draft.expression);
+  setFieldValue(fields, settings.fieldMapping.word, draft.word);
+  setFieldValue(fields, settings.fieldMapping.transcription, draft.transcription);
+  setFieldValue(fields, settings.fieldMapping.source, draft.source);
+  setFieldValue(fields, settings.fieldMapping.wordTypes, draft.wordTypes);
+  setFieldValue(fields, settings.fieldMapping.definition, draft.definition);
+  setFieldValue(fields, settings.fieldMapping.translation, draft.translation);
+  setFieldValue(fields, settings.fieldMapping.mnemonic, draft.mnemonic);
+  setFieldValue(fields, settings.fieldMapping.example, draft.example);
+  setFieldValue(fields, settings.fieldMapping.antonyms, draft.antonyms);
+  setFieldValue(fields, settings.fieldMapping.synonyms, draft.synonyms);
+  setFieldValue(fields, settings.fieldMapping.url, draft.url);
 
   if (capture.screenshot?.dataUrl && settings.fieldMapping.image) {
     const imageFileName = await storeMediaFromDataUrl(
@@ -656,15 +694,22 @@ async function validateFieldMapping(settings) {
   const available = new Set(availableFields);
   const mappings = settings.fieldMapping || {};
   const requiredMappings = [
-    ["Front", mappings.front],
-    ["Back", mappings.back]
+    ["Expression", mappings.expression]
   ];
   const optionalMappings = [
-    ["Subtitle", mappings.subtitle],
-    ["Context", mappings.context],
-    ["Source", mappings.source],
+    ["Word", mappings.word],
     ["Image", mappings.image],
-    ["Audio", mappings.audio]
+    ["Audio", mappings.audio],
+    ["Transcription", mappings.transcription],
+    ["Source", mappings.source],
+    ["Word Types", mappings.wordTypes],
+    ["Definition", mappings.definition],
+    ["Translation", mappings.translation],
+    ["Mnemonic", mappings.mnemonic],
+    ["Example", mappings.example],
+    ["Antonyms", mappings.antonyms],
+    ["Synonyms", mappings.synonyms],
+    ["Url", mappings.url]
   ];
 
   const missingRequired = requiredMappings
@@ -747,6 +792,87 @@ async function storeMediaFromDataUrl(dataUrl, filename) {
     data: base64
   });
   return filename;
+}
+
+async function translateText(text, options = {}) {
+  const value = text.trim();
+  if (!value) {
+    throw new Error("No text to translate.");
+  }
+
+  const settings = await getAnkiSettings();
+  const sourceLang = options.sourceLang || settings.translationSourceLang || "en";
+  const targetLang = options.targetLang || settings.translationTargetLang || "ru";
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(value)}&langpair=${encodeURIComponent(`${sourceLang}|${targetLang}`)}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Translation request failed with status ${response.status}.`);
+  }
+
+  const payload = await response.json();
+  const translatedText = payload?.responseData?.translatedText || "";
+  if (!translatedText) {
+    throw new Error("Translator returned an empty result.");
+  }
+
+  return {
+    provider: "MyMemory",
+    sourceLang,
+    targetLang,
+    translatedText
+  };
+}
+
+async function lookupWord(word) {
+  const value = word.trim();
+  if (!value) {
+    throw new Error("No word selected.");
+  }
+
+  const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(value)}`);
+  if (!response.ok) {
+    throw new Error(`No dictionary entry found for "${value}".`);
+  }
+
+  const payload = await response.json();
+  const entry = Array.isArray(payload) ? payload[0] : null;
+  const phonetic = entry?.phonetic || entry?.phonetics?.find((item) => item.text)?.text || "";
+  const meaning = entry?.meanings?.find((item) => item.definitions?.length);
+  const definition = meaning?.definitions?.[0]?.definition || "";
+  const example = meaning?.definitions?.[0]?.example || "";
+  const partOfSpeech = meaning?.partOfSpeech || "";
+
+  if (!definition) {
+    throw new Error(`No usable definition found for "${value}".`);
+  }
+
+  return {
+    definition,
+    example,
+    partOfSpeech,
+    phonetic,
+    provider: "Free Dictionary API",
+    word: value
+  };
+}
+
+async function findDuplicateExpression(expression) {
+  const value = expression.trim();
+  if (!value) {
+    return { count: 0, noteIds: [] };
+  }
+
+  const settings = await getAnkiSettings();
+  const query = `deck:${quoteAnkiQuery(settings.deckName)} ${quoteAnkiQuery(value)}`;
+  const noteIds = await invokeAnki("findNotes", {
+    query
+  }).catch(() => []);
+
+  return {
+    count: noteIds.length,
+    noteIds
+  };
 }
 
 async function invokeAnki(action, params, endpointOverride = null) {
@@ -1019,30 +1145,21 @@ function buildContextText(capture) {
   return lines.join("\n");
 }
 
-function buildBackText(capture) {
-  const lines = [];
-
-  if (capture.previousSubtitle) {
-    lines.push(`<div><strong>Previous:</strong> ${escapeHtml(capture.previousSubtitle)}</div>`);
-  }
-
-  if (capture.subtitle) {
-    lines.push(`<div><strong>Current:</strong> ${escapeHtml(capture.subtitle)}</div>`);
-  }
-
-  if (capture.nextSubtitle) {
-    lines.push(`<div><strong>Next:</strong> ${escapeHtml(capture.nextSubtitle)}</div>`);
-  }
-
-  if (capture.pageTitle) {
-    lines.push(`<div><strong>Title:</strong> ${escapeHtml(capture.pageTitle)}</div>`);
-  }
-
-  if (capture.pageUrl) {
-    lines.push(`<div><strong>Source:</strong> <a href="${capture.pageUrl}">${capture.pageUrl}</a></div>`);
-  }
-
-  return lines.join("");
+function buildSentenceMiningDraft(capture, draftOverrides) {
+  return {
+    expression: draftOverrides.expression ?? capture.subtitle ?? "",
+    word: draftOverrides.word ?? "",
+    transcription: draftOverrides.transcription ?? "",
+    source: draftOverrides.source ?? capture.pageTitle ?? "",
+    wordTypes: draftOverrides.wordTypes ?? "",
+    definition: draftOverrides.definition ?? "",
+    translation: draftOverrides.translation ?? "",
+    mnemonic: draftOverrides.mnemonic ?? "",
+    example: draftOverrides.example ?? buildContextText(capture),
+    antonyms: draftOverrides.antonyms ?? "",
+    synonyms: draftOverrides.synonyms ?? "",
+    url: draftOverrides.url ?? capture.pageUrl ?? ""
+  };
 }
 
 function buildFileName(prefix, extension, timestamp) {
@@ -1054,6 +1171,10 @@ function buildFileName(prefix, extension, timestamp) {
 
 function ensureExtension(filename, extension) {
   return filename.endsWith(`.${extension}`) ? filename : `${filename}.${extension}`;
+}
+
+function quoteAnkiQuery(value) {
+  return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 function toSrt(entries, stoppedAt) {

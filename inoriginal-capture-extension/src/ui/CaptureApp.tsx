@@ -8,15 +8,35 @@ type CaptureAppProps = {
 };
 
 type FlowStatus = "Idle" | "Rewinding" | "Recording subtitle audio" | "Ready to review" | "Sending to Anki" | "Created" | "Failed" | "Cancelled";
+type SentenceDraft = {
+  expression: string;
+  word: string;
+  translation: string;
+  definition: string;
+  example: string;
+  source: string;
+  url: string;
+};
 
 export function CaptureApp({ mode }: CaptureAppProps) {
   const [context, setContext] = useState<PopupContext | null>(null);
   const [flowStatus, setFlowStatus] = useState<FlowStatus>("Idle");
   const [message, setMessage] = useState("Loading...");
-  const [front, setFront] = useState("");
-  const [back, setBack] = useState("");
+  const [expression, setExpression] = useState("");
+  const [word, setWord] = useState("");
+  const [translation, setTranslation] = useState("");
+  const [definition, setDefinition] = useState("");
+  const [example, setExample] = useState("");
+  const [source, setSource] = useState("");
+  const [url, setUrl] = useState("");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isLookingUpWord, setIsLookingUpWord] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState("");
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const lastCaptureSignature = useRef("");
+  const lastAutoTranslateSignature = useRef("");
+  const expressionRef = useRef<HTMLTextAreaElement | null>(null);
+  const confirmedDuplicateExpression = useRef("");
 
   useEffect(() => {
     void refresh();
@@ -26,6 +46,26 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (
+      context?.settings.translationMode !== "after-capture"
+      || !context.capture?.audio?.dataUrl
+      || !expression.trim()
+      || translation.trim()
+      || isTranslating
+    ) {
+      return;
+    }
+
+    const signature = `${context.capture.audio.filename || ""}|${expression}|${context.settings.translationSourceLang}|${context.settings.translationTargetLang}`;
+    if (signature === lastAutoTranslateSignature.current) {
+      return;
+    }
+
+    lastAutoTranslateSignature.current = signature;
+    void translateSubtitle({ silent: true });
+  }, [context, expression, translation, isTranslating]);
 
   async function refresh(showLoading = true) {
     if (showLoading) {
@@ -49,8 +89,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       return;
     }
 
-    setFront(capture?.subtitle || "");
-    setBack(buildEditableBack(capture));
+    setExpression(capture?.subtitle || "");
+    setWord("");
+    setTranslation("");
+    setDefinition("");
+    setExample(buildExampleText(capture));
+    setSource(capture?.pageTitle || "");
+    setUrl(capture?.pageUrl || "");
+    setDuplicateWarning("");
     setAudioDuration(null);
     lastCaptureSignature.current = signature;
   }
@@ -106,8 +152,23 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   }
 
   async function createCard() {
-    if (!canSendToAnki(context, front)) {
+    if (!canSendToAnki(context, expression)) {
       setMessage("Capture subtitle, screenshot, audio, deck, and note type first.");
+      return;
+    }
+
+    let finalTranslation = translation;
+    if (context?.settings.translationMode === "before-send" && !finalTranslation.trim()) {
+      const translatedText = await translateSubtitle({ silent: true });
+      if (!translatedText) {
+        setMessage("Translation failed. You can edit Translation manually or switch translation mode to Manual.");
+        return;
+      }
+      finalTranslation = translatedText;
+    }
+
+    const duplicateOk = await warnIfDuplicateExpression();
+    if (!duplicateOk) {
       return;
     }
 
@@ -116,9 +177,16 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     const response = await sendRuntimeMessage<{ noteId: number }>({
       type: "create-anki-card",
       payload: {
-        subtitle: context?.capture?.subtitle || front,
-        front,
-        back,
+        subtitle: context?.capture?.subtitle || expression,
+        draft: {
+          expression,
+          word,
+          translation: finalTranslation,
+          definition,
+          example,
+          source,
+          url
+        },
         settings: {
           deckName: context?.settings.deckName,
           modelName: context?.settings.modelName
@@ -138,12 +206,127 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setMessage(`Card created: ${response.result?.noteId}`);
   }
 
+  async function translateSubtitle(options: { silent?: boolean } = {}) {
+    const text = expression || context?.capture?.subtitle || "";
+    if (!text.trim()) {
+      if (!options.silent) {
+        setMessage("No subtitle text to translate.");
+      }
+      return "";
+    }
+
+    setIsTranslating(true);
+    if (!options.silent) {
+      setMessage("Translating subtitle...");
+    }
+    const response = await sendRuntimeMessage<{ translatedText: string; provider: string }>({
+      type: "translate-text",
+      text,
+      options: {
+        sourceLang: context?.settings.translationSourceLang,
+        targetLang: context?.settings.translationTargetLang
+      }
+    });
+    setIsTranslating(false);
+
+    if (!response.ok || !response.result?.translatedText) {
+      setMessage(response.error || "Translation failed.");
+      return "";
+    }
+
+    const translatedText = response.result.translatedText;
+    setTranslation(translatedText);
+    setMessage(options.silent ? "Translation added." : `Translated with ${response.result.provider}.`);
+    return translatedText;
+  }
+
+  function useSelectedWord() {
+    const input = expressionRef.current;
+    const selectedText = input
+      ? expression.slice(input.selectionStart, input.selectionEnd).trim()
+      : "";
+    const fallback = selectedText || expression.split(/\s+/).find(Boolean) || "";
+    const normalized = fallback.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+
+    if (!normalized) {
+      setMessage("Select a word in Expression first.");
+      return;
+    }
+
+    setWord(normalized);
+    setMessage(`Word set: ${normalized}`);
+  }
+
+  async function lookupDefinition() {
+    const targetWord = word.trim();
+    if (!targetWord) {
+      setMessage("Set Word before dictionary lookup.");
+      return;
+    }
+
+    setIsLookingUpWord(true);
+    setMessage("Looking up definition...");
+    const response = await sendRuntimeMessage<{
+      definition: string;
+      example?: string;
+      partOfSpeech?: string;
+      phonetic?: string;
+      provider: string;
+    }>({
+      type: "lookup-word",
+      word: targetWord
+    });
+    setIsLookingUpWord(false);
+
+    if (!response.ok || !response.result?.definition) {
+      setMessage(response.error || "Dictionary lookup failed.");
+      return;
+    }
+
+    const parts = [
+      response.result.partOfSpeech ? `(${response.result.partOfSpeech}) ${response.result.definition}` : response.result.definition,
+      response.result.phonetic ? `Pronunciation: ${response.result.phonetic}` : "",
+      response.result.example ? `Example: ${response.result.example}` : ""
+    ].filter(Boolean);
+    setDefinition(parts.join("\n"));
+    setMessage(`Definition added from ${response.result.provider}.`);
+  }
+
+  async function warnIfDuplicateExpression() {
+    const value = expression.trim();
+    if (!value || confirmedDuplicateExpression.current === value) {
+      return true;
+    }
+
+    const response = await sendRuntimeMessage<{ count: number; noteIds: number[] }>({
+      type: "find-duplicate-expression",
+      expression: value
+    });
+
+    if (!response.ok || !response.result?.count) {
+      setDuplicateWarning("");
+      return true;
+    }
+
+    setDuplicateWarning(`Possible duplicate: ${response.result.count} note(s) already contain this expression. Click Send to Anki again to send anyway.`);
+    confirmedDuplicateExpression.current = value;
+    setMessage("Possible duplicate found.");
+    return false;
+  }
+
   async function makeAnother() {
     await sendRuntimeMessage({ type: "clear-draft" });
-    setFront("");
-    setBack("");
+    setExpression("");
+    setWord("");
+    setTranslation("");
+    setDefinition("");
+    setExample("");
+    setSource("");
+    setUrl("");
+    setDuplicateWarning("");
     setAudioDuration(null);
     lastCaptureSignature.current = "";
+    lastAutoTranslateSignature.current = "";
     await refresh();
   }
 
@@ -210,7 +393,8 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   }
 
   const capture = context?.capture;
-  const ready = canSendToAnki(context, front);
+  const draft = { expression, word, translation, definition, example, source, url };
+  const ready = canSendToAnki(context, expression);
   const isRecording = Boolean(context?.isRecording);
 
   if (mode === "popup") {
@@ -308,7 +492,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       <section className="anki-pane">
         <div className="section-head">
           <h2>Anki</h2>
-          <Checklist context={context} front={front} />
+          <Checklist context={context} expression={expression} translation={translation} />
         </div>
         <div className="compact-toolbar">
           <label>
@@ -328,11 +512,18 @@ export function CaptureApp({ mode }: CaptureAppProps) {
         <details className="mapping-panel">
           <summary>Bind Anki template fields</summary>
           <div className="mapping-grid">
-            <FieldMappingSelect label="Front" fieldKey="front" context={context} allowEmpty={false} onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Back" fieldKey="back" context={context} allowEmpty={false} onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Subtitle" fieldKey="subtitle" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Context" fieldKey="context" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Expression" fieldKey="expression" context={context} allowEmpty={false} onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Word" fieldKey="word" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Translation" fieldKey="translation" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Definition" fieldKey="definition" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Transcription" fieldKey="transcription" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Word Types" fieldKey="wordTypes" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Mnemonic" fieldKey="mnemonic" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Example" fieldKey="example" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Synonyms" fieldKey="synonyms" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Antonyms" fieldKey="antonyms" context={context} allowEmpty onChange={updateFieldMapping} />
             <FieldMappingSelect label="Source" fieldKey="source" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Url" fieldKey="url" context={context} allowEmpty onChange={updateFieldMapping} />
             <FieldMappingSelect label="Image" fieldKey="image" context={context} allowEmpty onChange={updateFieldMapping} />
             <FieldMappingSelect label="Audio" fieldKey="audio" context={context} allowEmpty onChange={updateFieldMapping} />
           </div>
@@ -341,14 +532,60 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
         <section className="editor-grid">
           <label className="editor-card">
-            <span>Front</span>
-            <textarea rows={3} value={front} onChange={(event) => setFront(event.target.value)} />
+            <span>Expression</span>
+            <textarea ref={expressionRef} rows={3} value={expression} onChange={(event) => {
+              setExpression(event.target.value);
+              setDuplicateWarning("");
+            }} />
           </label>
           <label className="editor-card">
-            <span>Back</span>
-            <textarea rows={7} value={back} onChange={(event) => setBack(event.target.value)} />
+            <span>Word</span>
+            <input value={word} onChange={(event) => setWord(event.target.value)} placeholder="Optional target word" />
+            <div className="field-actions">
+              <button type="button" className="secondary inline-action" onClick={useSelectedWord}>Use selected word</button>
+              <button type="button" className="secondary inline-action" disabled={isLookingUpWord || !word.trim()} onClick={lookupDefinition}>
+                {isLookingUpWord ? "Looking up..." : "Define word"}
+              </button>
+            </div>
+          </label>
+          <label className="editor-card">
+            <span>Translation</span>
+            <textarea rows={3} value={translation} onChange={(event) => setTranslation(event.target.value)} />
+          </label>
+          <label className="editor-card">
+            <span>Definition</span>
+            <textarea rows={3} value={definition} onChange={(event) => setDefinition(event.target.value)} />
+          </label>
+          <label className="editor-card editor-card--wide">
+            <span>Example / Context</span>
+            <textarea rows={5} value={example} onChange={(event) => setExample(event.target.value)} />
+          </label>
+          <label className="editor-card">
+            <span>Source</span>
+            <input value={source} onChange={(event) => setSource(event.target.value)} />
+          </label>
+          <label className="editor-card">
+            <span>Url</span>
+            <input value={url} onChange={(event) => setUrl(event.target.value)} />
           </label>
         </section>
+
+        <section className="translator-panel">
+          <div>
+            <h2>Translator</h2>
+            <p className="muted">
+              {formatTranslationMode(context?.settings.translationMode)} | {context?.settings.translationSourceLang || "en"} to {context?.settings.translationTargetLang || "ru"}
+            </p>
+          </div>
+          <button className="secondary inline-action" disabled={isTranslating || !expression.trim()} onClick={() => translateSubtitle()}>
+            {isTranslating ? "Translating..." : "Translate subtitle"}
+          </button>
+          <button className="secondary inline-action" disabled={!translation} onClick={() => setTranslation("")}>Clear translation</button>
+          {translation && <p className="translation-preview">{translation}</p>}
+        </section>
+
+        <AnkiFieldPreview context={context} draft={draft} />
+        {duplicateWarning && <p className="warning-banner">{duplicateWarning}</p>}
 
         <footer className="footer-bar">
           {flowStatus === "Created" ? (
@@ -411,14 +648,16 @@ function StatusPill({ status }: { status: FlowStatus }) {
   return <span className={`status-pill status-pill--${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>;
 }
 
-function Checklist({ context, front }: { context: PopupContext | null; front: string }) {
+function Checklist({ context, expression, translation }: { context: PopupContext | null; expression: string; translation: string }) {
   const capture = context?.capture;
   const items = [
-    ["Subtitle", Boolean(capture?.subtitle || front)],
+    ["Expression", Boolean(capture?.subtitle || expression)],
+    ["Translation", Boolean(translation) || context?.settings.translationMode === "manual"],
     ["Screenshot", Boolean(capture?.screenshot?.dataUrl)],
     ["Audio", Boolean(capture?.audio?.dataUrl)],
     ["Deck", Boolean(context?.settings.deckName)],
-    ["Note type", Boolean(context?.settings.modelName)]
+    ["Note type", Boolean(context?.settings.modelName)],
+    ["Mapping", Boolean(context?.settings.fieldMapping.expression)]
   ] as const;
 
   return (
@@ -427,6 +666,43 @@ function Checklist({ context, front }: { context: PopupContext | null; front: st
         <span key={label} className={done ? "checklist-item checklist-item--done" : "checklist-item"}>{label}</span>
       ))}
     </div>
+  );
+}
+
+function AnkiFieldPreview({ context, draft }: { context: PopupContext | null; draft: SentenceDraft }) {
+  const mapping = context?.settings.fieldMapping;
+  if (!mapping) {
+    return null;
+  }
+
+  const rows = [
+    ["Expression", mapping.expression, draft.expression],
+    ["Word", mapping.word, draft.word],
+    ["Translation", mapping.translation, draft.translation],
+    ["Definition", mapping.definition, draft.definition],
+    ["Example", mapping.example, draft.example],
+    ["Source", mapping.source, draft.source],
+    ["Url", mapping.url, draft.url],
+    ["Image", mapping.image, context?.capture?.screenshot?.dataUrl ? "Screenshot media" : ""],
+    ["Audio", mapping.audio, context?.capture?.audio?.dataUrl ? "Audio media" : ""]
+  ].filter(([, fieldName]) => Boolean(fieldName));
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <details className="anki-preview">
+      <summary>Anki field preview</summary>
+      <div className="anki-preview__grid">
+        {rows.map(([label, fieldName, value]) => (
+          <div className="anki-preview__row" key={`${label}-${fieldName}`}>
+            <span>{label} {"->"} {fieldName}</span>
+            <p>{value || "Empty"}</p>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -465,10 +741,20 @@ function renderOptions(values: string[] = [], selectedValue = "") {
   ));
 }
 
-function canSendToAnki(context: PopupContext | null, front: string) {
+function formatTranslationMode(mode?: string) {
+  if (mode === "before-send") {
+    return "Auto before Send";
+  }
+  if (mode === "manual") {
+    return "Manual";
+  }
+  return "Auto after Capture";
+}
+
+function canSendToAnki(context: PopupContext | null, expression: string) {
   const capture = context?.capture;
   return Boolean(
-    (capture?.subtitle || front)
+    (capture?.subtitle || expression)
     && capture?.screenshot?.dataUrl
     && capture?.audio?.dataUrl
     && context?.settings.deckName
@@ -477,7 +763,7 @@ function canSendToAnki(context: PopupContext | null, front: string) {
   );
 }
 
-function buildEditableBack(capture?: CaptureData) {
+function buildExampleText(capture?: CaptureData) {
   if (!capture) {
     return "";
   }
@@ -485,9 +771,7 @@ function buildEditableBack(capture?: CaptureData) {
   return [
     capture.previousSubtitle ? `Previous: ${capture.previousSubtitle}` : "",
     capture.subtitle ? `Current: ${capture.subtitle}` : "",
-    capture.nextSubtitle ? `Next: ${capture.nextSubtitle}` : "",
-    capture.pageTitle ? `Title: ${capture.pageTitle}` : "",
-    capture.pageUrl ? `Source: ${capture.pageUrl}` : ""
+    capture.nextSubtitle ? `Next: ${capture.nextSubtitle}` : ""
   ].filter(Boolean).join("\n");
 }
 
