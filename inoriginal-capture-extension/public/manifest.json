@@ -44,9 +44,9 @@
     },
     "capture-subtitle-clip": {
       "suggested_key": {
-        "default": "Ctrl+Shift+4"
+        "default": "Alt+Shift+C"
       },
-      "description": "Capture screenshot and audio for the current subtitle until it changes"
+      "description": "Capture current subtitle"
     },
     "create-anki-card": {
       "suggested_key": {
