@@ -55,6 +55,16 @@ export type CaptureData = {
   createdAt?: number;
 };
 
+export type SentenceDraft = {
+  expression: string;
+  word: string;
+  translation: string;
+  definition: string;
+  example: string;
+  source: string;
+  url: string;
+};
+
 export type CardHistoryItem = {
   noteId: number;
   subtitle: string;
@@ -65,6 +75,7 @@ export type CardHistoryItem = {
 
 export type PopupContext = {
   capture?: CaptureData;
+  sentenceDraft?: SentenceDraft;
   settings: AnkiSettings;
   choices: {
     deckNames?: string[];

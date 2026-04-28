@@ -1,6 +1,7 @@
 const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
 const SESSION_KEY = "recordingSession";
 const CAPTURE_KEY = "latestCapture";
+const DRAFT_KEY = "sentenceDraft";
 const ANKI_SETTINGS_KEY = "ankiSettings";
 const CARD_HISTORY_KEY = "cardHistory";
 
@@ -110,6 +111,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "clear-draft") {
     void clearDraft()
       .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "save-sentence-draft") {
+    void saveSentenceDraft(message.draft || {})
+      .then((draft) => sendResponse({ ok: true, result: draft }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -292,6 +300,18 @@ async function captureSubtitleClip(options = {}) {
 
   const startedAt = Date.now();
   const settings = await getAnkiSettings();
+  const draft = normalizeSentenceDraft({
+    expression: subtitleContext.currentSubtitle,
+    example: buildContextText({
+      subtitle: subtitleContext.currentSubtitle,
+      previousSubtitle: subtitleContext.previousSubtitle || "",
+      nextSubtitle: subtitleContext.nextSubtitle || ""
+    }),
+    source: tab.title || "inoriginal",
+    url: tab.url || ""
+  });
+  await saveSentenceDraft(draft);
+
   await mergeLatestCapture({
     capturedAt: startedAt,
     pageTitle: tab.title || "inoriginal",
@@ -548,6 +568,16 @@ async function finalizeSubtitleClip(message) {
       dataUrl: `data:text/plain;charset=utf-8,${encodeURIComponent(toSrt([subtitleEntry], stoppedAt))}`
     }
   });
+  await saveSentenceDraft({
+    expression: subtitle,
+    example: buildContextText({
+      subtitle,
+      previousSubtitle: message.previousSubtitle || session.previousSubtitle || "",
+      nextSubtitle: message.nextSubtitle || ""
+    }),
+    source: session.pageTitle || "inoriginal",
+    url: session.pageUrl || ""
+  });
   await addCaptureEvent("stopping", "Subtitle changed. Stopping audio and pausing video.");
 
   await sendMessageToTab(session.tabId, {
@@ -587,7 +617,12 @@ async function createAnkiCardFromActiveTab(overrides = {}) {
     latestCapture = await takeScreenshot();
   }
 
-  const draftExpression = overrides.draft?.expression?.trim() || "";
+  const storedDraft = await getSentenceDraft();
+  const draft = normalizeSentenceDraft({
+    ...storedDraft,
+    ...(overrides.draft || {})
+  });
+  const draftExpression = draft.expression.trim();
   const subtitle = overrides.subtitle || draftExpression || latestCapture?.subtitle || subtitlePayload.currentSubtitle || "";
   if (!subtitle) {
     throw new Error("No subtitle text found in #pjs_playerjs_subtitle > span.");
@@ -595,8 +630,8 @@ async function createAnkiCardFromActiveTab(overrides = {}) {
 
   await mergeLatestCapture({
     capturedAt: Date.now(),
-    pageTitle: overrides.draft?.source || latestCapture?.pageTitle || tab.title || "inoriginal",
-    pageUrl: overrides.draft?.url || latestCapture?.pageUrl || tab.url || "",
+    pageTitle: draft.source || latestCapture?.pageTitle || tab.title || "inoriginal",
+    pageUrl: draft.url || latestCapture?.pageUrl || tab.url || "",
     subtitle,
     previousSubtitle: latestCapture?.previousSubtitle || subtitlePayload.previousSubtitle || "",
     nextSubtitle: latestCapture?.nextSubtitle || subtitlePayload.nextSubtitle || ""
@@ -610,7 +645,10 @@ async function createAnkiCardFromActiveTab(overrides = {}) {
   latestCapture = await getLatestCapture();
   let noteId;
   try {
-    noteId = await createAnkiNote(latestCapture, overrides);
+    noteId = await createAnkiNote(latestCapture, {
+      ...overrides,
+      draft
+    });
   } catch (error) {
     await mergeLatestCapture({
       cardState: "review",
@@ -903,12 +941,13 @@ async function invokeAnki(action, params, endpointOverride = null) {
 }
 
 async function buildPopupContext() {
-  const [capture, settings, session, activeTabContext, cardHistory] = await Promise.all([
+  const [capture, settings, session, activeTabContext, cardHistory, sentenceDraft] = await Promise.all([
     getLatestCapture(),
     getAnkiSettings(),
     getSession(),
     getActiveTabSubtitleContext(),
-    getCardHistory()
+    getCardHistory(),
+    getSentenceDraft()
   ]);
 
   const choices = await handleAnkiAction("popupChoices", {});
@@ -922,6 +961,7 @@ async function buildPopupContext() {
 
   return {
     capture: mergedCapture,
+    sentenceDraft,
     settings,
     choices,
     cardHistory,
@@ -990,6 +1030,11 @@ async function getLatestCapture() {
   return data[CAPTURE_KEY];
 }
 
+async function getSentenceDraft() {
+  const data = await chrome.storage.local.get(DRAFT_KEY);
+  return normalizeSentenceDraft(data[DRAFT_KEY] || {});
+}
+
 async function getAnkiSettings() {
   const data = await chrome.storage.local.get(ANKI_SETTINGS_KEY);
   return normalizeAnkiSettings(data[ANKI_SETTINGS_KEY] || {});
@@ -1020,8 +1065,21 @@ async function saveAnkiSettings(settings) {
   return merged;
 }
 
+async function saveSentenceDraft(draft) {
+  const previous = await getSentenceDraft();
+  const nextDraft = normalizeSentenceDraft({
+    ...previous,
+    ...draft
+  });
+
+  await chrome.storage.local.set({
+    [DRAFT_KEY]: nextDraft
+  });
+  return nextDraft;
+}
+
 async function clearDraft() {
-  await chrome.storage.local.remove(CAPTURE_KEY);
+  await chrome.storage.local.remove([CAPTURE_KEY, DRAFT_KEY]);
 }
 
 async function addCardHistory(entry) {
@@ -1104,6 +1162,18 @@ function normalizeAnkiSettings(value) {
       ...DEFAULT_ANKI_SETTINGS.fieldMapping,
       ...(value.fieldMapping || {})
     }
+  };
+}
+
+function normalizeSentenceDraft(value = {}) {
+  return {
+    expression: value.expression || "",
+    word: value.word || "",
+    translation: value.translation || "",
+    definition: value.definition || "",
+    example: value.example || "",
+    source: value.source || "",
+    url: value.url || ""
   };
 }
 

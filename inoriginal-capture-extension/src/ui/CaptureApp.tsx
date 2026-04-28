@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getPopupContext, saveAnkiSettings, sendRuntimeMessage } from "../shared/chromeApi";
-import type { CaptureData, FieldMapping, PopupContext } from "../shared/types";
+import type { CaptureData, FieldMapping, PopupContext, SentenceDraft } from "../shared/types";
 import "./styles.css";
 
 type CaptureAppProps = {
@@ -8,15 +8,6 @@ type CaptureAppProps = {
 };
 
 type FlowStatus = "Idle" | "Rewinding" | "Recording subtitle audio" | "Ready to review" | "Sending to Anki" | "Created" | "Failed" | "Cancelled";
-type SentenceDraft = {
-  expression: string;
-  word: string;
-  translation: string;
-  definition: string;
-  example: string;
-  source: string;
-  url: string;
-};
 
 export function CaptureApp({ mode }: CaptureAppProps) {
   const [context, setContext] = useState<PopupContext | null>(null);
@@ -34,7 +25,9 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const [duplicateWarning, setDuplicateWarning] = useState("");
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const lastCaptureSignature = useRef("");
+  const lastSavedDraftSignature = useRef("");
   const lastAutoTranslateSignature = useRef("");
+  const hasHydratedEditor = useRef(false);
   const expressionRef = useRef<HTMLTextAreaElement | null>(null);
   const confirmedDuplicateExpression = useRef("");
 
@@ -46,6 +39,32 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!hasHydratedEditor.current) {
+      return;
+    }
+
+    const draft = buildSentenceDraft({
+      expression,
+      word,
+      translation,
+      definition,
+      example,
+      source,
+      url
+    });
+    const signature = buildDraftSignature(draft);
+    if (signature === lastSavedDraftSignature.current) {
+      return;
+    }
+
+    lastSavedDraftSignature.current = signature;
+    void sendRuntimeMessage({
+      type: "save-sentence-draft",
+      draft
+    });
+  }, [expression, word, translation, definition, example, source, url]);
 
   useEffect(() => {
     if (
@@ -75,7 +94,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     try {
       const nextContext = await getPopupContext();
       setContext(nextContext);
-      hydrateEditor(nextContext.capture);
+      hydrateEditor(nextContext.capture, nextContext.sentenceDraft);
       setFlowStatus(deriveFlowStatus(nextContext));
       setMessage(buildMessage(nextContext));
     } catch (error) {
@@ -83,22 +102,32 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     }
   }
 
-  function hydrateEditor(capture?: CaptureData) {
+  function hydrateEditor(capture?: CaptureData, storedDraft?: SentenceDraft) {
     const signature = buildCaptureSignature(capture);
-    if (signature === lastCaptureSignature.current) {
+    if (hasHydratedEditor.current && signature === lastCaptureSignature.current) {
       return;
     }
 
-    setExpression(capture?.subtitle || "");
-    setWord("");
-    setTranslation("");
-    setDefinition("");
-    setExample(buildExampleText(capture));
-    setSource(capture?.pageTitle || "");
-    setUrl(capture?.pageUrl || "");
+    const nextDraft = buildSentenceDraft({
+      ...storedDraft,
+      expression: storedDraft?.expression || capture?.subtitle || "",
+      example: storedDraft?.example || buildExampleText(capture),
+      source: storedDraft?.source || capture?.pageTitle || "",
+      url: storedDraft?.url || capture?.pageUrl || ""
+    });
+
+    setExpression(nextDraft.expression);
+    setWord(nextDraft.word);
+    setTranslation(nextDraft.translation);
+    setDefinition(nextDraft.definition);
+    setExample(nextDraft.example);
+    setSource(nextDraft.source);
+    setUrl(nextDraft.url);
     setDuplicateWarning("");
     setAudioDuration(null);
     lastCaptureSignature.current = signature;
+    lastSavedDraftSignature.current = buildDraftSignature(nextDraft);
+    hasHydratedEditor.current = true;
   }
 
   async function captureSubtitleClip() {
@@ -177,7 +206,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     const response = await sendRuntimeMessage<{ noteId: number }>({
       type: "create-anki-card",
       payload: {
-        subtitle: context?.capture?.subtitle || expression,
+        subtitle: expression || context?.capture?.subtitle,
         draft: {
           expression,
           word,
@@ -326,7 +355,9 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setDuplicateWarning("");
     setAudioDuration(null);
     lastCaptureSignature.current = "";
+    lastSavedDraftSignature.current = "";
     lastAutoTranslateSignature.current = "";
+    hasHydratedEditor.current = false;
     await refresh();
   }
 
@@ -773,6 +804,30 @@ function buildExampleText(capture?: CaptureData) {
     capture.subtitle ? `Current: ${capture.subtitle}` : "",
     capture.nextSubtitle ? `Next: ${capture.nextSubtitle}` : ""
   ].filter(Boolean).join("\n");
+}
+
+function buildSentenceDraft(value: Partial<SentenceDraft> = {}): SentenceDraft {
+  return {
+    expression: value.expression || "",
+    word: value.word || "",
+    translation: value.translation || "",
+    definition: value.definition || "",
+    example: value.example || "",
+    source: value.source || "",
+    url: value.url || ""
+  };
+}
+
+function buildDraftSignature(draft: SentenceDraft) {
+  return [
+    draft.expression,
+    draft.word,
+    draft.translation,
+    draft.definition,
+    draft.example,
+    draft.source,
+    draft.url
+  ].join("|");
 }
 
 function buildCaptureSignature(capture?: CaptureData) {
