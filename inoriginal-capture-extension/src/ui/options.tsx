@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS: AnkiSettings = {
   endpoint: "http://127.0.0.1:8765",
   deckName: "Default",
   modelName: "Basic",
+  rewindMs: 1200,
   tags: "inoriginal",
   fieldMapping: {
     front: "Front",
@@ -143,6 +144,18 @@ function OptionsApp() {
         <label>
           <span>Tags</span>
           <input value={settings.tags} onChange={(event) => setSettings({ ...settings, tags: event.target.value })} />
+        </label>
+
+        <label>
+          <span>Rewind before recording: {(settings.rewindMs / 1000).toFixed(1)}s</span>
+          <input
+            max={2000}
+            min={500}
+            step={100}
+            type="range"
+            value={settings.rewindMs}
+            onChange={(event) => setSettings({ ...settings, rewindMs: Number(event.target.value) })}
+          />
         </label>
 
         <div className="actions">

@@ -13,6 +13,7 @@
     "tabs"
   ],
   "host_permissions": [
+    "<all_urls>",
     "https://inoriginal.cc/*",
     "http://127.0.0.1/*",
     "http://localhost/*"

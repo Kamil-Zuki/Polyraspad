@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { getPopupContext, saveAnkiSettings, sendRuntimeMessage } from "../shared/chromeApi";
-import type { CaptureData, PopupContext } from "../shared/types";
+import type { CaptureData, FieldMapping, PopupContext } from "../shared/types";
 import "./styles.css";
 
 type CaptureAppProps = {
   mode: "popup" | "sidepanel";
 };
 
+type FlowStatus = "Idle" | "Rewinding" | "Recording subtitle audio" | "Ready to review" | "Sending to Anki" | "Created" | "Failed" | "Cancelled";
+
 export function CaptureApp({ mode }: CaptureAppProps) {
   const [context, setContext] = useState<PopupContext | null>(null);
-  const [status, setStatus] = useState("Loading...");
+  const [flowStatus, setFlowStatus] = useState<FlowStatus>("Idle");
+  const [message, setMessage] = useState("Loading...");
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const lastCaptureSignature = useRef("");
 
   useEffect(() => {
@@ -25,16 +29,17 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
   async function refresh(showLoading = true) {
     if (showLoading) {
-      setStatus("Loading...");
+      setMessage("Loading...");
     }
 
     try {
       const nextContext = await getPopupContext();
       setContext(nextContext);
       hydrateEditor(nextContext.capture);
-      setStatus(buildStatus(nextContext));
+      setFlowStatus(deriveFlowStatus(nextContext));
+      setMessage(buildMessage(nextContext));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Failed to load popup.");
+      setMessage(error instanceof Error ? error.message : "Failed to load extension UI.");
     }
   }
 
@@ -46,34 +51,68 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
     setFront(capture?.subtitle || "");
     setBack(buildEditableBack(capture));
+    setAudioDuration(null);
     lastCaptureSignature.current = signature;
   }
 
-  async function runAction(type: string) {
-    setStatus("Working...");
-    const response = await sendRuntimeMessage({ type });
+  async function captureSubtitleClip() {
+    setFlowStatus("Rewinding");
+    setMessage("Preparing subtitle capture...");
+    const response = await sendRuntimeMessage({ type: "capture-subtitle-clip" });
     if (!response.ok) {
-      setStatus(response.error || "Action failed.");
+      await refresh(false);
+      setFlowStatus("Failed");
+      setMessage(response.error || "Capture failed.");
+      return;
+    }
+
+    await refresh(false);
+  }
+
+  async function retakeScreenshot() {
+    setMessage("Retaking screenshot...");
+    const response = await sendRuntimeMessage({ type: "take-screenshot" });
+    if (!response.ok) {
+      setMessage(response.error || "Screenshot failed.");
       return;
     }
 
     await refresh();
   }
 
-  async function captureSubtitleClip() {
-    setStatus("Making a card: screenshot now, audio until the subtitle changes...");
-    const response = await sendRuntimeMessage({ type: "capture-subtitle-clip" });
+  async function recaptureAudio() {
+    setFlowStatus("Rewinding");
+    setMessage("Re-recording subtitle audio...");
+    const response = await sendRuntimeMessage({ type: "recapture-subtitle-audio" });
     if (!response.ok) {
-      setStatus(response.error || "Capture failed.");
+      await refresh(false);
+      setFlowStatus("Failed");
+      setMessage(response.error || "Audio re-record failed.");
       return;
     }
 
-    setStatus("Recording audio until the subtitle changes...");
-    await refresh();
+    await refresh(false);
+  }
+
+  async function cancelCapture() {
+    setMessage("Cancelling capture...");
+    const response = await sendRuntimeMessage({ type: "cancel-capture" });
+    if (!response.ok) {
+      setMessage(response.error || "Could not cancel capture.");
+      return;
+    }
+
+    await refresh(false);
   }
 
   async function createCard() {
-    setStatus("Creating Anki card...");
+    if (!canSendToAnki(context, front)) {
+      setMessage("Capture subtitle, screenshot, audio, deck, and note type first.");
+      return;
+    }
+
+    setFlowStatus("Sending to Anki");
+    setMessage("Sending card to Anki...");
     const response = await sendRuntimeMessage<{ noteId: number }>({
       type: "create-anki-card",
       payload: {
@@ -88,22 +127,49 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     });
 
     if (!response.ok) {
-      setStatus(response.error || "Failed to create card.");
+      await refresh(false);
+      setFlowStatus("Failed");
+      setMessage(response.error || "Failed to create card.");
       return;
     }
 
-    setStatus(`Created note ${response.result?.noteId}.`);
+    await refresh(false);
+    setFlowStatus("Created");
+    setMessage(`Card created: ${response.result?.noteId}`);
+  }
+
+  async function makeAnother() {
+    await sendRuntimeMessage({ type: "clear-draft" });
+    setFront("");
+    setBack("");
+    setAudioDuration(null);
+    lastCaptureSignature.current = "";
+    await refresh();
+  }
+
+  async function openInAnki() {
+    const noteId = context?.capture?.noteId;
+    if (!noteId) {
+      setMessage("No created Anki note is available.");
+      return;
+    }
+
+    const response = await sendRuntimeMessage({
+      type: "open-anki-note",
+      noteId
+    });
+    setMessage(response.ok ? "Opened in Anki." : response.error || "Could not open Anki.");
   }
 
   async function openSidePanel() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.windowId) {
-      setStatus("No active window available for the side panel.");
+      setMessage("No active window available for the side panel.");
       return;
     }
 
     if (typeof chrome.sidePanel?.open !== "function") {
-      setStatus("This Chrome version does not support side panel opening.");
+      setMessage("This Chrome version does not support side panel opening.");
       return;
     }
 
@@ -129,126 +195,263 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     await refresh(false);
   }
 
+  async function updateFieldMapping(key: keyof FieldMapping, value: string) {
+    if (!context) {
+      return;
+    }
+
+    const settings = await saveAnkiSettings({
+      fieldMapping: {
+        ...context.settings.fieldMapping,
+        [key]: value
+      }
+    });
+    setContext({ ...context, settings });
+  }
+
   const capture = context?.capture;
+  const ready = canSendToAnki(context, front);
   const isRecording = Boolean(context?.isRecording);
-  const isClipRecording = isRecording && context?.sessionMode === "clip";
+
+  if (mode === "popup") {
+    return (
+      <main className="quick-panel">
+        <header className="quick-header">
+          <div>
+            <p className="eyebrow">InOriginal</p>
+            <h1>Capture</h1>
+          </div>
+          <StatusPill status={flowStatus} />
+        </header>
+
+        <p className="subtitle subtitle--current quick-subtitle">{capture?.subtitle || "No current subtitle yet."}</p>
+
+        {capture?.audio?.dataUrl && (
+          <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
+            const duration = event.currentTarget.duration;
+            setAudioDuration(Number.isFinite(duration) ? duration : null);
+          }} />
+        )}
+
+        <div className="quick-actions">
+          <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture current subtitle</button>
+          {isRecording && <button className="secondary" onClick={cancelCapture}>Cancel capture</button>}
+          <button className="secondary" onClick={openSidePanel}>Open review panel</button>
+          <button className="secondary" disabled={!ready || isRecording} onClick={createCard}>Send to Anki</button>
+        </div>
+
+        <p className="status">{audioDuration ? `Audio: ${audioDuration.toFixed(1)}s | ${message}` : message}</p>
+      </main>
+    );
+  }
 
   return (
-    <main className="panel mining-layout">
-      <header className="hero">
+    <main className="studio-shell">
+      <header className="studio-topbar">
         <div>
-          <p className="eyebrow">Subtitle Mining</p>
+          <p className="eyebrow">Subtitle Studio</p>
           <h1>InOriginal Capture</h1>
-          <p className="muted hero-copy">Capture the current subtitle, preview screenshot and audio, then send the final card to Anki.</p>
         </div>
         <div className="hero-actions">
-          {mode === "popup" && (
-            <button id="open-sidepanel" className="secondary ghost-button" onClick={openSidePanel}>Side panel</button>
-          )}
+          <StatusPill status={flowStatus} />
+          <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture</button>
+          {isRecording && <button className="secondary ghost-button" onClick={cancelCapture}>Cancel</button>}
           <button className="secondary ghost-button" onClick={() => chrome.runtime.openOptionsPage()}>Settings</button>
         </div>
       </header>
 
-      <section className="workflow-bar">
-        <WorkflowStep index="1" title="Capture" copy="Grab subtitle, screenshot, and audio clip." />
-        <WorkflowStep index="2" title="Preview" copy="Check image, audio, and subtitle context." />
-        <WorkflowStep index="3" title="Create" copy="Send the finished card to Anki." />
-      </section>
-
-      <section className="capture-panel">
-        <div className="capture-main">
-          <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Make a card</button>
-          <p className="muted action-copy">Starts capture now, keeps the video playing, and stops audio when the subtitle changes.</p>
-        </div>
-        <div className="actions actions--tight">
-          <button className="secondary" disabled={isClipRecording} onClick={() => runAction("take-screenshot")}>Retake screenshot</button>
-          <button className="secondary" onClick={() => runAction("toggle-recording")}>
-            {isRecording ? "Stop audio + subtitles" : "Start or stop audio + subtitles"}
-          </button>
-        </div>
-      </section>
-
-      <section className="compact-toolbar">
-        <label>
-          <span>Deck</span>
-          <select value={context?.settings.deckName || ""} onChange={(event) => updateDeck(event.target.value)}>
-            {renderOptions(context?.choices.deckNames, context?.settings.deckName)}
-          </select>
-        </label>
-        <label>
-          <span>Note type</span>
-          <select value={context?.settings.modelName || ""} onChange={(event) => updateModel(event.target.value)}>
-            {renderOptions(context?.choices.modelNames, context?.settings.modelName)}
-          </select>
-        </label>
-      </section>
-
-      <section className="card subtitle-stage">
-        <div className="section-head">
-          <h2>Current Subtitle</h2>
-          <p className="status">{status}</p>
-        </div>
-        <div className="subtitle-stack subtitle-stack--focused">
+      <section className="studio-grid">
+        <section className="review-pane">
+          <div className="section-head">
+            <h2>Review</h2>
+            <p className="status">{message}</p>
+          </div>
           <p className="subtitle subtitle--muted subtitle--context">{capture?.previousSubtitle || "No previous subtitle."}</p>
           <p className="subtitle subtitle--current subtitle--hero">{capture?.subtitle || "No current subtitle yet."}</p>
           <p className="subtitle subtitle--muted subtitle--context">{capture?.nextSubtitle || "No next subtitle."}</p>
+          <CaptureTimeline capture={capture} />
+        </section>
+
+        <section className="media-pane">
+          <article className="media-tile">
+            <div className="section-head">
+              <h2>Screenshot</h2>
+              <button className="secondary inline-action" disabled={isRecording} onClick={retakeScreenshot}>Retake screenshot</button>
+            </div>
+            {capture?.screenshot?.dataUrl ? (
+              <img className="media-preview media-preview--image" alt="Screenshot preview" src={capture.screenshot.dataUrl} />
+            ) : (
+              <p className="muted media-empty">No screenshot yet.</p>
+            )}
+          </article>
+
+          <article className="media-tile">
+            <div className="section-head">
+              <h2>Audio</h2>
+              <button className="secondary inline-action" disabled={isRecording} onClick={recaptureAudio}>Re-record audio</button>
+            </div>
+            {capture?.audio?.dataUrl ? (
+              <>
+                <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
+                  const duration = event.currentTarget.duration;
+                  setAudioDuration(Number.isFinite(duration) ? duration : null);
+                }} />
+                <p className="status">{audioDuration ? `Audio: ${audioDuration.toFixed(1)}s` : "Audio ready"}</p>
+              </>
+            ) : (
+              <p className="muted media-empty">No audio yet.</p>
+            )}
+          </article>
+        </section>
+      </section>
+
+      <section className="anki-pane">
+        <div className="section-head">
+          <h2>Anki</h2>
+          <Checklist context={context} front={front} />
         </div>
-      </section>
+        <div className="compact-toolbar">
+          <label>
+            <span>Deck</span>
+            <select value={context?.settings.deckName || ""} onChange={(event) => updateDeck(event.target.value)}>
+              {renderOptions(context?.choices.deckNames, context?.settings.deckName)}
+            </select>
+          </label>
+          <label>
+            <span>Note type</span>
+            <select value={context?.settings.modelName || ""} onChange={(event) => updateModel(event.target.value)}>
+              {renderOptions(context?.choices.modelNames, context?.settings.modelName)}
+            </select>
+          </label>
+        </div>
 
-      <section className="media-strip">
-        <article className="card media-tile">
-          <div className="section-head">
-            <h2>Screenshot</h2>
-            <span className="tile-badge">Preview</span>
+        <details className="mapping-panel">
+          <summary>Bind Anki template fields</summary>
+          <div className="mapping-grid">
+            <FieldMappingSelect label="Front" fieldKey="front" context={context} allowEmpty={false} onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Back" fieldKey="back" context={context} allowEmpty={false} onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Subtitle" fieldKey="subtitle" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Context" fieldKey="context" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Source" fieldKey="source" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Image" fieldKey="image" context={context} allowEmpty onChange={updateFieldMapping} />
+            <FieldMappingSelect label="Audio" fieldKey="audio" context={context} allowEmpty onChange={updateFieldMapping} />
           </div>
-          {capture?.screenshot?.dataUrl ? (
-            <img className="media-preview media-preview--image" alt="Screenshot preview" src={capture.screenshot.dataUrl} />
-          ) : (
-            <p className="muted media-empty">No screenshot yet.</p>
-          )}
-        </article>
+          <p className="muted">Fields are loaded from the selected note type.</p>
+        </details>
 
-        <article className="card media-tile">
-          <div className="section-head">
-            <h2>Audio</h2>
-            <span className="tile-badge">Preview</span>
+        <section className="editor-grid">
+          <label className="editor-card">
+            <span>Front</span>
+            <textarea rows={3} value={front} onChange={(event) => setFront(event.target.value)} />
+          </label>
+          <label className="editor-card">
+            <span>Back</span>
+            <textarea rows={7} value={back} onChange={(event) => setBack(event.target.value)} />
+          </label>
+        </section>
+
+        <footer className="footer-bar">
+          {flowStatus === "Created" ? (
+            <div className="created-actions">
+              <span className="created-label">Card created</span>
+              <button className="secondary" onClick={makeAnother}>Make another</button>
+              <button className="secondary" onClick={openInAnki}>Open in Anki</button>
+            </div>
+          ) : (
+            <>
+              <p className="muted footer-copy">Preview first, then send the final card to Anki.</p>
+              <button className="primary-action" disabled={!ready || isRecording} onClick={createCard}>Send to Anki</button>
+            </>
+          )}
+        </footer>
+      </section>
+
+      <section className="history-pane">
+        <h2>Recent cards</h2>
+        {(context?.cardHistory || []).length === 0 ? (
+          <p className="muted">No cards created yet.</p>
+        ) : (
+          <div className="history-list">
+            {(context?.cardHistory || []).map((item) => (
+              <button key={`${item.noteId}-${item.createdAt}`} className="history-item" onClick={() => sendRuntimeMessage({ type: "open-anki-note", noteId: item.noteId })}>
+                <span>{item.subtitle}</span>
+                <small>{new Date(item.createdAt).toLocaleTimeString()}</small>
+              </button>
+            ))}
           </div>
-          {capture?.audio?.dataUrl ? (
-            <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} />
-          ) : (
-            <p className="muted media-empty">No audio yet.</p>
-          )}
-        </article>
+        )}
       </section>
-
-      <section className="editor-grid">
-        <label className="card editor-card">
-          <span>Front</span>
-          <textarea rows={3} value={front} onChange={(event) => setFront(event.target.value)} />
-        </label>
-        <label className="card editor-card">
-          <span>Back</span>
-          <textarea rows={7} value={back} onChange={(event) => setBack(event.target.value)} />
-        </label>
-      </section>
-
-      <footer className="footer-bar">
-        <p className="muted footer-copy">Preview first, then create the final Anki card.</p>
-        <button className="primary-action" disabled={isRecording} onClick={createCard}>Create card</button>
-      </footer>
     </main>
   );
 }
 
-function WorkflowStep({ index, title, copy }: { index: string; title: string; copy: string }) {
+function CaptureTimeline({ capture }: { capture?: CaptureData }) {
+  const events = capture?.captureEvents || [];
+  if (events.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="workflow-step">
-      <span className="workflow-index">{index}</span>
-      <div>
-        <p className="workflow-title">{title}</p>
-        <p className="workflow-copy">{copy}</p>
-      </div>
+    <details className="capture-debug">
+      <summary>Capture details</summary>
+      <ol>
+        {events.map((event) => (
+          <li key={`${event.at}-${event.step}-${event.message}`} className={`capture-debug__event capture-debug__event--${event.level}`}>
+            <span>{event.step}</span>
+            <p>{event.message}</p>
+            <small>{new Date(event.at).toLocaleTimeString()}</small>
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
+function StatusPill({ status }: { status: FlowStatus }) {
+  return <span className={`status-pill status-pill--${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>;
+}
+
+function Checklist({ context, front }: { context: PopupContext | null; front: string }) {
+  const capture = context?.capture;
+  const items = [
+    ["Subtitle", Boolean(capture?.subtitle || front)],
+    ["Screenshot", Boolean(capture?.screenshot?.dataUrl)],
+    ["Audio", Boolean(capture?.audio?.dataUrl)],
+    ["Deck", Boolean(context?.settings.deckName)],
+    ["Note type", Boolean(context?.settings.modelName)]
+  ] as const;
+
+  return (
+    <div className="checklist">
+      {items.map(([label, done]) => (
+        <span key={label} className={done ? "checklist-item checklist-item--done" : "checklist-item"}>{label}</span>
+      ))}
     </div>
+  );
+}
+
+function FieldMappingSelect({
+  allowEmpty,
+  context,
+  fieldKey,
+  label,
+  onChange
+}: {
+  allowEmpty?: boolean;
+  context: PopupContext | null;
+  fieldKey: keyof FieldMapping;
+  label: string;
+  onChange: (key: keyof FieldMapping, value: string) => void;
+}) {
+  const value = context?.settings.fieldMapping[fieldKey] || "";
+  return (
+    <label>
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(fieldKey, event.target.value)}>
+        {allowEmpty && <option value="">Not used</option>}
+        {renderOptions(context?.choices.modelFieldNames, value)}
+      </select>
+    </label>
   );
 }
 
@@ -260,6 +463,18 @@ function renderOptions(values: string[] = [], selectedValue = "") {
   return options.map((value) => (
     <option key={value} value={value}>{value}</option>
   ));
+}
+
+function canSendToAnki(context: PopupContext | null, front: string) {
+  const capture = context?.capture;
+  return Boolean(
+    (capture?.subtitle || front)
+    && capture?.screenshot?.dataUrl
+    && capture?.audio?.dataUrl
+    && context?.settings.deckName
+    && context?.settings.modelName
+    && !context?.isRecording
+  );
 }
 
 function buildEditableBack(capture?: CaptureData) {
@@ -287,25 +502,60 @@ function buildCaptureSignature(capture?: CaptureData) {
     capture.nextSubtitle || "",
     capture.screenshot?.filename || "",
     capture.audio?.filename || "",
-    capture.pageUrl || ""
+    capture.pageUrl || "",
+    capture.cardState || "",
+    capture.captureStep || "",
+    capture.error || "",
+    capture.noteId || ""
   ].join("|");
 }
 
-function buildStatus(context: PopupContext) {
+function deriveFlowStatus(context: PopupContext): FlowStatus {
+  if (context.isRecording && context.sessionMode === "clip-waiting") {
+    return "Rewinding";
+  }
   if (context.isRecording && context.sessionMode === "clip") {
-    return "Recording the current subtitle. The preview will be ready when the subtitle changes.";
+    return "Recording subtitle audio";
   }
+  if (context.capture?.cardState === "created") {
+    return "Created";
+  }
+  if (context.capture?.captureStep === "failed") {
+    return "Failed";
+  }
+  if (context.capture?.captureStep === "cancelled") {
+    return "Cancelled";
+  }
+  if (context.capture?.error) {
+    return "Ready to review";
+  }
+  if (context.capture?.subtitle && context.capture?.screenshot?.dataUrl && context.capture?.audio?.dataUrl) {
+    return "Ready to review";
+  }
+  return "Idle";
+}
 
-  const pieces = [];
-  if (context.capture?.pageTitle) {
-    pieces.push(context.capture.pageTitle);
+function buildMessage(context: PopupContext) {
+  if (context.isRecording && context.sessionMode === "clip-waiting") {
+    return "Rewinding to catch the start of the subtitle.";
   }
-  if (context.capture?.screenshot?.filename) {
-    pieces.push("Image ready");
+  if (context.isRecording && context.sessionMode === "clip") {
+    return "Recording subtitle audio.";
   }
-  if (context.capture?.audio?.filename) {
-    pieces.push("Audio ready");
+  if (context.capture?.cardState === "created") {
+    return `Card created${context.capture.noteId ? `: ${context.capture.noteId}` : ""}.`;
   }
-
-  return pieces.join(" | ") || "Click 'Make a card' to capture screenshot and audio for the current subtitle.";
+  if (context.capture?.captureStep === "failed" && context.capture.error) {
+    return context.capture.error;
+  }
+  if (context.capture?.captureStep === "cancelled") {
+    return "Capture cancelled. You can capture again or keep editing the draft.";
+  }
+  if (context.capture?.error) {
+    return context.capture.error;
+  }
+  if (context.capture?.subtitle && context.capture?.screenshot?.dataUrl && context.capture?.audio?.dataUrl) {
+    return "Ready to review.";
+  }
+  return "Capture a subtitle to start a draft.";
 }

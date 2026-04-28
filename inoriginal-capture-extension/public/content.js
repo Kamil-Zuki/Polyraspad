@@ -13,6 +13,8 @@
     startedAt: 0,
     pollTimer: null,
     clipPollTimer: null,
+    clipFallbackTimer: null,
+    clipMaxTimer: null,
     lastText: "",
     clipMode: null
   };
@@ -86,6 +88,16 @@
     if (state.clipPollTimer) {
       clearInterval(state.clipPollTimer);
       state.clipPollTimer = null;
+    }
+
+    if (state.clipFallbackTimer) {
+      clearTimeout(state.clipFallbackTimer);
+      state.clipFallbackTimer = null;
+    }
+
+    if (state.clipMaxTimer) {
+      clearTimeout(state.clipMaxTimer);
+      state.clipMaxTimer = null;
     }
 
     if (state.entries.length > 0) {
@@ -189,8 +201,12 @@
       active: true,
       targetSubtitle,
       recordingRequested: false,
-      recordingStarted: false
+      recordingStarted: false,
+      forcedStart: false
     };
+
+    maybeRequestClipRecording(getCurrentSubtitle());
+
     state.clipPollTimer = window.setInterval(() => {
       const currentText = getCurrentSubtitle();
       if (currentText) {
@@ -199,11 +215,22 @@
       maybeCompleteClip(currentText, state.lastText);
     }, 100);
 
-    window.setTimeout(() => {
-      if (!rewound) {
-        maybeRequestClipRecording(getCurrentSubtitle());
+    state.clipFallbackTimer = window.setTimeout(() => {
+      if (!state.clipMode?.active || state.clipMode.recordingStarted) {
+        return;
       }
-    }, 150);
+
+      state.clipMode.forcedStart = true;
+      maybeRequestClipRecording(state.clipMode.targetSubtitle, true);
+    }, rewound ? 1800 : 350);
+
+    state.clipMaxTimer = window.setTimeout(() => {
+      if (!state.clipMode?.active || !state.clipMode.recordingStarted) {
+        return;
+      }
+
+      completeClip(getCurrentSubtitle());
+    }, 12000);
   }
 
   function getPreviousSubtitleFor(text) {
@@ -248,11 +275,11 @@
     return true;
   }
 
-  function maybeRequestClipRecording(text) {
+  function maybeRequestClipRecording(text, force = false) {
     if (
       !state.clipMode?.active
       || state.clipMode.recordingRequested
-      || text !== state.clipMode.targetSubtitle
+      || (!force && text !== state.clipMode.targetSubtitle)
     ) {
       return;
     }
@@ -282,19 +309,43 @@
     if (
       !state.clipMode?.active
       || !state.clipMode.recordingStarted
-      || previousText !== state.clipMode.targetSubtitle
+      || (!state.clipMode.forcedStart && previousText !== state.clipMode.targetSubtitle)
       || text === state.clipMode.targetSubtitle
     ) {
       return;
     }
 
+    completeClip(text);
+  }
+
+  function completeClip(nextSubtitle) {
+    if (!state.clipMode?.active) {
+      return;
+    }
+
     state.clipMode.active = false;
+
+    if (state.clipPollTimer) {
+      clearInterval(state.clipPollTimer);
+      state.clipPollTimer = null;
+    }
+
+    if (state.clipFallbackTimer) {
+      clearTimeout(state.clipFallbackTimer);
+      state.clipFallbackTimer = null;
+    }
+
+    if (state.clipMaxTimer) {
+      clearTimeout(state.clipMaxTimer);
+      state.clipMaxTimer = null;
+    }
+
     pauseVideoPlayback();
     void chrome.runtime.sendMessage({
       type: "subtitle-clip-complete",
       subtitle: state.clipMode.targetSubtitle,
       previousSubtitle: getPreviousSubtitleFor(state.clipMode.targetSubtitle),
-      nextSubtitle: text || ""
+      nextSubtitle: nextSubtitle && nextSubtitle !== state.clipMode.targetSubtitle ? nextSubtitle : ""
     });
   }
 

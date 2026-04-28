@@ -12,6 +12,7 @@ export type AnkiSettings = {
   endpoint: string;
   deckName: string;
   modelName: string;
+  rewindMs: number;
   tags: string;
   fieldMapping: FieldMapping;
 };
@@ -31,6 +32,25 @@ export type CaptureData = {
     dataUrl?: string;
     filename?: string;
   };
+  cardState?: "capturing" | "review" | "created";
+  captureStep?: "idle" | "screenshot" | "rewinding" | "waiting-subtitle" | "recording-audio" | "stopping" | "review-ready" | "sending-anki" | "created" | "failed" | "cancelled";
+  captureEvents?: Array<{
+    at: number;
+    level: "info" | "success" | "warning" | "error";
+    message: string;
+    step: string;
+  }>;
+  error?: string;
+  noteId?: number;
+  createdAt?: number;
+};
+
+export type CardHistoryItem = {
+  noteId: number;
+  subtitle: string;
+  pageTitle: string;
+  pageUrl: string;
+  createdAt: number;
 };
 
 export type PopupContext = {
@@ -41,6 +61,7 @@ export type PopupContext = {
     modelNames?: string[];
     modelFieldNames?: string[];
   };
+  cardHistory?: CardHistoryItem[];
   isRecording: boolean;
   sessionMode: string | null;
 };

@@ -2,12 +2,13 @@ const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
 const SESSION_KEY = "recordingSession";
 const CAPTURE_KEY = "latestCapture";
 const ANKI_SETTINGS_KEY = "ankiSettings";
-const CLIP_REWIND_MS = 1200;
+const CARD_HISTORY_KEY = "cardHistory";
 
 const DEFAULT_ANKI_SETTINGS = {
   endpoint: "http://127.0.0.1:8765",
   deckName: "Default",
   modelName: "Basic",
+  rewindMs: 1200,
   tags: "inoriginal",
   fieldMapping: {
     front: "Front",
@@ -41,6 +42,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 
     if (command === "capture-subtitle-clip") {
       await captureSubtitleClip();
+      await openSidePanelForActiveWindow().catch(() => null);
       return;
     }
 
@@ -61,8 +63,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "recording-error") {
-    console.error("Offscreen recording error", message.error);
-    return false;
+    void handleRecordingError(message.error)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
   }
 
   if (message?.type === "subtitle-clip-complete") {
@@ -93,6 +97,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "clear-draft") {
+    void clearDraft()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "cancel-capture") {
+    void cancelCapture()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "open-anki-note") {
+    void openAnkiNote(message.noteId)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "take-screenshot") {
     void takeScreenshot()
       .then((capture) => sendResponse({ ok: true, capture }))
@@ -109,6 +134,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "capture-subtitle-clip") {
     void captureSubtitleClip()
+      .then((capture) => sendResponse({ ok: true, capture }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "recapture-subtitle-audio") {
+    void captureSubtitleClip({ takeScreenshot: false })
       .then((capture) => sendResponse({ ok: true, capture }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -207,7 +239,8 @@ async function toggleRecording() {
   await startRecording(tab);
 }
 
-async function captureSubtitleClip() {
+async function captureSubtitleClip(options = {}) {
+  const { takeScreenshot = true } = options;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.windowId || !tab.url?.startsWith("https://inoriginal.cc/")) {
     throw new Error("Open a page on https://inoriginal.cc/ before capturing a subtitle clip.");
@@ -226,8 +259,27 @@ async function captureSubtitleClip() {
     throw new Error("No active subtitle found to capture.");
   }
 
-  const screenshotCapture = await takeScreenshotForTab(tab);
   const startedAt = Date.now();
+  const settings = await getAnkiSettings();
+  await mergeLatestCapture({
+    capturedAt: startedAt,
+    pageTitle: tab.title || "inoriginal",
+    pageUrl: tab.url || "",
+    subtitle: subtitleContext.currentSubtitle,
+    previousSubtitle: subtitleContext.previousSubtitle || "",
+    nextSubtitle: subtitleContext.nextSubtitle || "",
+    cardState: "capturing",
+    captureStep: takeScreenshot ? "screenshot" : "rewinding",
+    error: "",
+    captureEvents: [
+      buildCaptureEvent(
+        takeScreenshot ? "screenshot" : "rewinding",
+        takeScreenshot ? "Capture started. Taking screenshot." : "Re-record started. Keeping existing screenshot."
+      )
+    ]
+  });
+
+  const screenshotCapture = takeScreenshot ? await takeScreenshotForTab(tab) : null;
 
   await chrome.storage.local.set({
     [SESSION_KEY]: {
@@ -248,15 +300,29 @@ async function captureSubtitleClip() {
     subtitle: subtitleContext.currentSubtitle,
     previousSubtitle: subtitleContext.previousSubtitle || "",
     nextSubtitle: subtitleContext.nextSubtitle || "",
-    screenshot: screenshotCapture.screenshot
+    cardState: "capturing",
+    captureStep: "rewinding",
+    ...(screenshotCapture ? { screenshot: screenshotCapture.screenshot } : {})
   });
+  await addCaptureEvent("rewinding", "Video rewind requested. Waiting for subtitle audio start.");
 
-  await sendMessageToTab(tab.id, {
-    type: "start-subtitle-clip",
-    startedAt,
-    targetSubtitle: subtitleContext.currentSubtitle,
-    rewindMs: CLIP_REWIND_MS
-  });
+  try {
+    await sendMessageToTab(tab.id, {
+      type: "start-subtitle-clip",
+      startedAt,
+      targetSubtitle: subtitleContext.currentSubtitle,
+      rewindMs: settings.rewindMs
+    });
+  } catch (error) {
+    await chrome.storage.local.remove(SESSION_KEY);
+    await mergeLatestCapture({
+      cardState: "review",
+      captureStep: "failed",
+      error: error.message || "Could not start subtitle capture in the page."
+    });
+    await addCaptureEvent("failed", error.message || "Could not start subtitle capture in the page.", "error");
+    throw error;
+  }
 
   return getLatestCapture();
 }
@@ -284,13 +350,31 @@ async function startSubtitleClipRecording() {
       startedAt
     }
   });
+  await addCaptureEvent("recording-audio", "Tab audio recording is starting.");
+  await mergeLatestCapture({
+    cardState: "capturing",
+    captureStep: "recording-audio"
+  });
 
-  await chrome.runtime.sendMessage({
+  const response = await chrome.runtime.sendMessage({
     type: "start-audio-recording",
     streamId,
     tabId: session.tabId,
     startedAt
   });
+
+  if (!response?.ok) {
+    await chrome.storage.local.remove(SESSION_KEY);
+    await mergeLatestCapture({
+      cardState: "review",
+      captureStep: "failed",
+      error: response?.error || "Chrome could not start tab audio capture."
+    });
+    await addCaptureEvent("failed", response?.error || "Chrome could not start tab audio capture.", "error");
+    throw new Error(response?.error || "Chrome could not start tab audio capture.");
+  }
+
+  await addCaptureEvent("recording-audio", "Tab audio recording started.", "success");
 }
 
 async function takeScreenshot() {
@@ -424,6 +508,8 @@ async function finalizeSubtitleClip(message) {
     subtitle,
     previousSubtitle: message.previousSubtitle || session.previousSubtitle || "",
     nextSubtitle: message.nextSubtitle || "",
+    cardState: "review",
+    captureStep: "stopping",
     subtitles: {
       entries: [subtitleEntry],
       srt: toSrt([subtitleEntry], stoppedAt),
@@ -431,6 +517,7 @@ async function finalizeSubtitleClip(message) {
       dataUrl: `data:text/plain;charset=utf-8,${encodeURIComponent(toSrt([subtitleEntry], stoppedAt))}`
     }
   });
+  await addCaptureEvent("stopping", "Subtitle changed. Stopping audio and pausing video.");
 
   await sendMessageToTab(session.tabId, {
     type: "stop-subtitle-capture",
@@ -483,8 +570,39 @@ async function createAnkiCardFromActiveTab(overrides = {}) {
     nextSubtitle: subtitlePayload.nextSubtitle || latestCapture?.nextSubtitle || ""
   });
 
+  await mergeLatestCapture({
+    captureStep: "sending-anki"
+  });
+  await addCaptureEvent("sending-anki", "Sending note payload to AnkiConnect.");
+
   latestCapture = await getLatestCapture();
-  const noteId = await createAnkiNote(latestCapture, overrides);
+  let noteId;
+  try {
+    noteId = await createAnkiNote(latestCapture, overrides);
+  } catch (error) {
+    await mergeLatestCapture({
+      cardState: "review",
+      captureStep: "failed",
+      error: error.message || "Failed to create Anki note."
+    });
+    await addCaptureEvent("failed", error.message || "Failed to create Anki note.", "error");
+    throw error;
+  }
+
+  await mergeLatestCapture({
+    cardState: "created",
+    captureStep: "created",
+    noteId,
+    createdAt: Date.now()
+  });
+  await addCaptureEvent("created", `Anki note created: ${noteId}.`, "success");
+  await addCardHistory({
+    noteId,
+    subtitle,
+    pageTitle: latestCapture?.pageTitle || "",
+    pageUrl: latestCapture?.pageUrl || "",
+    createdAt: Date.now()
+  });
   return { noteId };
 }
 
@@ -494,6 +612,7 @@ async function createAnkiNote(capture, overrides = {}) {
   }
 
   const settings = await getMergedAnkiSettings(overrides.settings || {});
+  await validateFieldMapping(settings);
   const frontText = overrides.front ?? capture.subtitle ?? "";
   const backText = overrides.back ?? buildBackText(capture);
 
@@ -530,15 +649,95 @@ async function createAnkiNote(capture, overrides = {}) {
   return invokeAnki("addNote", { note });
 }
 
+async function validateFieldMapping(settings) {
+  const availableFields = await invokeAnki("modelFieldNames", {
+    modelName: settings.modelName
+  });
+  const available = new Set(availableFields);
+  const mappings = settings.fieldMapping || {};
+  const requiredMappings = [
+    ["Front", mappings.front],
+    ["Back", mappings.back]
+  ];
+  const optionalMappings = [
+    ["Subtitle", mappings.subtitle],
+    ["Context", mappings.context],
+    ["Source", mappings.source],
+    ["Image", mappings.image],
+    ["Audio", mappings.audio]
+  ];
+
+  const missingRequired = requiredMappings
+    .filter(([, fieldName]) => !fieldName || !available.has(fieldName))
+    .map(([label, fieldName]) => `${label} -> ${fieldName || "not selected"}`);
+  const missingOptional = optionalMappings
+    .filter(([, fieldName]) => fieldName && !available.has(fieldName))
+    .map(([label, fieldName]) => `${label} -> ${fieldName}`);
+
+  if (missingRequired.length || missingOptional.length) {
+    throw new Error(
+      `Field mapping does not match note type "${settings.modelName}". Missing: ${[
+        ...missingRequired,
+        ...missingOptional
+      ].join(", ")}. Open Bind Anki template fields and choose fields from this note type.`
+    );
+  }
+}
+
 async function handleAudioReady(message) {
   const filename = buildFileName("audio", "webm", message.startedAt);
   await mergeLatestCapture({
     capturedAt: Date.now(),
+    cardState: "review",
+    captureStep: "review-ready",
+    error: "",
     audio: {
       dataUrl: message.dataUrl,
       filename
     }
   });
+  await addCaptureEvent("review-ready", "Audio saved. Draft is ready to review.", "success");
+}
+
+async function handleRecordingError(error) {
+  const session = await getSession();
+  if (session?.tabId) {
+    await sendMessageToTab(session.tabId, {
+      type: "stop-subtitle-capture",
+      stoppedAt: Date.now()
+    }).catch(() => null);
+  }
+
+  await chrome.storage.local.remove(SESSION_KEY);
+  await mergeLatestCapture({
+    cardState: "review",
+    captureStep: "failed",
+    error: error || "Audio recording failed."
+  });
+  await addCaptureEvent("failed", error || "Audio recording failed.", "error");
+}
+
+async function cancelCapture() {
+  const session = await getSession();
+  if (session?.tabId) {
+    await sendMessageToTab(session.tabId, {
+      type: "stop-subtitle-capture",
+      stoppedAt: Date.now()
+    }).catch(() => null);
+
+    await chrome.runtime.sendMessage({
+      type: "stop-audio-recording",
+      tabId: session.tabId
+    }).catch(() => null);
+  }
+
+  await chrome.storage.local.remove(SESSION_KEY);
+  await mergeLatestCapture({
+    cardState: "review",
+    captureStep: "cancelled",
+    error: "Capture cancelled."
+  });
+  await addCaptureEvent("cancelled", "Capture cancelled by user.", "warning");
 }
 
 async function storeMediaFromDataUrl(dataUrl, filename) {
@@ -578,23 +777,28 @@ async function invokeAnki(action, params, endpointOverride = null) {
 }
 
 async function buildPopupContext() {
-  const [capture, settings, session, activeTabContext] = await Promise.all([
+  const [capture, settings, session, activeTabContext, cardHistory] = await Promise.all([
     getLatestCapture(),
     getAnkiSettings(),
     getSession(),
-    getActiveTabSubtitleContext()
+    getActiveTabSubtitleContext(),
+    getCardHistory()
   ]);
 
   const choices = await handleAnkiAction("popupChoices", {});
-  const mergedCapture = {
-    ...(capture || {}),
-    ...(activeTabContext || {})
-  };
+  const shouldUseLiveSubtitle = !capture?.audio?.dataUrl && capture?.cardState !== "created";
+  const mergedCapture = shouldUseLiveSubtitle
+    ? {
+        ...(capture || {}),
+        ...(activeTabContext || {})
+      }
+    : capture || activeTabContext || {};
 
   return {
     capture: mergedCapture,
     settings,
     choices,
+    cardHistory,
     isRecording: Boolean(session),
     sessionMode: session?.mode || null
   };
@@ -665,6 +869,11 @@ async function getAnkiSettings() {
   return normalizeAnkiSettings(data[ANKI_SETTINGS_KEY] || {});
 }
 
+async function getCardHistory() {
+  const data = await chrome.storage.local.get(CARD_HISTORY_KEY);
+  return data[CARD_HISTORY_KEY] || [];
+}
+
 async function getMergedAnkiSettings(partialSettings) {
   const stored = await getAnkiSettings();
   return normalizeAnkiSettings({
@@ -683,6 +892,58 @@ async function saveAnkiSettings(settings) {
     [ANKI_SETTINGS_KEY]: merged
   });
   return merged;
+}
+
+async function clearDraft() {
+  await chrome.storage.local.remove(CAPTURE_KEY);
+}
+
+async function addCardHistory(entry) {
+  const previous = await getCardHistory();
+  await chrome.storage.local.set({
+    [CARD_HISTORY_KEY]: [entry, ...previous].slice(0, 3)
+  });
+}
+
+async function openAnkiNote(noteId) {
+  if (!noteId) {
+    throw new Error("No Anki note id is available.");
+  }
+
+  return invokeAnki("guiBrowse", {
+    query: `nid:${noteId}`
+  });
+}
+
+async function openSidePanelForActiveWindow() {
+  if (typeof chrome.sidePanel?.open !== "function") {
+    return;
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.windowId) {
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+  }
+}
+
+async function addCaptureEvent(step, message, level = "info") {
+  const previous = (await getLatestCapture()) || {};
+  await mergeLatestCapture({
+    captureStep: step,
+    captureEvents: [
+      buildCaptureEvent(step, message, level),
+      ...(previous.captureEvents || [])
+    ].slice(0, 8)
+  });
+}
+
+function buildCaptureEvent(step, message, level = "info") {
+  return {
+    at: Date.now(),
+    level,
+    message,
+    step
+  };
 }
 
 async function mergeLatestCapture(partialCapture) {
