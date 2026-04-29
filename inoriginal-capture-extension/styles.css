@@ -644,6 +644,51 @@ button.secondary {
   font-size: 12px;
 }
 
+.range-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.waveform {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(31, 27, 24, 0.04), rgba(178, 76, 45, 0.08)),
+    #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  gap: 2px;
+  height: 74px;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.waveform--empty {
+  justify-content: center;
+}
+
+.waveform--empty span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.waveform__bar {
+  background: rgba(106, 95, 86, 0.35);
+  border-radius: 999px;
+  flex: 1 1 0;
+  min-width: 1px;
+  transition: background 0.15s ease, height 0.15s ease;
+}
+
+.waveform__bar--suggested {
+  background: rgba(31, 77, 112, 0.42);
+}
+
+.waveform__bar--selected {
+  background: var(--accent);
+}
+
 .editor-grid {
   display: grid;
   gap: 14px;

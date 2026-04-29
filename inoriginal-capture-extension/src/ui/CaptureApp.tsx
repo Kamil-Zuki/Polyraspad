@@ -8,6 +8,10 @@ type CaptureAppProps = {
 };
 
 type FlowStatus = "Idle" | "Rewinding" | "Recording subtitle audio" | "Ready to review" | "Sending to Anki" | "Created" | "Failed" | "Cancelled";
+type TrimSuggestion = {
+  start: number;
+  end: number;
+};
 
 export function CaptureApp({ mode }: CaptureAppProps) {
   const [context, setContext] = useState<PopupContext | null>(null);
@@ -26,10 +30,15 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [audioRangeStart, setAudioRangeStart] = useState(0);
   const [audioRangeEnd, setAudioRangeEnd] = useState(0);
+  const [waveformPeaks, setWaveformPeaks] = useState<number[]>([]);
+  const [trimSuggestion, setTrimSuggestion] = useState<TrimSuggestion | null>(null);
+  const [isAnalyzingAudio, setIsAnalyzingAudio] = useState(false);
+  const [waveformError, setWaveformError] = useState("");
   const lastCaptureSignature = useRef("");
   const lastSavedDraftSignature = useRef("");
   const lastAutoTranslateSignature = useRef("");
   const lastAudioRangeFile = useRef("");
+  const lastAutoTrimFile = useRef("");
   const hasHydratedEditor = useRef(false);
   const expressionRef = useRef<HTMLTextAreaElement | null>(null);
   const confirmedDuplicateExpression = useRef("");
@@ -100,6 +109,54 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setAudioRangeStart(0);
     setAudioRangeEnd(Number(duration.toFixed(2)));
   }, [context?.capture, audioDuration]);
+
+  useEffect(() => {
+    const audio = context?.capture?.audio;
+    const filename = audio?.filename || "";
+    if (!audio?.dataUrl || !filename) {
+      setWaveformPeaks([]);
+      setTrimSuggestion(null);
+      setWaveformError("");
+      return;
+    }
+
+    let cancelled = false;
+    setIsAnalyzingAudio(true);
+    setWaveformError("");
+
+    analyzeAudioDataUrl(audio.dataUrl)
+      .then((analysis) => {
+        if (cancelled) {
+          return;
+        }
+
+        setWaveformPeaks(analysis.peaks);
+        setTrimSuggestion(analysis.trim);
+        setAudioDuration((current) => current || analysis.duration);
+
+        if (analysis.trim && lastAutoTrimFile.current !== filename) {
+          lastAutoTrimFile.current = filename;
+          setAudioRangeStart(analysis.trim.start);
+          setAudioRangeEnd(analysis.trim.end);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setWaveformPeaks([]);
+          setTrimSuggestion(null);
+          setWaveformError(error instanceof Error ? error.message : "Could not analyze audio waveform.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsAnalyzingAudio(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [context?.capture?.audio?.dataUrl, context?.capture?.audio?.filename]);
 
   async function refresh(showLoading = true) {
     if (showLoading) {
@@ -237,6 +294,28 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     }
 
     await refresh(false);
+  }
+
+  function applyTrimSuggestion() {
+    if (!trimSuggestion) {
+      setMessage("No speech range found to auto-trim.");
+      return;
+    }
+
+    setAudioRangeStart(trimSuggestion.start);
+    setAudioRangeEnd(trimSuggestion.end);
+    setMessage(`Auto-trim applied: ${trimSuggestion.start.toFixed(1)}s to ${trimSuggestion.end.toFixed(1)}s.`);
+  }
+
+  function resetAudioRange() {
+    const effectiveDuration = getEffectiveAudioDuration(context?.capture, audioDuration);
+    if (!effectiveDuration) {
+      return;
+    }
+
+    setAudioRangeStart(0);
+    setAudioRangeEnd(Number(effectiveDuration.toFixed(2)));
+    setMessage("Audio range reset to the full clip.");
   }
 
   async function createCard() {
@@ -415,9 +494,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setAudioDuration(null);
     setAudioRangeStart(0);
     setAudioRangeEnd(0);
+    setWaveformPeaks([]);
+    setTrimSuggestion(null);
+    setWaveformError("");
     lastCaptureSignature.current = "";
     lastSavedDraftSignature.current = "";
     lastAutoTranslateSignature.current = "";
+    lastAudioRangeFile.current = "";
+    lastAutoTrimFile.current = "";
     hasHydratedEditor.current = false;
     await refresh();
   }
@@ -590,6 +674,20 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                         Move Start left of 0s to begin earlier than the current clip. The extension will seek the video to that moment, play it, record the selected range, and pause again.
                       </p>
                     </div>
+                    <WaveformPreview
+                      duration={effectiveAudioDuration}
+                      peaks={waveformPeaks}
+                      rangeEnd={normalizedAudioRangeEnd}
+                      rangeStart={audioRangeStart}
+                      trimSuggestion={trimSuggestion}
+                    />
+                    <div className="range-editor__actions">
+                      <button className="secondary inline-action" disabled={!trimSuggestion || isAnalyzingAudio} onClick={applyTrimSuggestion}>
+                        {isAnalyzingAudio ? "Analyzing..." : "Auto-trim silence"}
+                      </button>
+                      <button className="secondary inline-action" disabled={isRecording} onClick={resetAudioRange}>Reset full clip</button>
+                    </div>
+                    {waveformError && <p className="muted media-empty">{waveformError}</p>}
                     <div className="range-editor__labels">
                       <span>Start: {audioRangeStart.toFixed(1)}s</span>
                       <span>End: {normalizedAudioRangeEnd.toFixed(1)}s</span>
@@ -794,6 +892,47 @@ function StatusPill({ status }: { status: FlowStatus }) {
   return <span className={`status-pill status-pill--${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>;
 }
 
+function WaveformPreview({
+  duration,
+  peaks,
+  rangeEnd,
+  rangeStart,
+  trimSuggestion
+}: {
+  duration: number;
+  peaks: number[];
+  rangeEnd: number;
+  rangeStart: number;
+  trimSuggestion: TrimSuggestion | null;
+}) {
+  if (peaks.length === 0) {
+    return <div className="waveform waveform--empty"><span>Waveform is loading...</span></div>;
+  }
+
+  const visibleStart = Math.max(0, rangeStart);
+  const visibleEnd = Math.min(duration, rangeEnd);
+  return (
+    <div className="waveform" aria-label="Audio waveform preview">
+      {peaks.map((peak, index) => {
+        const pointTime = duration * ((index + 0.5) / peaks.length);
+        const isSelected = pointTime >= visibleStart && pointTime <= visibleEnd;
+        const isSuggested = Boolean(trimSuggestion && pointTime >= trimSuggestion.start && pointTime <= trimSuggestion.end);
+        return (
+          <span
+            className={[
+              "waveform__bar",
+              isSuggested ? "waveform__bar--suggested" : "",
+              isSelected ? "waveform__bar--selected" : ""
+            ].filter(Boolean).join(" ")}
+            key={`${index}-${peak.toFixed(3)}`}
+            style={{ height: `${Math.max(8, Math.round(peak * 100))}%` }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function Checklist({ context, expression, translation }: { context: PopupContext | null; expression: string; translation: string }) {
   const capture = context?.capture;
   const items = [
@@ -923,6 +1062,90 @@ function getAudioRangeStartMin(capture: CaptureData | undefined) {
   }
 
   return -Math.min(5, videoStartTime);
+}
+
+async function analyzeAudioDataUrl(dataUrl: string): Promise<{
+  duration: number;
+  peaks: number[];
+  trim: TrimSuggestion | null;
+}> {
+  const response = await fetch(dataUrl);
+  const audioData = await response.arrayBuffer();
+  const AudioContextConstructor = window.AudioContext
+    || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextConstructor) {
+    throw new Error("This browser cannot analyze audio waveforms.");
+  }
+
+  const audioContext = new AudioContextConstructor();
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(audioData.slice(0));
+    const channel = audioBuffer.getChannelData(0);
+    const duration = audioBuffer.duration;
+    const peaks = buildWaveformPeaks(channel, 96);
+    const trim = detectSpeechRange(channel, audioBuffer.sampleRate, duration);
+    return { duration, peaks, trim };
+  } finally {
+    await audioContext.close().catch(() => {});
+  }
+}
+
+function buildWaveformPeaks(channel: Float32Array, segmentCount: number) {
+  const segmentSize = Math.max(1, Math.floor(channel.length / segmentCount));
+  const peaks = Array.from({ length: segmentCount }, (_, index) => {
+    const start = index * segmentSize;
+    const end = Math.min(channel.length, start + segmentSize);
+    let max = 0;
+
+    for (let cursor = start; cursor < end; cursor += 1) {
+      max = Math.max(max, Math.abs(channel[cursor]));
+    }
+
+    return max;
+  });
+  const maxPeak = Math.max(...peaks, 0.001);
+  return peaks.map((peak) => peak / maxPeak);
+}
+
+function detectSpeechRange(channel: Float32Array, sampleRate: number, duration: number): TrimSuggestion | null {
+  const frameSize = Math.max(1, Math.floor(sampleRate * 0.05));
+  const frameCount = Math.ceil(channel.length / frameSize);
+  const rmsFrames = Array.from({ length: frameCount }, (_, frameIndex) => {
+    const start = frameIndex * frameSize;
+    const end = Math.min(channel.length, start + frameSize);
+    let sum = 0;
+
+    for (let cursor = start; cursor < end; cursor += 1) {
+      sum += channel[cursor] * channel[cursor];
+    }
+
+    return Math.sqrt(sum / Math.max(1, end - start));
+  });
+
+  const maxRms = Math.max(...rmsFrames, 0);
+  if (maxRms <= 0.003) {
+    return null;
+  }
+
+  const threshold = Math.max(0.01, maxRms * 0.12);
+  const firstSpeechFrame = rmsFrames.findIndex((value) => value >= threshold);
+  const lastSpeechFrame = rmsFrames.length - 1 - [...rmsFrames].reverse().findIndex((value) => value >= threshold);
+
+  if (firstSpeechFrame < 0 || lastSpeechFrame < firstSpeechFrame) {
+    return null;
+  }
+
+  const padSeconds = 0.12;
+  const start = Math.max(0, firstSpeechFrame * 0.05 - padSeconds);
+  const end = Math.min(duration, (lastSpeechFrame + 1) * 0.05 + padSeconds);
+  if (end - start < 0.25) {
+    return null;
+  }
+
+  return {
+    start: Number(start.toFixed(2)),
+    end: Number(end.toFixed(2))
+  };
 }
 
 function formatAudioStatus(capture: CaptureData, audioDuration: number | null) {
