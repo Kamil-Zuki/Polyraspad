@@ -650,6 +650,13 @@ button.secondary {
   gap: 8px;
 }
 
+.range-editor__advanced {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
 .waveform {
   align-items: center;
   background:
@@ -707,6 +714,48 @@ button.secondary {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.word-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.word-picker__hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.word-picker__tokens {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.word-token {
+  background: #eef4f1;
+  border: 1px solid #d3e3dd;
+  border-radius: 999px;
+  color: #25443d;
+  min-width: 0;
+  padding: 5px 8px;
+}
+
+.word-token:hover,
+.word-token--selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.word-token__punctuation {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: pre-wrap;
 }
 
 .footer-bar {

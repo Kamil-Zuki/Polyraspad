@@ -63,9 +63,13 @@ export type CaptureData = {
 export type SentenceDraft = {
   expression: string;
   word: string;
+  transcription: string;
+  wordTypes: string;
   translation: string;
   definition: string;
   example: string;
+  synonyms: string;
+  antonyms: string;
   source: string;
   url: string;
 };

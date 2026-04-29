@@ -19,9 +19,13 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const [message, setMessage] = useState("Loading...");
   const [expression, setExpression] = useState("");
   const [word, setWord] = useState("");
+  const [transcription, setTranscription] = useState("");
+  const [wordTypes, setWordTypes] = useState("");
   const [translation, setTranslation] = useState("");
   const [definition, setDefinition] = useState("");
   const [example, setExample] = useState("");
+  const [synonyms, setSynonyms] = useState("");
+  const [antonyms, setAntonyms] = useState("");
   const [source, setSource] = useState("");
   const [url, setUrl] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
@@ -34,6 +38,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const [trimSuggestion, setTrimSuggestion] = useState<TrimSuggestion | null>(null);
   const [isAnalyzingAudio, setIsAnalyzingAudio] = useState(false);
   const [waveformError, setWaveformError] = useState("");
+  const [showAudioAdvanced, setShowAudioAdvanced] = useState(false);
   const lastCaptureSignature = useRef("");
   const lastSavedDraftSignature = useRef("");
   const lastAutoTranslateSignature = useRef("");
@@ -60,9 +65,13 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     const draft = buildSentenceDraft({
       expression,
       word,
+      transcription,
+      wordTypes,
       translation,
       definition,
       example,
+      synonyms,
+      antonyms,
       source,
       url
     });
@@ -76,7 +85,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       type: "save-sentence-draft",
       draft
     });
-  }, [expression, word, translation, definition, example, source, url]);
+  }, [expression, word, transcription, wordTypes, translation, definition, example, synonyms, antonyms, source, url]);
 
   useEffect(() => {
     if (
@@ -190,9 +199,13 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
     setExpression(nextDraft.expression);
     setWord(nextDraft.word);
+    setTranscription(nextDraft.transcription);
+    setWordTypes(nextDraft.wordTypes);
     setTranslation(nextDraft.translation);
     setDefinition(nextDraft.definition);
     setExample(nextDraft.example);
+    setSynonyms(nextDraft.synonyms);
+    setAntonyms(nextDraft.antonyms);
     setSource(nextDraft.source);
     setUrl(nextDraft.url);
     setDuplicateWarning("");
@@ -348,9 +361,13 @@ export function CaptureApp({ mode }: CaptureAppProps) {
         draft: {
           expression,
           word,
+          transcription,
+          wordTypes,
           translation: finalTranslation,
           definition,
           example,
+          synonyms,
+          antonyms,
           source,
           url
         },
@@ -413,7 +430,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       ? expression.slice(input.selectionStart, input.selectionEnd).trim()
       : "";
     const fallback = selectedText || expression.split(/\s+/).find(Boolean) || "";
-    const normalized = fallback.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    const normalized = normalizeWord(fallback);
 
     if (!normalized) {
       setMessage("Select a word in Expression first.");
@@ -434,11 +451,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setIsLookingUpWord(true);
     setMessage("Looking up definition...");
     const response = await sendRuntimeMessage<{
+      antonyms?: string;
       definition: string;
       example?: string;
       partOfSpeech?: string;
       phonetic?: string;
       provider: string;
+      synonyms?: string;
+      wordTypes?: string;
     }>({
       type: "lookup-word",
       word: targetWord
@@ -450,13 +470,62 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       return;
     }
 
-    const parts = [
-      response.result.partOfSpeech ? `(${response.result.partOfSpeech}) ${response.result.definition}` : response.result.definition,
-      response.result.phonetic ? `Pronunciation: ${response.result.phonetic}` : "",
-      response.result.example ? `Example: ${response.result.example}` : ""
-    ].filter(Boolean);
-    setDefinition(parts.join("\n"));
+    applyDictionaryResult(response.result);
     setMessage(`Definition added from ${response.result.provider}.`);
+  }
+
+  async function chooseWordFromExpression(targetWord: string) {
+    const normalized = normalizeWord(targetWord);
+    if (!normalized) {
+      return;
+    }
+
+    setWord(normalized);
+    setIsLookingUpWord(true);
+    setMessage(`Looking up "${normalized}"...`);
+    const response = await sendRuntimeMessage<{
+      antonyms?: string;
+      definition: string;
+      example?: string;
+      partOfSpeech?: string;
+      phonetic?: string;
+      provider: string;
+      synonyms?: string;
+      wordTypes?: string;
+    }>({
+      type: "lookup-word",
+      word: normalized
+    });
+    setIsLookingUpWord(false);
+
+    if (!response.ok || !response.result?.definition) {
+      setMessage(response.error || `Could not auto-fill "${normalized}".`);
+      return;
+    }
+
+    applyDictionaryResult(response.result);
+    setMessage(`Word picked: ${normalized}. Dictionary fields filled.`);
+  }
+
+  function applyDictionaryResult(result: {
+    antonyms?: string;
+    definition: string;
+    example?: string;
+    partOfSpeech?: string;
+    phonetic?: string;
+    synonyms?: string;
+    wordTypes?: string;
+  }) {
+    const parts = [
+      result.partOfSpeech ? `(${result.partOfSpeech}) ${result.definition}` : result.definition,
+      result.example ? `Example: ${result.example}` : ""
+    ].filter(Boolean);
+
+    setDefinition(parts.join("\n"));
+    setTranscription(result.phonetic || "");
+    setWordTypes(result.wordTypes || result.partOfSpeech || "");
+    setSynonyms(result.synonyms || "");
+    setAntonyms(result.antonyms || "");
   }
 
   async function warnIfDuplicateExpression() {
@@ -485,9 +554,13 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     await sendRuntimeMessage({ type: "clear-draft" });
     setExpression("");
     setWord("");
+    setTranscription("");
+    setWordTypes("");
     setTranslation("");
     setDefinition("");
     setExample("");
+    setSynonyms("");
+    setAntonyms("");
     setSource("");
     setUrl("");
     setDuplicateWarning("");
@@ -497,6 +570,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setWaveformPeaks([]);
     setTrimSuggestion(null);
     setWaveformError("");
+    setShowAudioAdvanced(false);
     lastCaptureSignature.current = "";
     lastSavedDraftSignature.current = "";
     lastAutoTranslateSignature.current = "";
@@ -569,7 +643,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   }
 
   const capture = context?.capture;
-  const draft = { expression, word, translation, definition, example, source, url };
+  const draft = { expression, word, transcription, wordTypes, translation, definition, example, synonyms, antonyms, source, url };
   const ready = canSendToAnki(context, expression);
   const isRecording = Boolean(context?.isRecording);
   const canStopRecording = context?.sessionMode === "clip" || context?.sessionMode === "range";
@@ -655,8 +729,8 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
           <article className="media-tile">
             <div className="section-head">
-              <h2>Audio</h2>
-              <button className="secondary inline-action" disabled={isRecording} onClick={recaptureAudio}>Re-record audio</button>
+              <h2>Audio clip</h2>
+              <button className="secondary inline-action" disabled={isRecording} onClick={recaptureAudio}>Re-record from subtitle</button>
             </div>
             {capture?.audio?.dataUrl ? (
               <>
@@ -669,10 +743,8 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                 {effectiveAudioDuration && (
                   <div className="range-editor">
                     <div>
-                      <h3>Video re-record range</h3>
-                      <p className="muted">
-                        Move Start left of 0s to begin earlier than the current clip. The extension will seek the video to that moment, play it, record the selected range, and pause again.
-                      </p>
+                      <h3>{trimSuggestion ? "Clean range ready" : isAnalyzingAudio ? "Finding clean range..." : "Clean range"}</h3>
+                      <p className="muted">{buildAudioGuidance(trimSuggestion, isAnalyzingAudio)}</p>
                     </div>
                     <WaveformPreview
                       duration={effectiveAudioDuration}
@@ -682,44 +754,53 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                       trimSuggestion={trimSuggestion}
                     />
                     <div className="range-editor__actions">
-                      <button className="secondary inline-action" disabled={!trimSuggestion || isAnalyzingAudio} onClick={applyTrimSuggestion}>
-                        {isAnalyzingAudio ? "Analyzing..." : "Auto-trim silence"}
+                      <button
+                        className="primary-action inline-action"
+                        disabled={isRecording || capture.audio.videoStartTime === undefined}
+                        onClick={recaptureSelectedAudioRange}
+                      >
+                        Re-record clean range
                       </button>
-                      <button className="secondary inline-action" disabled={isRecording} onClick={resetAudioRange}>Reset full clip</button>
+                      <button className="secondary inline-action" onClick={() => setShowAudioAdvanced(!showAudioAdvanced)}>
+                        {showAudioAdvanced ? "Hide manual controls" : "Adjust manually"}
+                      </button>
                     </div>
                     {waveformError && <p className="muted media-empty">{waveformError}</p>}
-                    <div className="range-editor__labels">
-                      <span>Start: {audioRangeStart.toFixed(1)}s</span>
-                      <span>End: {normalizedAudioRangeEnd.toFixed(1)}s</span>
-                    </div>
-                    <input
-                      aria-label="Audio range start"
-                      max={Math.max(0, normalizedAudioRangeEnd - 0.1)}
-                      min={audioRangeStartMin}
-                      step={0.1}
-                      type="range"
-                      value={audioRangeStart}
-                      onChange={(event) => {
-                        const nextStart = Math.min(Number(event.target.value), normalizedAudioRangeEnd - 0.1);
-                        setAudioRangeStart(Math.max(audioRangeStartMin, nextStart));
-                      }}
-                    />
-                    <input
-                      aria-label="Audio range end"
-                      max={effectiveAudioDuration}
-                      min={Math.min(effectiveAudioDuration, audioRangeStart + 0.1)}
-                      step={0.1}
-                      type="range"
-                      value={normalizedAudioRangeEnd}
-                      onChange={(event) => setAudioRangeEnd(Math.max(Number(event.target.value), audioRangeStart + 0.1))}
-                    />
-                    <button
-                      className="secondary inline-action"
-                      disabled={isRecording || capture.audio.videoStartTime === undefined}
-                      onClick={recaptureSelectedAudioRange}
-                    >
-                      Re-record selected range
-                    </button>
+                    {showAudioAdvanced && (
+                      <div className="range-editor__advanced">
+                        <div className="range-editor__labels">
+                          <span>Start: {audioRangeStart.toFixed(1)}s</span>
+                          <span>End: {normalizedAudioRangeEnd.toFixed(1)}s</span>
+                        </div>
+                        <input
+                          aria-label="Audio range start"
+                          max={Math.max(0, normalizedAudioRangeEnd - 0.1)}
+                          min={audioRangeStartMin}
+                          step={0.1}
+                          type="range"
+                          value={audioRangeStart}
+                          onChange={(event) => {
+                            const nextStart = Math.min(Number(event.target.value), normalizedAudioRangeEnd - 0.1);
+                            setAudioRangeStart(Math.max(audioRangeStartMin, nextStart));
+                          }}
+                        />
+                        <input
+                          aria-label="Audio range end"
+                          max={effectiveAudioDuration}
+                          min={Math.min(effectiveAudioDuration, audioRangeStart + 0.1)}
+                          step={0.1}
+                          type="range"
+                          value={normalizedAudioRangeEnd}
+                          onChange={(event) => setAudioRangeEnd(Math.max(Number(event.target.value), audioRangeStart + 0.1))}
+                        />
+                        <div className="range-editor__actions">
+                          <button className="secondary inline-action" disabled={!trimSuggestion || isAnalyzingAudio} onClick={applyTrimSuggestion}>
+                            Apply auto-trim
+                          </button>
+                          <button className="secondary inline-action" disabled={isRecording} onClick={resetAudioRange}>Reset full clip</button>
+                        </div>
+                      </div>
+                    )}
                     {capture.audio.videoStartTime === undefined && (
                       <p className="muted media-empty">This old clip has no video timestamp. Press Capture again once, then this button will seek the video automatically.</p>
                     )}
@@ -781,6 +862,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
               setExpression(event.target.value);
               setDuplicateWarning("");
             }} />
+            <WordPicker expression={expression} isLoading={isLookingUpWord} selectedWord={word} onPick={chooseWordFromExpression} />
           </label>
           <label className="editor-card">
             <span>Word</span>
@@ -793,6 +875,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
             </div>
           </label>
           <label className="editor-card">
+            <span>Transcription</span>
+            <input value={transcription} onChange={(event) => setTranscription(event.target.value)} placeholder="Auto-filled pronunciation" />
+          </label>
+          <label className="editor-card">
+            <span>Word Types</span>
+            <input value={wordTypes} onChange={(event) => setWordTypes(event.target.value)} placeholder="noun, verb, adjective..." />
+          </label>
+          <label className="editor-card">
             <span>Translation</span>
             <textarea rows={3} value={translation} onChange={(event) => setTranslation(event.target.value)} />
           </label>
@@ -803,6 +893,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <label className="editor-card editor-card--wide">
             <span>Example / Context</span>
             <textarea rows={5} value={example} onChange={(event) => setExample(event.target.value)} />
+          </label>
+          <label className="editor-card">
+            <span>Synonyms</span>
+            <input value={synonyms} onChange={(event) => setSynonyms(event.target.value)} />
+          </label>
+          <label className="editor-card">
+            <span>Antonyms</span>
+            <input value={antonyms} onChange={(event) => setAntonyms(event.target.value)} />
           </label>
           <label className="editor-card">
             <span>Source</span>
@@ -892,6 +990,44 @@ function StatusPill({ status }: { status: FlowStatus }) {
   return <span className={`status-pill status-pill--${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>;
 }
 
+function WordPicker({
+  expression,
+  isLoading,
+  onPick,
+  selectedWord
+}: {
+  expression: string;
+  isLoading: boolean;
+  onPick: (word: string) => void;
+  selectedWord: string;
+}) {
+  const tokens = tokenizeExpression(expression);
+  if (tokens.length === 0) {
+    return <p className="muted word-picker__hint">Capture or type an expression, then click a word to auto-fill dictionary fields.</p>;
+  }
+
+  return (
+    <div className="word-picker" aria-label="Clickable words from expression">
+      <p className="word-picker__hint">Click a word to fill Word, Definition, Transcription, Word Types, Synonyms, and Antonyms.</p>
+      <div className="word-picker__tokens">
+        {tokens.map((token, index) => token.isWord ? (
+          <button
+            className={normalizeWord(token.value).toLowerCase() === selectedWord.toLowerCase() ? "word-token word-token--selected" : "word-token"}
+            disabled={isLoading}
+            key={`${token.value}-${index}`}
+            onClick={() => onPick(token.value)}
+            type="button"
+          >
+            {token.value}
+          </button>
+        ) : (
+          <span className="word-token__punctuation" key={`${token.value}-${index}`}>{token.value}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function WaveformPreview({
   duration,
   peaks,
@@ -963,9 +1099,13 @@ function AnkiFieldPreview({ context, draft }: { context: PopupContext | null; dr
   const rows = [
     ["Expression", mapping.expression, draft.expression],
     ["Word", mapping.word, draft.word],
+    ["Transcription", mapping.transcription, draft.transcription],
+    ["Word Types", mapping.wordTypes, draft.wordTypes],
     ["Translation", mapping.translation, draft.translation],
     ["Definition", mapping.definition, draft.definition],
     ["Example", mapping.example, draft.example],
+    ["Synonyms", mapping.synonyms, draft.synonyms],
+    ["Antonyms", mapping.antonyms, draft.antonyms],
     ["Source", mapping.source, draft.source],
     ["Url", mapping.url, draft.url],
     ["Image", mapping.image, context?.capture?.screenshot?.dataUrl ? "Screenshot media" : ""],
@@ -1034,6 +1174,18 @@ function formatTranslationMode(mode?: string) {
     return "Manual";
   }
   return "Auto after Capture";
+}
+
+function buildAudioGuidance(trimSuggestion: TrimSuggestion | null, isAnalyzingAudio: boolean) {
+  if (isAnalyzingAudio) {
+    return "Analyzing silence and speech in the clip.";
+  }
+
+  if (trimSuggestion) {
+    return `Suggested clean range: ${trimSuggestion.start.toFixed(1)}s to ${trimSuggestion.end.toFixed(1)}s. Preview it, then re-record only that part if the clip needs cleanup.`;
+  }
+
+  return "Preview the clip. If it has extra silence or missed speech, adjust manually or re-record from the subtitle.";
 }
 
 function getEffectiveAudioDuration(capture: CaptureData | undefined, metadataDuration: number | null) {
@@ -1190,9 +1342,13 @@ function buildSentenceDraft(value: Partial<SentenceDraft> = {}): SentenceDraft {
   return {
     expression: value.expression || "",
     word: value.word || "",
+    transcription: value.transcription || "",
+    wordTypes: value.wordTypes || "",
     translation: value.translation || "",
     definition: value.definition || "",
     example: value.example || "",
+    synonyms: value.synonyms || "",
+    antonyms: value.antonyms || "",
     source: value.source || "",
     url: value.url || ""
   };
@@ -1202,12 +1358,30 @@ function buildDraftSignature(draft: SentenceDraft) {
   return [
     draft.expression,
     draft.word,
+    draft.transcription,
+    draft.wordTypes,
     draft.translation,
     draft.definition,
     draft.example,
+    draft.synonyms,
+    draft.antonyms,
     draft.source,
     draft.url
   ].join("|");
+}
+
+function normalizeWord(value: string) {
+  return value.replace(/^[^\p{L}\p{N}'-]+|[^\p{L}\p{N}'-]+$/gu, "");
+}
+
+function tokenizeExpression(value: string) {
+  const matches = value.match(/[\p{L}\p{N}'-]+|[^\p{L}\p{N}'-]+/gu) || [];
+  return matches
+    .map((token) => ({
+      isWord: Boolean(normalizeWord(token)),
+      value: token
+    }))
+    .filter((token) => token.value.trim() || token.isWord);
 }
 
 function buildCaptureSignature(capture?: CaptureData) {

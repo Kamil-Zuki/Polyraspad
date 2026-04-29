@@ -1053,17 +1053,29 @@ async function lookupWord(word) {
   const definition = meaning?.definitions?.[0]?.definition || "";
   const example = meaning?.definitions?.[0]?.example || "";
   const partOfSpeech = meaning?.partOfSpeech || "";
+  const wordTypes = [...new Set((entry?.meanings || []).map((item) => item.partOfSpeech).filter(Boolean))];
+  const synonyms = [...new Set((entry?.meanings || []).flatMap((item) => [
+    ...(item.synonyms || []),
+    ...((item.definitions || []).flatMap((definitionItem) => definitionItem.synonyms || []))
+  ]).filter(Boolean))].slice(0, 8);
+  const antonyms = [...new Set((entry?.meanings || []).flatMap((item) => [
+    ...(item.antonyms || []),
+    ...((item.definitions || []).flatMap((definitionItem) => definitionItem.antonyms || []))
+  ]).filter(Boolean))].slice(0, 8);
 
   if (!definition) {
     throw new Error(`No usable definition found for "${value}".`);
   }
 
   return {
+    antonyms: antonyms.join(", "),
     definition,
     example,
     partOfSpeech,
     phonetic,
     provider: "Free Dictionary API",
+    synonyms: synonyms.join(", "),
+    wordTypes: wordTypes.join(", "),
     word: value
   };
 }
@@ -1342,9 +1354,13 @@ function normalizeSentenceDraft(value = {}) {
   return {
     expression: value.expression || "",
     word: value.word || "",
+    transcription: value.transcription || "",
+    wordTypes: value.wordTypes || "",
     translation: value.translation || "",
     definition: value.definition || "",
     example: value.example || "",
+    synonyms: value.synonyms || "",
+    antonyms: value.antonyms || "",
     source: value.source || "",
     url: value.url || ""
   };
