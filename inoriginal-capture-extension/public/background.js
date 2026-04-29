@@ -192,6 +192,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "select-subtitle-cue") {
+    void selectSubtitleCue(message.index)
+      .then((capture) => sendResponse({ ok: true, capture }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "create-anki-card") {
     void createAnkiCardFromActiveTab(message.payload || {})
       .then((result) => sendResponse({ ok: true, result }))
@@ -347,6 +354,8 @@ async function captureSubtitleClip(options = {}) {
     subtitle: subtitleContext.currentSubtitle,
     previousSubtitle: subtitleContext.previousSubtitle || "",
     nextSubtitle: subtitleContext.nextSubtitle || "",
+    subtitleCue: subtitleContext.cue,
+    subtitleTimeline: subtitleContext.timeline,
     cardState: "capturing",
     captureStep: takeScreenshot ? "screenshot" : "rewinding",
     error: "",
@@ -368,7 +377,9 @@ async function captureSubtitleClip(options = {}) {
       pageTitle: tab.title || "inoriginal",
       pageUrl: tab.url || "",
       targetSubtitle: subtitleContext.currentSubtitle,
-      previousSubtitle: subtitleContext.previousSubtitle || ""
+      previousSubtitle: subtitleContext.previousSubtitle || "",
+      subtitleCue: subtitleContext.cue,
+      subtitleTimeline: subtitleContext.timeline
     }
   });
 
@@ -379,6 +390,8 @@ async function captureSubtitleClip(options = {}) {
     subtitle: subtitleContext.currentSubtitle,
     previousSubtitle: subtitleContext.previousSubtitle || "",
     nextSubtitle: subtitleContext.nextSubtitle || "",
+    subtitleCue: subtitleContext.cue,
+    subtitleTimeline: subtitleContext.timeline,
     cardState: "capturing",
     captureStep: "rewinding",
     ...(screenshotCapture ? { screenshot: screenshotCapture.screenshot } : {})
@@ -390,6 +403,7 @@ async function captureSubtitleClip(options = {}) {
       type: "start-subtitle-clip",
       startedAt,
       targetSubtitle: subtitleContext.currentSubtitle,
+      cue: subtitleContext.cue,
       rewindMs: settings.rewindMs,
       maxClipMs: settings.maxClipMs
     });
@@ -422,13 +436,23 @@ async function startSubtitleClipRecording(message = {}) {
     targetTabId: session.tabId
   });
   const startedAt = Date.now();
+  const videoStartTime = Number.isFinite(message.videoStartTime)
+    ? message.videoStartTime
+    : Number.isFinite(message.videoTime)
+      ? message.videoTime
+      : session.videoStartTime;
+  const videoEndTime = Number.isFinite(message.videoEndTime)
+    ? message.videoEndTime
+    : session.videoEndTime;
 
   await chrome.storage.local.set({
     [SESSION_KEY]: {
       ...session,
       mode: "clip",
       startedAt,
-      videoStartTime: Number.isFinite(message.videoTime) ? message.videoTime : session.videoStartTime
+      plannedDurationMs: Number.isFinite(message.plannedDurationMs) ? message.plannedDurationMs : session.plannedDurationMs,
+      videoEndTime,
+      videoStartTime
     }
   });
   await addCaptureEvent("recording-audio", "Tab audio recording is starting.");
@@ -436,6 +460,12 @@ async function startSubtitleClipRecording(message = {}) {
     cardState: "capturing",
     captureStep: "recording-audio"
   });
+  if (Number.isFinite(message.plannedDurationMs) || Number.isFinite(videoStartTime) || Number.isFinite(videoEndTime)) {
+    await addCaptureEvent(
+      "recording-audio",
+      `Cue-aware plan: ${formatSeconds(videoStartTime || 0)} to ${formatSeconds(videoEndTime || 0)} (${((message.plannedDurationMs || 0) / 1000).toFixed(1)}s).`
+    );
+  }
 
   const response = await chrome.runtime.sendMessage({
     type: "start-audio-recording",
@@ -444,7 +474,8 @@ async function startSubtitleClipRecording(message = {}) {
     startedAt,
     metadata: {
       mode: "clip",
-      videoStartTime: Number.isFinite(message.videoTime) ? message.videoTime : session.videoStartTime
+      videoEndTime,
+      videoStartTime
     }
   });
 
@@ -580,9 +611,23 @@ async function finalizeSubtitleClip(message) {
   const stoppedAt = Date.now();
   const subtitle = message.subtitle || session.targetSubtitle || "";
   const stopReason = message.stopReason || "subtitle-change";
+  const cue = message.cue || session.subtitleCue;
+  const plannedDurationMs = Number.isFinite(session.plannedDurationMs)
+    ? session.plannedDurationMs
+    : cue
+      ? Math.max(500, Math.round((cue.end - cue.start) * 1000))
+      : Math.max(500, stoppedAt - session.startedAt);
+  const rawVideoStartTime = Number.isFinite(message.videoStartTime) ? message.videoStartTime : session.videoStartTime;
+  const rawVideoEndTime = Number.isFinite(message.videoEndTime) ? message.videoEndTime : session.videoEndTime ?? cue?.end;
+  const safeVideoStartTime = Number.isFinite(rawVideoStartTime) ? rawVideoStartTime : undefined;
+  const safeVideoEndTime = Number.isFinite(rawVideoEndTime) && (!Number.isFinite(safeVideoStartTime) || rawVideoEndTime > safeVideoStartTime)
+    ? rawVideoEndTime
+    : Number.isFinite(safeVideoStartTime)
+      ? safeVideoStartTime + plannedDurationMs / 1000
+      : undefined;
   const subtitleEntry = {
     atMs: 0,
-    endMs: Math.max(500, stoppedAt - session.startedAt),
+    endMs: plannedDurationMs,
     sessionStartedAt: session.startedAt,
     text: subtitle
   };
@@ -594,6 +639,8 @@ async function finalizeSubtitleClip(message) {
     subtitle,
     previousSubtitle: message.previousSubtitle || session.previousSubtitle || "",
     nextSubtitle: message.nextSubtitle || "",
+    subtitleCue: cue,
+    subtitleTimeline: session.subtitleTimeline,
     cardState: "review",
     captureStep: "stopping",
     stopReason,
@@ -616,7 +663,9 @@ async function finalizeSubtitleClip(message) {
   });
   await addCaptureEvent(
     "stopping",
-    stopReason === "max-duration"
+    stopReason === "cue-end"
+      ? "Subtitle cue ended. Stopping audio and pausing video."
+      : stopReason === "max-duration"
       ? "Max clip length reached. Stopping audio and pausing video."
       : "Subtitle changed. Stopping audio and pausing video.",
     stopReason === "max-duration" ? "warning" : "info"
@@ -631,10 +680,10 @@ async function finalizeSubtitleClip(message) {
     type: "stop-audio-recording",
     tabId: session.tabId,
     metadata: {
-      durationMs: session.startedAt ? stoppedAt - session.startedAt : undefined,
+      durationMs: plannedDurationMs,
       stopReason,
-      videoStartTime: session.videoStartTime,
-      videoEndTime: Number.isFinite(message.videoEndTime) ? message.videoEndTime : undefined
+      videoStartTime: safeVideoStartTime,
+      videoEndTime: safeVideoEndTime
     }
   });
 
@@ -722,6 +771,47 @@ async function recordAudioRange(payload) {
   setTimeout(() => {
     void stopCurrentCapture("range").catch(() => null);
   }, durationMs + 500);
+
+  return getLatestCapture();
+}
+
+async function selectSubtitleCue(index) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.url?.startsWith("https://inoriginal.cc/")) {
+    throw new Error("Open the original InOriginal tab before selecting a subtitle.");
+  }
+
+  const context = await sendMessageToTab(tab.id, {
+    type: "select-subtitle-cue",
+    index
+  });
+
+  if (!context?.currentSubtitle) {
+    throw new Error("Could not select subtitle cue.");
+  }
+
+  const latestCapture = await getLatestCapture();
+  await mergeLatestCapture({
+    capturedAt: Date.now(),
+    pageTitle: latestCapture?.pageTitle || tab.title || "inoriginal",
+    pageUrl: latestCapture?.pageUrl || tab.url || "",
+    subtitle: context.currentSubtitle,
+    previousSubtitle: context.previousSubtitle || "",
+    nextSubtitle: context.nextSubtitle || "",
+    subtitleCue: context.cue,
+    subtitleTimeline: context.timeline,
+    error: ""
+  });
+  await saveSentenceDraft({
+    expression: context.currentSubtitle,
+    example: buildContextText({
+      subtitle: context.currentSubtitle,
+      previousSubtitle: context.previousSubtitle || "",
+      nextSubtitle: context.nextSubtitle || ""
+    }),
+    source: latestCapture?.pageTitle || tab.title || "inoriginal",
+    url: latestCapture?.pageUrl || tab.url || ""
+  });
 
   return getLatestCapture();
 }
@@ -1047,12 +1137,22 @@ async function lookupWord(word) {
     throw new Error("No word selected.");
   }
 
-  const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(value)}`);
-  if (!response.ok) {
+  const candidates = buildDictionaryCandidates(value);
+  let payload = null;
+  let resolvedWord = value;
+  for (const candidate of candidates) {
+    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(candidate)}`);
+    if (response.ok) {
+      payload = await response.json();
+      resolvedWord = candidate;
+      break;
+    }
+  }
+
+  if (!payload) {
     throw new Error(`No dictionary entry found for "${value}".`);
   }
 
-  const payload = await response.json();
   const entry = Array.isArray(payload) ? payload[0] : null;
   const phonetic = entry?.phonetic || entry?.phonetics?.find((item) => item.text)?.text || "";
   const meaning = entry?.meanings?.find((item) => item.definitions?.length);
@@ -1082,8 +1182,35 @@ async function lookupWord(word) {
     provider: "Free Dictionary API",
     synonyms: synonyms.join(", "),
     wordTypes: wordTypes.join(", "),
-    word: value
+    word: resolvedWord
   };
+}
+
+function buildDictionaryCandidates(value) {
+  const lower = value.toLowerCase().replace(/[’`]/g, "'");
+  const stripped = lower.replace(/'s$/, "");
+  const candidates = [
+    value,
+    lower,
+    stripped
+  ];
+
+  if (stripped.endsWith("ies") && stripped.length > 4) {
+    candidates.push(`${stripped.slice(0, -3)}y`);
+  }
+  if (stripped.endsWith("ing") && stripped.length > 5) {
+    candidates.push(stripped.slice(0, -3));
+    candidates.push(`${stripped.slice(0, -3)}e`);
+  }
+  if (stripped.endsWith("ed") && stripped.length > 4) {
+    candidates.push(stripped.slice(0, -2));
+    candidates.push(`${stripped.slice(0, -1)}`);
+  }
+  if (stripped.endsWith("s") && stripped.length > 3) {
+    candidates.push(stripped.slice(0, -1));
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
 }
 
 async function findDuplicateExpression(expression) {
@@ -1178,7 +1305,9 @@ async function getActiveTabSubtitleContext() {
   return {
     subtitle: context.currentSubtitle || "",
     previousSubtitle: context.previousSubtitle || "",
-    nextSubtitle: context.nextSubtitle || ""
+    nextSubtitle: context.nextSubtitle || "",
+    subtitleCue: context.cue,
+    subtitleTimeline: context.timeline
   };
 }
 

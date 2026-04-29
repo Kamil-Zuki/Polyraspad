@@ -17,7 +17,9 @@
     clipMaxTimer: null,
     rangeTimer: null,
     lastText: "",
-    clipMode: null
+    clipMode: null,
+    timeline: null,
+    timelinePromise: null
   };
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -29,11 +31,16 @@
 
     if (message?.type === "stop-subtitle-capture") {
       stopCapture(message.stoppedAt);
-      sendResponse({
-        entries: state.entries,
-        ...getSubtitleContext()
-      });
-      return;
+      void getSubtitleContext()
+        .then((context) => sendResponse({
+          entries: state.entries,
+          ...context
+        }))
+        .catch(() => sendResponse({
+          entries: state.entries,
+          ...getDomSubtitleContext()
+        }));
+      return true;
     }
 
     if (message?.type === "get-current-subtitle") {
@@ -42,14 +49,23 @@
     }
 
     if (message?.type === "get-current-subtitle-context") {
-      sendResponse(getSubtitleContext());
-      return;
+      void getSubtitleContext()
+        .then((context) => sendResponse(context))
+        .catch(() => sendResponse(getDomSubtitleContext()));
+      return true;
     }
 
     if (message?.type === "start-subtitle-clip") {
-      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0, message.maxClipMs || 8000);
+      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0, message.maxClipMs || 8000, message.cue || null);
       sendResponse({ ok: true });
       return;
+    }
+
+    if (message?.type === "select-subtitle-cue") {
+      void selectSubtitleCue(message.index)
+        .then((context) => sendResponse({ ok: true, ...context }))
+        .catch((error) => sendResponse({ ok: false, error: error.message }));
+      return true;
     }
 
     if (message?.type === "prepare-audio-range") {
@@ -198,7 +214,13 @@
     return normalizeText(element?.textContent || "") || state.lastText || "";
   }
 
-  function getSubtitleContext() {
+  async function getSubtitleContext() {
+    const timeline = await getSubtitleTimeline().catch(() => null);
+    const cueContext = timeline ? getCueContext(timeline) : null;
+    return cueContext || getDomSubtitleContext();
+  }
+
+  function getDomSubtitleContext() {
     const currentSubtitle = getCurrentSubtitle();
     const currentIndex = state.entries.findIndex((entry) => entry.text === currentSubtitle);
     const fallbackIndex = state.entries.length - 1;
@@ -214,7 +236,85 @@
     };
   }
 
-  function startSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs) {
+  function startSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue) {
+    if (cue && Number.isFinite(cue.start) && Number.isFinite(cue.end) && cue.end > cue.start) {
+      void startCueAwareSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue)
+        .catch(() => startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs));
+      return;
+    }
+
+    startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs);
+  }
+
+  async function startCueAwareSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue) {
+    startCapture(startedAt);
+    state.clipMode = {
+      active: true,
+      cue,
+      cueAware: true,
+      plannedVideoEndTime: 0,
+      plannedVideoStartTime: 0,
+      targetSubtitle,
+      recordingRequested: true,
+      recordingStarted: false,
+      forcedStart: true
+    };
+
+    const mediaElement = getVideoElement();
+    if (!mediaElement) {
+      throw new Error("No video element found for cue-aware capture.");
+    }
+
+    const rewindSeconds = Math.max(0, Number(rewindMs) || 0) / 1000;
+    const startSeconds = Math.max(0, cue.start - rewindSeconds);
+    const recorderWarmupMs = 300;
+    const minCueClipMs = 2500;
+    const tailPaddingSeconds = 0.85;
+    const naturalEndSeconds = Math.max(cue.end + tailPaddingSeconds, startSeconds + minCueClipMs / 1000);
+    const maxEndSeconds = startSeconds + Math.max(0.5, Number(maxClipMs) || 8000) / 1000;
+    const endSeconds = Math.min(naturalEndSeconds, maxEndSeconds);
+    const plannedDurationMs = Math.max(minCueClipMs, Math.round((endSeconds - startSeconds) * 1000));
+    state.clipMode.plannedVideoStartTime = startSeconds;
+    state.clipMode.plannedVideoEndTime = endSeconds;
+    mediaElement.pause();
+    await seekVideo(mediaElement, startSeconds);
+
+    chrome.runtime.sendMessage({
+      type: "subtitle-clip-start-recording",
+      plannedDurationMs,
+      videoEndTime: endSeconds,
+      videoStartTime: startSeconds,
+      videoTime: startSeconds
+    }, (response) => {
+      if (chrome.runtime.lastError || !response?.ok || !state.clipMode?.active) {
+        startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs);
+        return;
+      }
+
+      state.clipMode.recordingStarted = true;
+      state.startedAt = Date.now();
+      state.entries = [{
+        atMs: 0,
+        endMs: plannedDurationMs,
+        sessionStartedAt: state.startedAt,
+        text: targetSubtitle
+      }];
+      state.lastText = targetSubtitle;
+
+      state.clipFallbackTimer = window.setTimeout(() => {
+        if (!state.clipMode?.active) {
+          return;
+        }
+
+        void mediaElement.play().catch(() => {});
+        state.clipMaxTimer = window.setTimeout(() => {
+          completeClipByCue(cue, "cue-end");
+        }, plannedDurationMs);
+      }, recorderWarmupMs);
+    });
+  }
+
+  function startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs) {
     startCapture(startedAt);
     const rewound = rewindVideoPlayback(rewindMs);
     state.clipMode = {
@@ -251,6 +351,42 @@
 
       completeClip(getCurrentSubtitle(), "max-duration");
     }, Math.max(3000, Number(maxClipMs) || 8000));
+  }
+
+  function completeClipByCue(cue, stopReason) {
+    if (!state.clipMode?.active) {
+      return;
+    }
+
+    const timeline = state.timeline;
+    state.clipMode.active = false;
+
+    if (state.clipPollTimer) {
+      clearInterval(state.clipPollTimer);
+      state.clipPollTimer = null;
+    }
+
+    if (state.clipFallbackTimer) {
+      clearTimeout(state.clipFallbackTimer);
+      state.clipFallbackTimer = null;
+    }
+
+    if (state.clipMaxTimer) {
+      clearTimeout(state.clipMaxTimer);
+      state.clipMaxTimer = null;
+    }
+
+    pauseVideoPlayback();
+    void chrome.runtime.sendMessage({
+      type: "subtitle-clip-complete",
+      subtitle: cue.text,
+      previousSubtitle: timeline?.cues?.[cue.index - 1]?.text || "",
+      nextSubtitle: timeline?.cues?.[cue.index + 1]?.text || "",
+      stopReason,
+      cue,
+      videoEndTime: state.clipMode.plannedVideoEndTime || cue.end,
+      videoStartTime: state.clipMode.plannedVideoStartTime
+    });
   }
 
   function getPreviousSubtitleFor(text) {
@@ -368,6 +504,7 @@
   function maybeRequestClipRecording(text, force = false) {
     if (
       !state.clipMode?.active
+      || state.clipMode.cueAware
       || state.clipMode.recordingRequested
       || (!force && text !== state.clipMode.targetSubtitle)
     ) {
@@ -399,6 +536,7 @@
   function maybeCompleteClip(text, previousText) {
     if (
       !state.clipMode?.active
+      || state.clipMode.cueAware
       || !state.clipMode.recordingStarted
       || (!state.clipMode.forcedStart && previousText !== state.clipMode.targetSubtitle)
       || text === state.clipMode.targetSubtitle
@@ -438,8 +576,172 @@
       previousSubtitle: getPreviousSubtitleFor(state.clipMode.targetSubtitle),
       nextSubtitle: nextSubtitle && nextSubtitle !== state.clipMode.targetSubtitle ? nextSubtitle : "",
       stopReason,
+      cue: state.clipMode.cue || null,
       videoEndTime: getVideoTime()
     });
+  }
+
+  async function selectSubtitleCue(index) {
+    const timeline = await getSubtitleTimeline();
+    const cue = timeline.cues.find((item) => item.index === index);
+    if (!cue) {
+      throw new Error("Subtitle cue was not found.");
+    }
+
+    const mediaElement = getVideoElement();
+    if (mediaElement) {
+      await seekVideo(mediaElement, cue.start);
+      mediaElement.pause();
+    }
+
+    return getCueContext(timeline, cue);
+  }
+
+  async function getSubtitleTimeline() {
+    if (state.timeline?.cues?.length) {
+      return state.timeline;
+    }
+
+    if (state.timelinePromise) {
+      return state.timelinePromise;
+    }
+
+    state.timelinePromise = loadSubtitleTimeline()
+      .then((timeline) => {
+        state.timeline = timeline;
+        return timeline;
+      })
+      .finally(() => {
+        state.timelinePromise = null;
+      });
+
+    return state.timelinePromise;
+  }
+
+  async function loadSubtitleTimeline() {
+    const source = findSubtitleSource();
+    if (!source?.url) {
+      throw new Error("No VTT subtitle URL found in Playerjs config.");
+    }
+
+    const response = await fetch(source.url, { credentials: "include" });
+    if (!response.ok) {
+      throw new Error(`Could not load subtitles: ${response.status}`);
+    }
+
+    const cues = parseVtt(await response.text());
+    if (cues.length === 0) {
+      throw new Error("Subtitle file has no cues.");
+    }
+
+    return {
+      cues,
+      sourceLabel: source.label,
+      sourceUrl: source.url
+    };
+  }
+
+  function findSubtitleSource() {
+    const scripts = Array.from(document.scripts).map((script) => script.textContent || "").join("\n");
+    const subtitleConfig = scripts.match(/["']subtitle["']\s*:\s*["']([^"']+)["']/)?.[1]
+      || scripts.match(/subtitle\s*:\s*["']([^"']+)["']/)?.[1]
+      || "";
+    const sources = [];
+    const pattern = /\[([^\]]+)\]([^,\s]+?\.vtt(?:\?[^,\s]*)?)/gi;
+    let match = pattern.exec(subtitleConfig);
+    while (match) {
+      sources.push({
+        label: match[1],
+        url: new URL(match[2], window.location.href).href
+      });
+      match = pattern.exec(subtitleConfig);
+    }
+
+    if (sources.length === 0) {
+      const direct = subtitleConfig.match(/https?:\/\/[^,\s"']+?\.vtt(?:\?[^,\s"']*)?/i)?.[0]
+        || subtitleConfig.match(/\/[^,\s"']+?\.vtt(?:\?[^,\s"']*)?/i)?.[0];
+      if (direct) {
+        sources.push({
+          label: "Subtitles",
+          url: new URL(direct, window.location.href).href
+        });
+      }
+    }
+
+    return sources.find((source) => /english|eng|англ/i.test(source.label)) || sources[0] || null;
+  }
+
+  function parseVtt(value) {
+    const blocks = value.replace(/\r/g, "").split(/\n{2,}/);
+    const cues = [];
+
+    for (const block of blocks) {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (lines.length === 0 || lines[0] === "WEBVTT") {
+        continue;
+      }
+
+      const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+      if (timeLineIndex < 0) {
+        continue;
+      }
+
+      const [rawStart, rawEnd] = lines[timeLineIndex].split("-->").map((part) => part.trim().split(/\s+/)[0]);
+      const start = parseVttTime(rawStart);
+      const end = parseVttTime(rawEnd);
+      const text = normalizeText(lines.slice(timeLineIndex + 1).join(" ").replace(/<[^>]+>/g, ""));
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !text) {
+        continue;
+      }
+
+      cues.push({
+        end,
+        index: cues.length,
+        start,
+        text
+      });
+    }
+
+    return cues;
+  }
+
+  function parseVttTime(value) {
+    const parts = value.split(":");
+    const secondsPart = parts.pop() || "0";
+    const seconds = Number(secondsPart.replace(",", "."));
+    const minutes = Number(parts.pop() || 0);
+    const hours = Number(parts.pop() || 0);
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  function getCueContext(timeline, selectedCue) {
+    const videoTime = getVideoTime();
+    const cue = selectedCue || timeline.cues.find((item) => videoTime !== undefined && videoTime >= item.start && videoTime <= item.end)
+      || findNearestCue(timeline.cues, videoTime);
+    if (!cue) {
+      return null;
+    }
+
+    return {
+      currentSubtitle: cue.text,
+      previousSubtitle: timeline.cues[cue.index - 1]?.text || "",
+      nextSubtitle: timeline.cues[cue.index + 1]?.text || "",
+      cue,
+      timeline: {
+        cues: timeline.cues.slice(Math.max(0, cue.index - 4), Math.min(timeline.cues.length, cue.index + 5)),
+        sourceLabel: timeline.sourceLabel,
+        sourceUrl: timeline.sourceUrl
+      },
+      videoTime
+    };
+  }
+
+  function findNearestCue(cues, videoTime) {
+    if (!Number.isFinite(videoTime)) {
+      return null;
+    }
+
+    return cues.find((cue) => videoTime < cue.start) || cues[cues.length - 1] || null;
   }
 
   function findPlaybackToggle() {

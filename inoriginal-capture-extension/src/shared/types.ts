@@ -43,6 +43,12 @@ export type CaptureData = {
   subtitle?: string;
   previousSubtitle?: string;
   nextSubtitle?: string;
+  subtitleCue?: SubtitleCue;
+  subtitleTimeline?: {
+    cues: SubtitleCue[];
+    sourceLabel?: string;
+    sourceUrl?: string;
+  };
   screenshot?: {
     dataUrl?: string;
     filename?: string;
@@ -51,7 +57,7 @@ export type CaptureData = {
     dataUrl?: string;
     filename?: string;
     durationMs?: number;
-    stopReason?: "subtitle-change" | "manual" | "max-duration" | "range";
+    stopReason?: "subtitle-change" | "manual" | "max-duration" | "range" | "cue-end";
     videoStartTime?: number;
     videoEndTime?: number;
   };
@@ -66,6 +72,13 @@ export type CaptureData = {
   error?: string;
   noteId?: number;
   createdAt?: number;
+};
+
+export type SubtitleCue = {
+  end: number;
+  index: number;
+  start: number;
+  text: string;
 };
 
 export type SentenceDraft = {

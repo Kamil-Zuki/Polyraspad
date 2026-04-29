@@ -477,6 +477,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       phonetic?: string;
       provider: string;
       synonyms?: string;
+      word?: string;
       wordTypes?: string;
     }>({
       type: "lookup-word",
@@ -489,7 +490,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       return;
     }
 
-    applyDictionaryResult(response.result);
+    const dictionaryDraft = buildDictionaryDraft(response.result);
+    const resolvedWord = response.result.word || targetWord;
+    setWord(resolvedWord);
+    applyDictionaryDraft(dictionaryDraft);
+    void persistCurrentDraft({
+      word: resolvedWord,
+      ...dictionaryDraft
+    });
     setMessage(`Definition added from ${response.result.provider}.`);
   }
 
@@ -500,6 +508,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     }
 
     setWord(normalized);
+    void persistCurrentDraft({ word: normalized });
     setIsLookingUpWord(true);
     setMessage(`Looking up "${normalized}"...`);
     const response = await sendRuntimeMessage<{
@@ -510,6 +519,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       phonetic?: string;
       provider: string;
       synonyms?: string;
+      word?: string;
       wordTypes?: string;
     }>({
       type: "lookup-word",
@@ -522,11 +532,18 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       return;
     }
 
-    applyDictionaryResult(response.result);
-    setMessage(`Word picked: ${normalized}. Dictionary fields filled.`);
+    const dictionaryDraft = buildDictionaryDraft(response.result);
+    const resolvedWord = response.result.word || normalized;
+    setWord(resolvedWord);
+    applyDictionaryDraft(dictionaryDraft);
+    void persistCurrentDraft({
+      word: resolvedWord,
+      ...dictionaryDraft
+    });
+    setMessage(`Word picked: ${resolvedWord}. Dictionary fields filled.`);
   }
 
-  function applyDictionaryResult(result: {
+  function buildDictionaryDraft(result: {
     antonyms?: string;
     definition: string;
     example?: string;
@@ -540,11 +557,55 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       result.example ? `Example: ${result.example}` : ""
     ].filter(Boolean);
 
-    setDefinition(parts.join("\n"));
-    setTranscription(result.phonetic || "");
-    setWordTypes(result.wordTypes || result.partOfSpeech || "");
-    setSynonyms(result.synonyms || "");
-    setAntonyms(result.antonyms || "");
+    return {
+      antonyms: result.antonyms || "",
+      definition: parts.join("\n"),
+      synonyms: result.synonyms || "",
+      transcription: result.phonetic || "",
+      wordTypes: result.wordTypes || result.partOfSpeech || ""
+    };
+  }
+
+  function applyDictionaryDraft(draft: Pick<SentenceDraft, "antonyms" | "definition" | "synonyms" | "transcription" | "wordTypes">) {
+    setDefinition(draft.definition);
+    setTranscription(draft.transcription);
+    setWordTypes(draft.wordTypes);
+    setSynonyms(draft.synonyms);
+    setAntonyms(draft.antonyms);
+  }
+
+  function applyDictionaryResult(result: {
+    antonyms?: string;
+    definition: string;
+    example?: string;
+    partOfSpeech?: string;
+    phonetic?: string;
+    synonyms?: string;
+    wordTypes?: string;
+  }) {
+    applyDictionaryDraft(buildDictionaryDraft(result));
+  }
+
+  async function persistCurrentDraft(overrides: Partial<SentenceDraft>) {
+    const draft = buildSentenceDraft({
+      expression,
+      word,
+      transcription,
+      wordTypes,
+      translation,
+      definition,
+      example,
+      synonyms,
+      antonyms,
+      source,
+      url,
+      ...overrides
+    });
+    lastSavedDraftSignature.current = buildDraftSignature(draft);
+    await sendRuntimeMessage({
+      type: "save-sentence-draft",
+      draft
+    });
   }
 
   async function warnIfDuplicateExpression() {
@@ -626,6 +687,17 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     }
 
     await chrome.sidePanel.open({ windowId: tab.windowId });
+  }
+
+  async function selectSubtitleCue(index: number) {
+    setMessage("Selecting subtitle from timeline...");
+    const response = await sendRuntimeMessage({ type: "select-subtitle-cue", index });
+    if (!response.ok) {
+      setMessage(response.error || "Could not select subtitle cue.");
+      return;
+    }
+
+    await refresh(false);
   }
 
   async function runSmartAction(action: SmartAction) {
@@ -779,6 +851,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <p className="subtitle subtitle--muted subtitle--context">{capture?.previousSubtitle || "No previous subtitle."}</p>
           <p className="subtitle subtitle--current subtitle--hero">{capture?.subtitle || "No current subtitle yet."}</p>
           <p className="subtitle subtitle--muted subtitle--context">{capture?.nextSubtitle || "No next subtitle."}</p>
+          <TimelineReview capture={capture} onSelect={selectSubtitleCue} />
           <CaptureTimeline capture={capture} />
         </section>
 
@@ -924,14 +997,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
         </details>
 
         <section className="editor-grid">
-          <label className="editor-card">
+          <div className="editor-card">
             <span>Expression</span>
             <textarea ref={expressionRef} rows={3} value={expression} onChange={(event) => {
               setExpression(event.target.value);
               setDuplicateWarning("");
             }} />
             <WordPicker expression={expression} isLoading={isLookingUpWord} selectedWord={word} onPick={chooseWordFromExpression} />
-          </label>
+          </div>
           <label className="editor-card">
             <span>Word</span>
             <input value={word} onChange={(event) => setWord(event.target.value)} placeholder="Optional target word" />
@@ -1053,6 +1126,36 @@ function CaptureTimeline({ capture }: { capture?: CaptureData }) {
         ))}
       </ol>
     </details>
+  );
+}
+
+function TimelineReview({ capture, onSelect }: { capture?: CaptureData; onSelect: (index: number) => void }) {
+  const cues = capture?.subtitleTimeline?.cues || [];
+  if (cues.length === 0) {
+    return null;
+  }
+
+  const currentIndex = capture?.subtitleCue?.index;
+  return (
+    <div className="timeline-review">
+      <div className="timeline-review__head">
+        <span>VTT timeline</span>
+        <small>{capture?.subtitleTimeline?.sourceLabel || "Subtitles"}</small>
+      </div>
+      <div className="timeline-review__list">
+        {cues.map((cue) => (
+          <button
+            className={cue.index === currentIndex ? "timeline-cue timeline-cue--current" : "timeline-cue"}
+            key={`${cue.index}-${cue.start}`}
+            onClick={() => onSelect(cue.index)}
+            type="button"
+          >
+            <small>{formatCueTime(cue.start)} - {formatCueTime(cue.end)}</small>
+            <span>{cue.text}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1643,6 +1746,9 @@ function detectSpeechRange(channel: Float32Array, sampleRate: number, duration: 
 
 function formatAudioStatus(capture: CaptureData, audioDuration: number | null) {
   const parts = [audioDuration ? `Audio: ${audioDuration.toFixed(1)}s` : "Audio ready"];
+  if (capture.audio?.stopReason === "cue-end") {
+    parts.push("stopped at subtitle cue end");
+  }
   if (capture.audio?.stopReason === "max-duration") {
     parts.push("stopped at max length");
   }
@@ -1653,6 +1759,13 @@ function formatAudioStatus(capture: CaptureData, audioDuration: number | null) {
     parts.push("selected range");
   }
   return parts.join(" | ");
+}
+
+function formatCueTime(value: number) {
+  const totalSeconds = Math.max(0, Math.floor(value));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function canSendToAnki(context: PopupContext | null, expression: string) {

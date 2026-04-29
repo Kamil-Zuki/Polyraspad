@@ -1207,6 +1207,69 @@ button.secondary {
   font-size: 12px;
 }
 
+.timeline-review {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.timeline-review__head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.timeline-review__head span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.timeline-review__head small {
+  color: var(--muted);
+}
+
+.timeline-review__list {
+  display: grid;
+  gap: 7px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.timeline-cue {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.timeline-cue:hover,
+.timeline-cue--current {
+  background: #2c201b;
+  border-color: #2c201b;
+  color: #fff7ed;
+}
+
+.timeline-cue small {
+  color: inherit;
+  font-size: 11px;
+  opacity: 0.72;
+}
+
+.timeline-cue span {
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .checklist {
   display: flex;
   flex-wrap: wrap;
