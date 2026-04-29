@@ -732,6 +732,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
         </header>
 
         <p className="subtitle subtitle--current quick-subtitle">{capture?.subtitle || "No current subtitle yet."}</p>
+        <CardQualityMini quality={cardQuality} />
 
         {capture?.audio?.dataUrl && (
           <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
@@ -993,6 +994,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           {translation && <p className="translation-preview">{translation}</p>}
         </section>
 
+        <CardPreview context={context} draft={draft} />
         <CardQualityPanel quality={cardQuality} onAction={runSmartAction} />
         <AnkiFieldPreview context={context} draft={draft} />
         {duplicateWarning && <p className="warning-banner">{duplicateWarning}</p>}
@@ -1192,6 +1194,101 @@ function CardQualityPanel({ onAction, quality }: { onAction: (action: SmartActio
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function CardQualityMini({ quality }: { quality: CardQuality }) {
+  return (
+    <section className={`quality-mini quality-mini--${quality.status.toLowerCase().replace(" ", "-")}`}>
+      <div>
+        <span>Smart Send</span>
+        <strong>{quality.status}</strong>
+      </div>
+      <div>
+        <span>Score</span>
+        <strong>{quality.score}</strong>
+      </div>
+      <p>{quality.footerCopy}</p>
+    </section>
+  );
+}
+
+function CardPreview({ context, draft }: { context: PopupContext | null; draft: SentenceDraft }) {
+  const capture = context?.capture;
+  const mapping = context?.settings.fieldMapping;
+  const warnings = [
+    capture?.screenshot?.dataUrl && !mapping?.image ? "Image exists, but Image field is not mapped." : "",
+    capture?.audio?.dataUrl && !mapping?.audio ? "Audio exists, but Audio field is not mapped." : "",
+    draft.word && !mapping?.word ? "Word is filled, but Word field is not mapped." : "",
+    draft.definition && !mapping?.definition ? "Definition is filled, but Definition field is not mapped." : "",
+    draft.translation && !mapping?.translation ? "Translation is filled, but Translation field is not mapped." : ""
+  ].filter(Boolean);
+
+  const backRows = [
+    ["Word", draft.word],
+    ["Transcription", draft.transcription],
+    ["Word Types", draft.wordTypes],
+    ["Translation", draft.translation],
+    ["Definition", draft.definition],
+    ["Example", draft.example],
+    ["Synonyms", draft.synonyms],
+    ["Antonyms", draft.antonyms]
+  ].filter(([, value]) => Boolean(value));
+
+  return (
+    <section className="card-preview" aria-label="Final Anki card preview">
+      <div className="card-preview__head">
+        <div>
+          <p className="eyebrow">Final Preview</p>
+          <h2>Card preview</h2>
+        </div>
+        <span>{context?.settings.deckName || "No deck"} / {context?.settings.modelName || "No note type"}</span>
+      </div>
+
+      <div className="card-preview__grid">
+        <article className="card-face card-face--front">
+          <span>Front</span>
+          <p>{draft.expression || capture?.subtitle || "No expression yet."}</p>
+        </article>
+
+        <article className="card-face card-face--back">
+          <span>Back</span>
+          {backRows.length > 0 ? (
+            <dl>
+              {backRows.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="muted">No Back fields yet.</p>
+          )}
+        </article>
+      </div>
+
+      <div className="card-preview__media">
+        {capture?.screenshot?.dataUrl ? (
+          <img alt="Card image preview" src={capture.screenshot.dataUrl} />
+        ) : (
+          <p className="muted media-empty">No image attached.</p>
+        )}
+        {capture?.audio?.dataUrl ? (
+          <audio controls src={capture.audio.dataUrl} />
+        ) : (
+          <p className="muted media-empty">No audio attached.</p>
+        )}
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="card-preview__warnings">
+          {warnings.map((warning) => (
+            <p key={warning}>{warning}</p>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

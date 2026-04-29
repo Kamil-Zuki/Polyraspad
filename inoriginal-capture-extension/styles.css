@@ -492,6 +492,44 @@ label {
   opacity: 0.8;
 }
 
+.quality-mini {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 10px;
+}
+
+.quality-mini div {
+  background: #fffaf3;
+  border-radius: 10px;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+
+.quality-mini span {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quality-mini strong {
+  color: var(--accent-strong);
+  font-size: 14px;
+}
+
+.quality-mini p {
+  color: var(--muted);
+  font-size: 12px;
+  grid-column: 1 / -1;
+  line-height: 1.35;
+  margin: 0;
+}
+
 span {
   font-size: 14px;
   font-weight: 600;
@@ -1245,6 +1283,145 @@ button.secondary {
   padding: 10px;
 }
 
+.card-preview {
+  background:
+    linear-gradient(135deg, rgba(44, 32, 27, 0.92), rgba(91, 55, 39, 0.88)),
+    radial-gradient(circle at top right, rgba(255, 247, 237, 0.16), transparent 35%);
+  border: 1px solid rgba(255, 247, 237, 0.2);
+  border-radius: 18px;
+  color: #fff7ed;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.card-preview__head {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.card-preview__head h2,
+.card-preview__head p {
+  margin: 0;
+}
+
+.card-preview__head > span {
+  background: rgba(255, 247, 237, 0.12);
+  border: 1px solid rgba(255, 247, 237, 0.16);
+  border-radius: 999px;
+  color: #fff7ed;
+  font-size: 12px;
+  padding: 6px 9px;
+  text-align: right;
+}
+
+.card-preview__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.card-face {
+  background: rgba(255, 250, 243, 0.96);
+  border-radius: 14px;
+  color: var(--text);
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.card-face > span {
+  color: var(--accent-strong);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-face p {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.card-face dl {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.card-face dl div {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 3px;
+  padding-bottom: 8px;
+}
+
+.card-face dt,
+.card-face dd {
+  margin: 0;
+}
+
+.card-face dt {
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-face dd {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.card-preview__media {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.card-preview__media img,
+.card-preview__media audio,
+.card-preview__media .media-empty {
+  background: rgba(255, 250, 243, 0.96);
+  border-radius: 12px;
+  color: var(--muted);
+  min-width: 0;
+  width: 100%;
+}
+
+.card-preview__media img {
+  max-height: 180px;
+  object-fit: cover;
+}
+
+.card-preview__media .media-empty {
+  margin: 0;
+  padding: 12px;
+}
+
+.card-preview__warnings {
+  display: grid;
+  gap: 6px;
+}
+
+.card-preview__warnings p {
+  background: rgba(255, 243, 216, 0.96);
+  border: 1px solid #dcae53;
+  border-radius: 10px;
+  color: #684b17;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+  padding: 8px 10px;
+}
+
 .quality-panel {
   background:
     radial-gradient(circle at top left, rgba(179, 76, 42, 0.12), transparent 34%),
@@ -1434,6 +1611,15 @@ button.secondary {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.popup--sidepanel .card-preview__head {
+  flex-direction: column;
+}
+
+.popup--sidepanel .card-preview__grid,
+.popup--sidepanel .card-preview__media {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .popup--sidepanel .field-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1469,6 +1655,15 @@ button.secondary {
   }
 
   .quality-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card-preview__head {
+    flex-direction: column;
+  }
+
+  .card-preview__grid,
+  .card-preview__media {
     grid-template-columns: minmax(0, 1fr);
   }
 
