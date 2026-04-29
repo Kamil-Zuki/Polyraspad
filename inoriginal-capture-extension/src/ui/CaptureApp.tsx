@@ -12,6 +12,23 @@ type TrimSuggestion = {
   start: number;
   end: number;
 };
+type SmartAction = "capture" | "stop-recording" | "pick-word" | "define-word" | "translate" | "fix-audio" | "open-settings" | "send";
+type QualityTone = "required" | "recommended" | "risk";
+type QualityItem = {
+  label: string;
+  done: boolean;
+  detail: string;
+  tone: QualityTone;
+};
+type CardQuality = {
+  cta: string;
+  disabled: boolean;
+  footerCopy: string;
+  items: QualityItem[];
+  nextAction: SmartAction;
+  score: number;
+  status: "Blocked" | "Needs review" | "Ready";
+};
 
 export function CaptureApp({ mode }: CaptureAppProps) {
   const [context, setContext] = useState<PopupContext | null>(null);
@@ -609,6 +626,47 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     await chrome.sidePanel.open({ windowId: tab.windowId });
   }
 
+  async function runSmartAction(action: SmartAction) {
+    if (action === "capture") {
+      await captureSubtitleClip();
+      return;
+    }
+
+    if (action === "stop-recording") {
+      await stopRecording();
+      return;
+    }
+
+    if (action === "pick-word") {
+      expressionRef.current?.focus();
+      setMessage("Click a word under Expression to fill dictionary fields.");
+      return;
+    }
+
+    if (action === "define-word") {
+      await lookupDefinition();
+      return;
+    }
+
+    if (action === "translate") {
+      await translateSubtitle();
+      return;
+    }
+
+    if (action === "fix-audio") {
+      setShowAudioAdvanced(true);
+      setMessage("Adjust the audio range or re-record the clean range before sending.");
+      return;
+    }
+
+    if (action === "open-settings") {
+      chrome.runtime.openOptionsPage();
+      return;
+    }
+
+    await createCard();
+  }
+
   async function updateDeck(deckName: string) {
     if (!context) {
       return;
@@ -648,6 +706,13 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const isRecording = Boolean(context?.isRecording);
   const canStopRecording = context?.sessionMode === "clip" || context?.sessionMode === "range";
   const effectiveAudioDuration = getEffectiveAudioDuration(capture, audioDuration);
+  const cardQuality = buildCardQuality({
+    context,
+    draft,
+    duplicateWarning,
+    effectiveAudioDuration,
+    isRecording
+  });
   const audioRangeStartMin = getAudioRangeStartMin(capture);
   const normalizedAudioRangeEnd = effectiveAudioDuration
     ? Math.min(audioRangeEnd || effectiveAudioDuration, effectiveAudioDuration)
@@ -678,7 +743,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           {canStopRecording && <button className="secondary" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary" onClick={cancelCapture}>Cancel capture</button>}
           <button className="secondary" onClick={openSidePanel}>Open review panel</button>
-          <button className="secondary" disabled={!ready || isRecording} onClick={createCard}>Send to Anki</button>
+          <button className="secondary" disabled={cardQuality.disabled} onClick={() => runSmartAction(cardQuality.nextAction)}>{cardQuality.cta}</button>
         </div>
 
         <p className="status">{effectiveAudioDuration ? `Audio: ${effectiveAudioDuration.toFixed(1)}s | ${message}` : message}</p>
@@ -926,6 +991,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           {translation && <p className="translation-preview">{translation}</p>}
         </section>
 
+        <CardQualityPanel quality={cardQuality} />
         <AnkiFieldPreview context={context} draft={draft} />
         {duplicateWarning && <p className="warning-banner">{duplicateWarning}</p>}
 
@@ -938,8 +1004,8 @@ export function CaptureApp({ mode }: CaptureAppProps) {
             </div>
           ) : (
             <>
-              <p className="muted footer-copy">Preview first, then send the final card to Anki.</p>
-              <button className="primary-action" disabled={!ready || isRecording} onClick={createCard}>Send to Anki</button>
+              <p className="muted footer-copy">{cardQuality.footerCopy}</p>
+              <button className="primary-action" disabled={cardQuality.disabled} onClick={() => runSmartAction(cardQuality.nextAction)}>{cardQuality.cta}</button>
             </>
           )}
         </footer>
@@ -1090,6 +1156,39 @@ function Checklist({ context, expression, translation }: { context: PopupContext
   );
 }
 
+function CardQualityPanel({ quality }: { quality: CardQuality }) {
+  return (
+    <section className={`quality-panel quality-panel--${quality.status.toLowerCase().replace(" ", "-")}`}>
+      <div className="quality-panel__head">
+        <div>
+          <p className="eyebrow">Smart Send</p>
+          <h2>Card quality</h2>
+        </div>
+        <div className="quality-score" aria-label={`Card quality score ${quality.score}`}>
+          <strong>{quality.score}</strong>
+          <span>{quality.status}</span>
+        </div>
+      </div>
+      <div className="quality-list">
+        {quality.items.map((item) => (
+          <div
+            className={[
+              "quality-item",
+              item.done ? "quality-item--done" : "",
+              `quality-item--${item.tone}`
+            ].filter(Boolean).join(" ")}
+            key={`${item.tone}-${item.label}`}
+          >
+            <span>{item.done ? "Ready" : item.tone === "risk" ? "Check" : "Missing"}</span>
+            <strong>{item.label}</strong>
+            <p>{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function AnkiFieldPreview({ context, draft }: { context: PopupContext | null; draft: SentenceDraft }) {
   const mapping = context?.settings.fieldMapping;
   if (!mapping) {
@@ -1174,6 +1273,115 @@ function formatTranslationMode(mode?: string) {
     return "Manual";
   }
   return "Auto after Capture";
+}
+
+function buildCardQuality({
+  context,
+  draft,
+  duplicateWarning,
+  effectiveAudioDuration,
+  isRecording
+}: {
+  context: PopupContext | null;
+  draft: SentenceDraft;
+  duplicateWarning: string;
+  effectiveAudioDuration: number | null;
+  isRecording: boolean;
+}): CardQuality {
+  const capture = context?.capture;
+  const hasExpression = Boolean(draft.expression.trim() || capture?.subtitle);
+  const hasScreenshot = Boolean(capture?.screenshot?.dataUrl);
+  const hasAudio = Boolean(capture?.audio?.dataUrl);
+  const hasDeck = Boolean(context?.settings.deckName);
+  const hasModel = Boolean(context?.settings.modelName);
+  const hasExpressionMapping = Boolean(context?.settings.fieldMapping.expression);
+  const hasTranslation = Boolean(draft.translation.trim()) || context?.settings.translationMode === "manual";
+  const hasWord = Boolean(draft.word.trim());
+  const hasDefinition = Boolean(draft.definition.trim());
+  const audioTooLong = Boolean(effectiveAudioDuration && effectiveAudioDuration > 8.5);
+  const hasDuplicateWarning = Boolean(duplicateWarning);
+
+  const required: QualityItem[] = [
+    { label: "Expression", done: hasExpression, detail: "Subtitle or edited sentence is required.", tone: "required" },
+    { label: "Screenshot", done: hasScreenshot, detail: "Image context should be attached to the card.", tone: "required" },
+    { label: "Audio", done: hasAudio, detail: "Audio clip should be attached before sending.", tone: "required" },
+    { label: "Deck", done: hasDeck, detail: "Choose where Anki will save the card.", tone: "required" },
+    { label: "Note type", done: hasModel, detail: "Choose the template used by Anki.", tone: "required" },
+    { label: "Expression field", done: hasExpressionMapping, detail: "Bind the sentence to a real Anki field.", tone: "required" }
+  ];
+
+  const recommended: QualityItem[] = [
+    { label: "Target word", done: hasWord, detail: "Pick the mined word so the card has a clear learning target.", tone: "recommended" },
+    { label: "Definition", done: hasDefinition, detail: "Dictionary data makes the Back side useful for review.", tone: "recommended" },
+    { label: "Translation", done: hasTranslation, detail: "Translation helps quick comprehension during reviews.", tone: "recommended" }
+  ];
+
+  const risks: QualityItem[] = [
+    { label: "Audio length", done: !audioTooLong, detail: audioTooLong ? "Clip is long. Trim or re-record the clean range." : "Clip length looks focused.", tone: "risk" },
+    { label: "Duplicate", done: !hasDuplicateWarning, detail: hasDuplicateWarning ? "This expression may already exist in Anki." : "No duplicate warning for this draft.", tone: "risk" }
+  ];
+
+  const requiredMissing = required.filter((item) => !item.done);
+  const recommendedMissing = recommended.filter((item) => !item.done);
+  const activeRisks = risks.filter((item) => !item.done);
+  const positiveItems = [...required, ...recommended];
+  const baseScore = Math.round((positiveItems.filter((item) => item.done).length / positiveItems.length) * 100);
+  const score = Math.max(0, Math.min(100, baseScore - activeRisks.length * 8));
+  const status = requiredMissing.length > 0 ? "Blocked" : recommendedMissing.length > 0 || activeRisks.length > 0 ? "Needs review" : "Ready";
+
+  if (isRecording) {
+    return {
+      cta: "Stop recording",
+      disabled: false,
+      footerCopy: "Recording is still running. Stop it to review the final clip.",
+      items: [...required, ...recommended, ...risks],
+      nextAction: "stop-recording",
+      score,
+      status
+    };
+  }
+
+  let nextAction: SmartAction = "send";
+  let cta = hasDuplicateWarning ? "Send anyway" : "Send to Anki";
+  let footerCopy = status === "Ready"
+    ? "Looks ready. Send the final card to Anki."
+    : "Smart Send found the next best fix before sending.";
+
+  if (!hasExpression || !hasScreenshot || !hasAudio) {
+    nextAction = "capture";
+    cta = "Capture";
+    footerCopy = "Capture will collect subtitle, screenshot, and audio first.";
+  } else if (!hasDeck || !hasModel || !hasExpressionMapping) {
+    nextAction = "open-settings";
+    cta = "Open settings";
+    footerCopy = "Finish deck, note type, and field mapping before sending.";
+  } else if (!hasWord) {
+    nextAction = "pick-word";
+    cta = "Pick a word";
+    footerCopy = "Choose the target word to turn this into a stronger sentence-mining card.";
+  } else if (!hasDefinition) {
+    nextAction = "define-word";
+    cta = "Define word";
+    footerCopy = "Add dictionary data before sending.";
+  } else if (!hasTranslation) {
+    nextAction = "translate";
+    cta = "Translate";
+    footerCopy = "Add translation before sending, or switch translation mode to Manual.";
+  } else if (audioTooLong) {
+    nextAction = "fix-audio";
+    cta = "Fix audio";
+    footerCopy = "The clip looks long. Trim or re-record the clean range.";
+  }
+
+  return {
+    cta,
+    disabled: false,
+    footerCopy,
+    items: [...required, ...recommended, ...risks],
+    nextAction,
+    score,
+    status
+  };
 }
 
 function buildAudioGuidance(trimSuggestion: TrimSuggestion | null, isAnalyzingAudio: boolean) {
@@ -1322,6 +1530,7 @@ function canSendToAnki(context: PopupContext | null, expression: string) {
     && capture?.audio?.dataUrl
     && context?.settings.deckName
     && context?.settings.modelName
+    && context?.settings.fieldMapping.expression
     && !context?.isRecording
   );
 }

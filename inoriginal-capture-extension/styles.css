@@ -1198,6 +1198,94 @@ button.secondary {
   padding: 10px;
 }
 
+.quality-panel {
+  background:
+    radial-gradient(circle at top left, rgba(179, 76, 42, 0.12), transparent 34%),
+    linear-gradient(135deg, #fffaf3, #fff);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.quality-panel__head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quality-panel__head h2,
+.quality-panel__head p {
+  margin: 0;
+}
+
+.quality-score {
+  align-items: center;
+  background: #2c201b;
+  border-radius: 16px;
+  color: #fff7ed;
+  display: grid;
+  justify-items: center;
+  min-width: 74px;
+  padding: 8px 10px;
+}
+
+.quality-score strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.quality-score span {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quality-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quality-item {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  border-left: 4px solid #b96d42;
+  border-radius: 10px;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+}
+
+.quality-item--done {
+  border-left-color: #3b7f61;
+}
+
+.quality-item--risk:not(.quality-item--done) {
+  border-left-color: #c28324;
+}
+
+.quality-item span {
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quality-item strong,
+.quality-item p {
+  margin: 0;
+}
+
+.quality-item p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .anki-preview {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1280,6 +1368,19 @@ button.secondary {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.popup--sidepanel .quality-panel__head {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.popup--sidepanel .quality-score {
+  justify-items: start;
+}
+
+.popup--sidepanel .quality-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .popup--sidepanel .field-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1302,6 +1403,19 @@ button.secondary {
 
   .translator-panel {
     align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quality-panel__head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quality-score {
+    justify-items: start;
+  }
+
+  .quality-list {
     grid-template-columns: minmax(0, 1fr);
   }
 
