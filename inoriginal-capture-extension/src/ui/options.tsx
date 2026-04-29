@@ -1,8 +1,45 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { saveAnkiSettings, sendRuntimeMessage } from "../shared/chromeApi";
-import type { AnkiSettings, FieldMapping } from "../shared/types";
+import type { AnkiSettings, FieldMapping, QualityRules } from "../shared/types";
 import "./styles.css";
+
+const QUALITY_PRESETS: Array<{
+  description: string;
+  label: string;
+  rules: QualityRules;
+}> = [
+  {
+    label: "Fast capture",
+    description: "Let cards send quickly; use quality panel as advice.",
+    rules: {
+      requireWord: false,
+      requireDefinition: false,
+      requireTranslation: false,
+      maxRecommendedAudioMs: 10000
+    }
+  },
+  {
+    label: "Balanced mining",
+    description: "Require word and definition, keep translation optional.",
+    rules: {
+      requireWord: true,
+      requireDefinition: true,
+      requireTranslation: false,
+      maxRecommendedAudioMs: 8500
+    }
+  },
+  {
+    label: "Strict mining",
+    description: "Require word, definition, and translation before sending.",
+    rules: {
+      requireWord: true,
+      requireDefinition: true,
+      requireTranslation: true,
+      maxRecommendedAudioMs: 6500
+    }
+  }
+];
 
 const DEFAULT_SETTINGS: AnkiSettings = {
   endpoint: "http://127.0.0.1:8765",
@@ -10,6 +47,12 @@ const DEFAULT_SETTINGS: AnkiSettings = {
   modelName: "Basic",
   rewindMs: 1200,
   maxClipMs: 8000,
+  qualityRules: {
+    requireWord: true,
+    requireDefinition: true,
+    requireTranslation: false,
+    maxRecommendedAudioMs: 8500
+  },
   translationMode: "after-capture",
   translationSourceLang: "en",
   translationTargetLang: "ru",
@@ -122,6 +165,13 @@ function OptionsApp() {
     });
   }
 
+  function applyQualityPreset(rules: QualityRules) {
+    setSettings({
+      ...settings,
+      qualityRules: rules
+    });
+  }
+
   return (
     <main className="panel panel--wide">
       <h1>InOriginal Capture Helper</h1>
@@ -180,6 +230,86 @@ function OptionsApp() {
             onChange={(event) => setSettings({ ...settings, maxClipMs: Number(event.target.value) })}
           />
         </label>
+
+        <h2>Smart Send / Card Quality</h2>
+        <p className="muted">Choose how strict the Send button should be before a card is allowed into Anki.</p>
+        <div className="quality-presets">
+          {QUALITY_PRESETS.map((preset) => {
+            const isActive = isSameQualityRules(settings.qualityRules, preset.rules);
+            return (
+              <button
+                className={isActive ? "quality-preset quality-preset--active" : "quality-preset"}
+                key={preset.label}
+                onClick={() => applyQualityPreset(preset.rules)}
+                type="button"
+              >
+                <strong>{preset.label}</strong>
+                <span>{preset.description}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="split-grid">
+          <label className="toggle-row">
+            <input
+              checked={settings.qualityRules.requireWord}
+              type="checkbox"
+              onChange={(event) => setSettings({
+                ...settings,
+                qualityRules: {
+                  ...settings.qualityRules,
+                  requireWord: event.target.checked
+                }
+              })}
+            />
+            <span>Require target word</span>
+          </label>
+          <label className="toggle-row">
+            <input
+              checked={settings.qualityRules.requireDefinition}
+              type="checkbox"
+              onChange={(event) => setSettings({
+                ...settings,
+                qualityRules: {
+                  ...settings.qualityRules,
+                  requireDefinition: event.target.checked
+                }
+              })}
+            />
+            <span>Require definition</span>
+          </label>
+          <label className="toggle-row">
+            <input
+              checked={settings.qualityRules.requireTranslation}
+              type="checkbox"
+              onChange={(event) => setSettings({
+                ...settings,
+                qualityRules: {
+                  ...settings.qualityRules,
+                  requireTranslation: event.target.checked
+                }
+              })}
+            />
+            <span>Require translation</span>
+          </label>
+          <label>
+            <span>Recommended max audio: {(settings.qualityRules.maxRecommendedAudioMs / 1000).toFixed(1)}s</span>
+            <input
+              max={15000}
+              min={3000}
+              step={500}
+              type="range"
+              value={settings.qualityRules.maxRecommendedAudioMs}
+              onChange={(event) => setSettings({
+                ...settings,
+                qualityRules: {
+                  ...settings.qualityRules,
+                  maxRecommendedAudioMs: Number(event.target.value)
+                }
+              })}
+            />
+          </label>
+        </div>
 
         <h2>Translation</h2>
         <label>
@@ -290,11 +420,22 @@ function normalizeSettings(value: Partial<AnkiSettings>): AnkiSettings {
   return {
     ...DEFAULT_SETTINGS,
     ...value,
+    qualityRules: {
+      ...DEFAULT_SETTINGS.qualityRules,
+      ...(value.qualityRules || {})
+    },
     fieldMapping: {
       ...DEFAULT_SETTINGS.fieldMapping,
       ...(value.fieldMapping || {})
     }
   };
+}
+
+function isSameQualityRules(left: QualityRules, right: QualityRules) {
+  return left.requireWord === right.requireWord
+    && left.requireDefinition === right.requireDefinition
+    && left.requireTranslation === right.requireTranslation
+    && left.maxRecommendedAudioMs === right.maxRecommendedAudioMs;
 }
 
 createRoot(document.getElementById("root")!).render(<OptionsApp />);

@@ -15,6 +15,8 @@ type TrimSuggestion = {
 type SmartAction = "capture" | "stop-recording" | "pick-word" | "define-word" | "translate" | "fix-audio" | "open-settings" | "send";
 type QualityTone = "required" | "recommended" | "risk";
 type QualityItem = {
+  action?: SmartAction;
+  actionLabel?: string;
   label: string;
   done: boolean;
   detail: string;
@@ -991,7 +993,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           {translation && <p className="translation-preview">{translation}</p>}
         </section>
 
-        <CardQualityPanel quality={cardQuality} />
+        <CardQualityPanel quality={cardQuality} onAction={runSmartAction} />
         <AnkiFieldPreview context={context} draft={draft} />
         {duplicateWarning && <p className="warning-banner">{duplicateWarning}</p>}
 
@@ -1156,7 +1158,7 @@ function Checklist({ context, expression, translation }: { context: PopupContext
   );
 }
 
-function CardQualityPanel({ quality }: { quality: CardQuality }) {
+function CardQualityPanel({ onAction, quality }: { onAction: (action: SmartAction) => void; quality: CardQuality }) {
   return (
     <section className={`quality-panel quality-panel--${quality.status.toLowerCase().replace(" ", "-")}`}>
       <div className="quality-panel__head">
@@ -1182,6 +1184,11 @@ function CardQualityPanel({ quality }: { quality: CardQuality }) {
             <span>{item.done ? "Ready" : item.tone === "risk" ? "Check" : "Missing"}</span>
             <strong>{item.label}</strong>
             <p>{item.detail}</p>
+            {!item.done && item.action && (
+              <button className="secondary inline-action quality-item__action" onClick={() => onAction(item.action as SmartAction)} type="button">
+                {item.actionLabel || "Fix"}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -1298,43 +1305,74 @@ function buildCardQuality({
   const hasTranslation = Boolean(draft.translation.trim()) || context?.settings.translationMode === "manual";
   const hasWord = Boolean(draft.word.trim());
   const hasDefinition = Boolean(draft.definition.trim());
-  const audioTooLong = Boolean(effectiveAudioDuration && effectiveAudioDuration > 8.5);
+  const qualityRules = context?.settings.qualityRules;
+  const requireWord = qualityRules?.requireWord ?? true;
+  const requireDefinition = qualityRules?.requireDefinition ?? true;
+  const requireTranslation = qualityRules?.requireTranslation ?? false;
+  const maxRecommendedAudioMs = qualityRules?.maxRecommendedAudioMs ?? 8500;
+  const audioTooLong = Boolean(effectiveAudioDuration && effectiveAudioDuration * 1000 > maxRecommendedAudioMs);
   const hasDuplicateWarning = Boolean(duplicateWarning);
+  const captureAction: QualityItem["action"] = "capture";
+  const settingsAction: QualityItem["action"] = "open-settings";
 
   const required: QualityItem[] = [
-    { label: "Expression", done: hasExpression, detail: "Subtitle or edited sentence is required.", tone: "required" },
-    { label: "Screenshot", done: hasScreenshot, detail: "Image context should be attached to the card.", tone: "required" },
-    { label: "Audio", done: hasAudio, detail: "Audio clip should be attached before sending.", tone: "required" },
-    { label: "Deck", done: hasDeck, detail: "Choose where Anki will save the card.", tone: "required" },
-    { label: "Note type", done: hasModel, detail: "Choose the template used by Anki.", tone: "required" },
-    { label: "Expression field", done: hasExpressionMapping, detail: "Bind the sentence to a real Anki field.", tone: "required" }
+    { action: captureAction, actionLabel: "Capture", label: "Expression", done: hasExpression, detail: "Subtitle or edited sentence is required.", tone: "required" },
+    { action: captureAction, actionLabel: "Capture", label: "Screenshot", done: hasScreenshot, detail: "Image context should be attached to the card.", tone: "required" },
+    { action: captureAction, actionLabel: "Capture audio", label: "Audio", done: hasAudio, detail: "Audio clip should be attached before sending.", tone: "required" },
+    { action: settingsAction, actionLabel: "Choose deck", label: "Deck", done: hasDeck, detail: "Choose where Anki will save the card.", tone: "required" },
+    { action: settingsAction, actionLabel: "Choose type", label: "Note type", done: hasModel, detail: "Choose the template used by Anki.", tone: "required" },
+    { action: settingsAction, actionLabel: "Bind field", label: "Expression field", done: hasExpressionMapping, detail: "Bind the sentence to a real Anki field.", tone: "required" }
   ];
 
-  const recommended: QualityItem[] = [
-    { label: "Target word", done: hasWord, detail: "Pick the mined word so the card has a clear learning target.", tone: "recommended" },
-    { label: "Definition", done: hasDefinition, detail: "Dictionary data makes the Back side useful for review.", tone: "recommended" },
-    { label: "Translation", done: hasTranslation, detail: "Translation helps quick comprehension during reviews.", tone: "recommended" }
-  ];
+  const wordItem = {
+    action: "pick-word" as const,
+    actionLabel: "Pick word",
+    label: "Target word",
+    done: hasWord,
+    detail: requireWord ? "Required by your quality rules." : "Pick the mined word so the card has a clear learning target.",
+    tone: requireWord ? "required" as const : "recommended" as const
+  };
+  const definitionItem = {
+    action: "define-word" as const,
+    actionLabel: "Define",
+    label: "Definition",
+    done: hasDefinition,
+    detail: requireDefinition ? "Required by your quality rules." : "Dictionary data makes the Back side useful for review.",
+    tone: requireDefinition ? "required" as const : "recommended" as const
+  };
+  const translationItem = {
+    action: "translate" as const,
+    actionLabel: "Translate",
+    label: "Translation",
+    done: hasTranslation,
+    detail: requireTranslation ? "Required by your quality rules." : "Translation helps quick comprehension during reviews.",
+    tone: requireTranslation ? "required" as const : "recommended" as const
+  };
+
+  const requiredByRules = [wordItem, definitionItem, translationItem].filter((item) => item.tone === "required");
+  const recommended = [wordItem, definitionItem, translationItem].filter((item) => item.tone === "recommended");
+  const allRequired = [...required, ...requiredByRules];
 
   const risks: QualityItem[] = [
-    { label: "Audio length", done: !audioTooLong, detail: audioTooLong ? "Clip is long. Trim or re-record the clean range." : "Clip length looks focused.", tone: "risk" },
-    { label: "Duplicate", done: !hasDuplicateWarning, detail: hasDuplicateWarning ? "This expression may already exist in Anki." : "No duplicate warning for this draft.", tone: "risk" }
+    { action: "fix-audio", actionLabel: "Fix audio", label: "Audio length", done: !audioTooLong, detail: audioTooLong ? `Clip is longer than ${(maxRecommendedAudioMs / 1000).toFixed(1)}s. Trim or re-record the clean range.` : "Clip length looks focused.", tone: "risk" },
+    { action: "send", actionLabel: "Send anyway", label: "Duplicate", done: !hasDuplicateWarning, detail: hasDuplicateWarning ? "This expression may already exist in Anki." : "No duplicate warning for this draft.", tone: "risk" }
   ];
 
-  const requiredMissing = required.filter((item) => !item.done);
+  const requiredMissing = allRequired.filter((item) => !item.done);
   const recommendedMissing = recommended.filter((item) => !item.done);
   const activeRisks = risks.filter((item) => !item.done);
-  const positiveItems = [...required, ...recommended];
+  const positiveItems = [...allRequired, ...recommended];
   const baseScore = Math.round((positiveItems.filter((item) => item.done).length / positiveItems.length) * 100);
   const score = Math.max(0, Math.min(100, baseScore - activeRisks.length * 8));
   const status = requiredMissing.length > 0 ? "Blocked" : recommendedMissing.length > 0 || activeRisks.length > 0 ? "Needs review" : "Ready";
+  const qualityItems = [...allRequired, ...recommended, ...risks];
 
   if (isRecording) {
     return {
       cta: "Stop recording",
       disabled: false,
       footerCopy: "Recording is still running. Stop it to review the final clip.",
-      items: [...required, ...recommended, ...risks],
+      items: qualityItems,
       nextAction: "stop-recording",
       score,
       status
@@ -1355,29 +1393,27 @@ function buildCardQuality({
     nextAction = "open-settings";
     cta = "Open settings";
     footerCopy = "Finish deck, note type, and field mapping before sending.";
-  } else if (!hasWord) {
+  } else if (requireWord && !hasWord) {
     nextAction = "pick-word";
     cta = "Pick a word";
-    footerCopy = "Choose the target word to turn this into a stronger sentence-mining card.";
-  } else if (!hasDefinition) {
+    footerCopy = "Your quality rules require a target word before sending.";
+  } else if (requireDefinition && !hasDefinition) {
     nextAction = "define-word";
     cta = "Define word";
-    footerCopy = "Add dictionary data before sending.";
-  } else if (!hasTranslation) {
+    footerCopy = "Your quality rules require a definition before sending.";
+  } else if (requireTranslation && !hasTranslation) {
     nextAction = "translate";
     cta = "Translate";
-    footerCopy = "Add translation before sending, or switch translation mode to Manual.";
-  } else if (audioTooLong) {
-    nextAction = "fix-audio";
-    cta = "Fix audio";
-    footerCopy = "The clip looks long. Trim or re-record the clean range.";
+    footerCopy = "Your quality rules require translation before sending.";
+  } else if (recommendedMissing.length > 0 || audioTooLong) {
+    footerCopy = "Optional improvements are available, but this card can be sent.";
   }
 
   return {
     cta,
     disabled: false,
     footerCopy,
-    items: [...required, ...recommended, ...risks],
+    items: qualityItems,
     nextAction,
     score,
     status

@@ -15,12 +15,20 @@ export type FieldMapping = {
   url: string;
 };
 
+export type QualityRules = {
+  requireWord: boolean;
+  requireDefinition: boolean;
+  requireTranslation: boolean;
+  maxRecommendedAudioMs: number;
+};
+
 export type AnkiSettings = {
   endpoint: string;
   deckName: string;
   modelName: string;
   rewindMs: number;
   maxClipMs: number;
+  qualityRules: QualityRules;
   translationMode: "manual" | "after-capture" | "before-send";
   translationSourceLang: string;
   translationTargetLang: string;

@@ -11,6 +11,12 @@ const DEFAULT_ANKI_SETTINGS = {
   modelName: "Basic",
   rewindMs: 1200,
   maxClipMs: 8000,
+  qualityRules: {
+    requireWord: true,
+    requireDefinition: true,
+    requireTranslation: false,
+    maxRecommendedAudioMs: 8500
+  },
   translationMode: "after-capture",
   translationSourceLang: "en",
   translationTargetLang: "ru",
@@ -1343,6 +1349,10 @@ function normalizeAnkiSettings(value) {
   return {
     ...DEFAULT_ANKI_SETTINGS,
     ...value,
+    qualityRules: {
+      ...DEFAULT_ANKI_SETTINGS.qualityRules,
+      ...(value.qualityRules || {})
+    },
     fieldMapping: {
       ...DEFAULT_ANKI_SETTINGS.fieldMapping,
       ...(value.fieldMapping || {})

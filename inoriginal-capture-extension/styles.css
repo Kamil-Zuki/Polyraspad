@@ -446,6 +446,52 @@ label {
   gap: 6px;
 }
 
+.toggle-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.toggle-row input {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.quality-presets {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.quality-preset {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+  line-height: 1.35;
+  padding: 12px;
+  text-align: left;
+}
+
+.quality-preset:hover,
+.quality-preset--active {
+  background: #2c201b;
+  color: #fff7ed;
+}
+
+.quality-preset span {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
 span {
   font-size: 14px;
   font-weight: 600;
@@ -776,6 +822,7 @@ button.secondary {
 
 @media (max-width: 700px) {
   .split-grid,
+  .quality-presets,
   .media-card,
   .media-strip,
   .editor-grid,
@@ -1284,6 +1331,12 @@ button.secondary {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.quality-item__action {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 6px 9px;
 }
 
 .anki-preview {
