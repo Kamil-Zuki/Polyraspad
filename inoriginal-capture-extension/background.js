@@ -636,7 +636,7 @@ async function finalizeSubtitleClip(message) {
 }
 
 async function recordAudioRange(payload) {
-  const startOffsetMs = Math.max(0, Number(payload.startOffsetMs) || 0);
+  const startOffsetMs = Math.max(-5000, Number(payload.startOffsetMs) || 0);
   const endOffsetMs = Math.max(startOffsetMs + 250, Number(payload.endOffsetMs) || 0);
   const latestCapture = await getLatestCapture();
   const audio = latestCapture?.audio;

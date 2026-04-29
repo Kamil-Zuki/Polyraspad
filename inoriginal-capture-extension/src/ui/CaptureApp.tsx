@@ -490,6 +490,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const isRecording = Boolean(context?.isRecording);
   const canStopRecording = context?.sessionMode === "clip" || context?.sessionMode === "range";
   const effectiveAudioDuration = getEffectiveAudioDuration(capture, audioDuration);
+  const audioRangeStartMin = getAudioRangeStartMin(capture);
   const normalizedAudioRangeEnd = effectiveAudioDuration
     ? Math.min(audioRangeEnd || effectiveAudioDuration, effectiveAudioDuration)
     : audioRangeEnd;
@@ -586,7 +587,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                     <div>
                       <h3>Video re-record range</h3>
                       <p className="muted">
-                        Choose the part of this audio clip, then click re-record. The extension will seek the video to that moment, play it, record the selected range, and pause again.
+                        Move Start left of 0s to begin earlier than the current clip. The extension will seek the video to that moment, play it, record the selected range, and pause again.
                       </p>
                     </div>
                     <div className="range-editor__labels">
@@ -596,11 +597,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                     <input
                       aria-label="Audio range start"
                       max={Math.max(0, normalizedAudioRangeEnd - 0.1)}
-                      min={0}
+                      min={audioRangeStartMin}
                       step={0.1}
                       type="range"
                       value={audioRangeStart}
-                      onChange={(event) => setAudioRangeStart(Math.min(Number(event.target.value), normalizedAudioRangeEnd - 0.1))}
+                      onChange={(event) => {
+                        const nextStart = Math.min(Number(event.target.value), normalizedAudioRangeEnd - 0.1);
+                        setAudioRangeStart(Math.max(audioRangeStartMin, nextStart));
+                      }}
                     />
                     <input
                       aria-label="Audio range end"
@@ -910,6 +914,15 @@ function getEffectiveAudioDuration(capture: CaptureData | undefined, metadataDur
   }
 
   return null;
+}
+
+function getAudioRangeStartMin(capture: CaptureData | undefined) {
+  const videoStartTime = capture?.audio?.videoStartTime;
+  if (videoStartTime === undefined) {
+    return 0;
+  }
+
+  return -Math.min(5, videoStartTime);
 }
 
 function formatAudioStatus(capture: CaptureData, audioDuration: number | null) {
