@@ -624,6 +624,15 @@ button.secondary {
   background: rgba(255, 255, 255, 0.7);
 }
 
+.range-editor h3,
+.range-editor p {
+  margin: 0;
+}
+
+.range-editor h3 {
+  font-size: 14px;
+}
+
 .range-editor__labels {
   display: flex;
   justify-content: space-between;

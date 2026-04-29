@@ -89,6 +89,18 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     void translateSubtitle({ silent: true });
   }, [context, expression, translation, isTranslating]);
 
+  useEffect(() => {
+    const duration = getEffectiveAudioDuration(context?.capture, audioDuration);
+    const filename = context?.capture?.audio?.filename || "";
+    if (!duration || !filename || lastAudioRangeFile.current === filename) {
+      return;
+    }
+
+    lastAudioRangeFile.current = filename;
+    setAudioRangeStart(0);
+    setAudioRangeEnd(Number(duration.toFixed(2)));
+  }, [context?.capture, audioDuration]);
+
   async function refresh(showLoading = true) {
     if (showLoading) {
       setMessage("Loading...");
@@ -197,7 +209,12 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   }
 
   async function recaptureSelectedAudioRange() {
-    if (!audioDuration || audioRangeEnd <= audioRangeStart) {
+    const effectiveDuration = getEffectiveAudioDuration(context?.capture, audioDuration);
+    const rangeEnd = effectiveDuration
+      ? Math.min(audioRangeEnd || effectiveDuration, effectiveDuration)
+      : audioRangeEnd;
+
+    if (!effectiveDuration || rangeEnd <= audioRangeStart) {
       setMessage("Choose a valid audio range first.");
       return;
     }
@@ -208,7 +225,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       type: "record-audio-range",
       payload: {
         startOffsetMs: Math.round(audioRangeStart * 1000),
-        endOffsetMs: Math.round(audioRangeEnd * 1000)
+        endOffsetMs: Math.round(rangeEnd * 1000)
       }
     });
 
@@ -472,6 +489,10 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const ready = canSendToAnki(context, expression);
   const isRecording = Boolean(context?.isRecording);
   const canStopRecording = context?.sessionMode === "clip" || context?.sessionMode === "range";
+  const effectiveAudioDuration = getEffectiveAudioDuration(capture, audioDuration);
+  const normalizedAudioRangeEnd = effectiveAudioDuration
+    ? Math.min(audioRangeEnd || effectiveAudioDuration, effectiveAudioDuration)
+    : audioRangeEnd;
 
   if (mode === "popup") {
     return (
@@ -501,7 +522,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <button className="secondary" disabled={!ready || isRecording} onClick={createCard}>Send to Anki</button>
         </div>
 
-        <p className="status">{audioDuration ? `Audio: ${audioDuration.toFixed(1)}s | ${message}` : message}</p>
+        <p className="status">{effectiveAudioDuration ? `Audio: ${effectiveAudioDuration.toFixed(1)}s | ${message}` : message}</p>
       </main>
     );
   }
@@ -558,35 +579,36 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                   const duration = event.currentTarget.duration;
                   const nextDuration = Number.isFinite(duration) ? duration : null;
                   setAudioDuration(nextDuration);
-                  if (nextDuration && lastAudioRangeFile.current !== capture.audio?.filename) {
-                    lastAudioRangeFile.current = capture.audio?.filename || "";
-                    setAudioRangeStart(0);
-                    setAudioRangeEnd(Number(nextDuration.toFixed(2)));
-                  }
                 }} />
-                <p className="status">{formatAudioStatus(capture, audioDuration)}</p>
-                {audioDuration && (
+                <p className="status">{formatAudioStatus(capture, effectiveAudioDuration)}</p>
+                {effectiveAudioDuration && (
                   <div className="range-editor">
+                    <div>
+                      <h3>Video re-record range</h3>
+                      <p className="muted">
+                        Choose the part of this audio clip, then click re-record. The extension will seek the video to that moment, play it, record the selected range, and pause again.
+                      </p>
+                    </div>
                     <div className="range-editor__labels">
-                      <span>Range: {audioRangeStart.toFixed(1)}s</span>
-                      <span>{audioRangeEnd.toFixed(1)}s</span>
+                      <span>Start: {audioRangeStart.toFixed(1)}s</span>
+                      <span>End: {normalizedAudioRangeEnd.toFixed(1)}s</span>
                     </div>
                     <input
                       aria-label="Audio range start"
-                      max={Math.max(0, audioRangeEnd - 0.1)}
+                      max={Math.max(0, normalizedAudioRangeEnd - 0.1)}
                       min={0}
                       step={0.1}
                       type="range"
                       value={audioRangeStart}
-                      onChange={(event) => setAudioRangeStart(Math.min(Number(event.target.value), audioRangeEnd - 0.1))}
+                      onChange={(event) => setAudioRangeStart(Math.min(Number(event.target.value), normalizedAudioRangeEnd - 0.1))}
                     />
                     <input
                       aria-label="Audio range end"
-                      max={audioDuration}
-                      min={Math.min(audioDuration, audioRangeStart + 0.1)}
+                      max={effectiveAudioDuration}
+                      min={Math.min(effectiveAudioDuration, audioRangeStart + 0.1)}
                       step={0.1}
                       type="range"
-                      value={audioRangeEnd || audioDuration}
+                      value={normalizedAudioRangeEnd}
                       onChange={(event) => setAudioRangeEnd(Math.max(Number(event.target.value), audioRangeStart + 0.1))}
                     />
                     <button
@@ -597,7 +619,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                       Re-record selected range
                     </button>
                     {capture.audio.videoStartTime === undefined && (
-                      <p className="muted media-empty">Capture once again to enable exact video-range re-recording.</p>
+                      <p className="muted media-empty">This old clip has no video timestamp. Press Capture again once, then this button will seek the video automatically.</p>
                     )}
                   </div>
                 )}
@@ -869,6 +891,25 @@ function formatTranslationMode(mode?: string) {
     return "Manual";
   }
   return "Auto after Capture";
+}
+
+function getEffectiveAudioDuration(capture: CaptureData | undefined, metadataDuration: number | null) {
+  if (metadataDuration && Number.isFinite(metadataDuration)) {
+    return metadataDuration;
+  }
+
+  const durationFromCapture = capture?.audio?.durationMs ? capture.audio.durationMs / 1000 : null;
+  if (durationFromCapture && Number.isFinite(durationFromCapture)) {
+    return durationFromCapture;
+  }
+
+  const videoStart = capture?.audio?.videoStartTime;
+  const videoEnd = capture?.audio?.videoEndTime;
+  if (videoStart !== undefined && videoEnd !== undefined && videoEnd > videoStart) {
+    return videoEnd - videoStart;
+  }
+
+  return null;
 }
 
 function formatAudioStatus(capture: CaptureData, audioDuration: number | null) {
