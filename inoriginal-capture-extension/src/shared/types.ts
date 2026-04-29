@@ -20,6 +20,7 @@ export type AnkiSettings = {
   deckName: string;
   modelName: string;
   rewindMs: number;
+  maxClipMs: number;
   translationMode: "manual" | "after-capture" | "before-send";
   translationSourceLang: string;
   translationTargetLang: string;
@@ -41,6 +42,10 @@ export type CaptureData = {
   audio?: {
     dataUrl?: string;
     filename?: string;
+    durationMs?: number;
+    stopReason?: "subtitle-change" | "manual" | "max-duration" | "range";
+    videoStartTime?: number;
+    videoEndTime?: number;
   };
   cardState?: "capturing" | "review" | "created";
   captureStep?: "idle" | "screenshot" | "rewinding" | "waiting-subtitle" | "recording-audio" | "stopping" | "review-ready" | "sending-anki" | "created" | "failed" | "cancelled";

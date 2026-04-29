@@ -615,6 +615,26 @@ button.secondary {
   margin: 0;
 }
 
+.range-editor {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.range-editor__labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.range-editor__labels span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .editor-grid {
   display: grid;
   gap: 14px;

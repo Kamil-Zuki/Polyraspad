@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS: AnkiSettings = {
   deckName: "Default",
   modelName: "Basic",
   rewindMs: 1200,
+  maxClipMs: 8000,
   translationMode: "after-capture",
   translationSourceLang: "en",
   translationTargetLang: "ru",
@@ -165,6 +166,18 @@ function OptionsApp() {
             type="range"
             value={settings.rewindMs}
             onChange={(event) => setSettings({ ...settings, rewindMs: Number(event.target.value) })}
+          />
+        </label>
+
+        <label>
+          <span>Max audio clip length: {(settings.maxClipMs / 1000).toFixed(1)}s</span>
+          <input
+            max={15000}
+            min={3000}
+            step={500}
+            type="range"
+            value={settings.maxClipMs}
+            onChange={(event) => setSettings({ ...settings, maxClipMs: Number(event.target.value) })}
           />
         </label>
 

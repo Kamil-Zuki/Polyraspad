@@ -15,6 +15,7 @@
     clipPollTimer: null,
     clipFallbackTimer: null,
     clipMaxTimer: null,
+    rangeTimer: null,
     lastText: "",
     clipMode: null
   };
@@ -46,7 +47,20 @@
     }
 
     if (message?.type === "start-subtitle-clip") {
-      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0);
+      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0, message.maxClipMs || 8000);
+      sendResponse({ ok: true });
+      return;
+    }
+
+    if (message?.type === "prepare-audio-range") {
+      void prepareAudioRange(message.startSeconds, message.endSeconds)
+        .then((result) => sendResponse({ ok: true, ...result }))
+        .catch((error) => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+
+    if (message?.type === "play-prepared-audio-range") {
+      playPreparedAudioRange(message.endSeconds);
       sendResponse({ ok: true });
       return;
     }
@@ -98,6 +112,11 @@
     if (state.clipMaxTimer) {
       clearTimeout(state.clipMaxTimer);
       state.clipMaxTimer = null;
+    }
+
+    if (state.rangeTimer) {
+      clearTimeout(state.rangeTimer);
+      state.rangeTimer = null;
     }
 
     if (state.entries.length > 0) {
@@ -190,11 +209,12 @@
       previousSubtitle: resolvedIndex > 0 ? state.entries[resolvedIndex - 1]?.text || "" : "",
       nextSubtitle: resolvedIndex >= 0 && resolvedIndex < state.entries.length - 1
         ? state.entries[resolvedIndex + 1]?.text || ""
-        : ""
+        : "",
+      videoTime: getVideoTime()
     };
   }
 
-  function startSubtitleClip(startedAt, targetSubtitle, rewindMs) {
+  function startSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs) {
     startCapture(startedAt);
     const rewound = rewindVideoPlayback(rewindMs);
     state.clipMode = {
@@ -229,8 +249,8 @@
         return;
       }
 
-      completeClip(getCurrentSubtitle());
-    }, 12000);
+      completeClip(getCurrentSubtitle(), "max-duration");
+    }, Math.max(3000, Number(maxClipMs) || 8000));
   }
 
   function getPreviousSubtitleFor(text) {
@@ -249,6 +269,76 @@
     if (control instanceof HTMLElement) {
       control.click();
     }
+  }
+
+  function getVideoElement() {
+    return document.querySelector("#playerjs video") || document.querySelector("video");
+  }
+
+  function getVideoTime() {
+    const mediaElement = getVideoElement();
+    return mediaElement && Number.isFinite(mediaElement.currentTime)
+      ? mediaElement.currentTime
+      : undefined;
+  }
+
+  function seekVideo(mediaElement, targetSeconds) {
+    return new Promise((resolve, reject) => {
+      if (!mediaElement || !Number.isFinite(mediaElement.duration)) {
+        reject(new Error("No seekable video element found."));
+        return;
+      }
+
+      const duration = mediaElement.duration || targetSeconds;
+      const nextTime = Math.max(0, Math.min(targetSeconds, duration));
+      const finish = () => resolve({ currentTime: mediaElement.currentTime, duration });
+      const timeout = window.setTimeout(finish, 1200);
+
+      mediaElement.addEventListener("seeked", () => {
+        clearTimeout(timeout);
+        finish();
+      }, { once: true });
+      mediaElement.currentTime = nextTime;
+    });
+  }
+
+  async function prepareAudioRange(startSeconds, endSeconds) {
+    const mediaElement = getVideoElement();
+    if (!mediaElement) {
+      throw new Error("No video element found in #playerjs.");
+    }
+
+    if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || endSeconds <= startSeconds) {
+      throw new Error("Invalid audio range.");
+    }
+
+    mediaElement.pause();
+    const result = await seekVideo(mediaElement, startSeconds);
+    return {
+      currentTime: result.currentTime,
+      duration: result.duration
+    };
+  }
+
+  function playPreparedAudioRange(endSeconds) {
+    const mediaElement = getVideoElement();
+    if (!mediaElement) {
+      return;
+    }
+
+    if (state.rangeTimer) {
+      clearTimeout(state.rangeTimer);
+      state.rangeTimer = null;
+    }
+
+    const durationMs = Math.max(250, (endSeconds - mediaElement.currentTime) * 1000);
+    void mediaElement.play().catch(() => {});
+    state.rangeTimer = window.setTimeout(() => {
+      pauseVideoPlayback();
+      void chrome.runtime.sendMessage({
+        type: "audio-range-complete"
+      });
+    }, durationMs);
   }
 
   function rewindVideoPlayback(rewindMs) {
@@ -286,7 +376,8 @@
 
     state.clipMode.recordingRequested = true;
     chrome.runtime.sendMessage({
-      type: "subtitle-clip-start-recording"
+      type: "subtitle-clip-start-recording",
+      videoTime: getVideoTime()
     }, (response) => {
       if (chrome.runtime.lastError || !response?.ok) {
         state.clipMode.recordingRequested = false;
@@ -318,7 +409,7 @@
     completeClip(text);
   }
 
-  function completeClip(nextSubtitle) {
+  function completeClip(nextSubtitle, stopReason = "subtitle-change") {
     if (!state.clipMode?.active) {
       return;
     }
@@ -345,7 +436,9 @@
       type: "subtitle-clip-complete",
       subtitle: state.clipMode.targetSubtitle,
       previousSubtitle: getPreviousSubtitleFor(state.clipMode.targetSubtitle),
-      nextSubtitle: nextSubtitle && nextSubtitle !== state.clipMode.targetSubtitle ? nextSubtitle : ""
+      nextSubtitle: nextSubtitle && nextSubtitle !== state.clipMode.targetSubtitle ? nextSubtitle : "",
+      stopReason,
+      videoEndTime: getVideoTime()
     });
   }
 

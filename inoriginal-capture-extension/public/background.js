@@ -10,6 +10,7 @@ const DEFAULT_ANKI_SETTINGS = {
   deckName: "Default",
   modelName: "Basic",
   rewindMs: 1200,
+  maxClipMs: 8000,
   translationMode: "after-capture",
   translationSourceLang: "en",
   translationTargetLang: "ru",
@@ -87,8 +88,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "audio-range-complete") {
+    void stopCurrentCapture("range")
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "subtitle-clip-start-recording") {
-    void startSubtitleClipRecording()
+    void startSubtitleClipRecording(message)
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -129,6 +137,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "stop-current-capture") {
+    void stopCurrentCapture("manual")
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "open-anki-note") {
     void openAnkiNote(message.noteId)
       .then((result) => sendResponse({ ok: true, result }))
@@ -159,6 +174,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "recapture-subtitle-audio") {
     void captureSubtitleClip({ takeScreenshot: false })
+      .then((capture) => sendResponse({ ok: true, capture }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "record-audio-range") {
+    void recordAudioRange(message.payload || {})
       .then((capture) => sendResponse({ ok: true, capture }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -362,7 +384,8 @@ async function captureSubtitleClip(options = {}) {
       type: "start-subtitle-clip",
       startedAt,
       targetSubtitle: subtitleContext.currentSubtitle,
-      rewindMs: settings.rewindMs
+      rewindMs: settings.rewindMs,
+      maxClipMs: settings.maxClipMs
     });
   } catch (error) {
     await chrome.storage.local.remove(SESSION_KEY);
@@ -378,7 +401,7 @@ async function captureSubtitleClip(options = {}) {
   return getLatestCapture();
 }
 
-async function startSubtitleClipRecording() {
+async function startSubtitleClipRecording(message = {}) {
   const session = await getSession();
   if (!session?.tabId || !["clip-waiting", "clip"].includes(session.mode)) {
     throw new Error("There is no subtitle clip waiting to record.");
@@ -398,7 +421,8 @@ async function startSubtitleClipRecording() {
     [SESSION_KEY]: {
       ...session,
       mode: "clip",
-      startedAt
+      startedAt,
+      videoStartTime: Number.isFinite(message.videoTime) ? message.videoTime : session.videoStartTime
     }
   });
   await addCaptureEvent("recording-audio", "Tab audio recording is starting.");
@@ -411,7 +435,11 @@ async function startSubtitleClipRecording() {
     type: "start-audio-recording",
     streamId,
     tabId: session.tabId,
-    startedAt
+    startedAt,
+    metadata: {
+      mode: "clip",
+      videoStartTime: Number.isFinite(message.videoTime) ? message.videoTime : session.videoStartTime
+    }
   });
 
   if (!response?.ok) {
@@ -545,6 +573,7 @@ async function finalizeSubtitleClip(message) {
 
   const stoppedAt = Date.now();
   const subtitle = message.subtitle || session.targetSubtitle || "";
+  const stopReason = message.stopReason || "subtitle-change";
   const subtitleEntry = {
     atMs: 0,
     endMs: Math.max(500, stoppedAt - session.startedAt),
@@ -561,6 +590,7 @@ async function finalizeSubtitleClip(message) {
     nextSubtitle: message.nextSubtitle || "",
     cardState: "review",
     captureStep: "stopping",
+    stopReason,
     subtitles: {
       entries: [subtitleEntry],
       srt: toSrt([subtitleEntry], stoppedAt),
@@ -578,7 +608,13 @@ async function finalizeSubtitleClip(message) {
     source: session.pageTitle || "inoriginal",
     url: session.pageUrl || ""
   });
-  await addCaptureEvent("stopping", "Subtitle changed. Stopping audio and pausing video.");
+  await addCaptureEvent(
+    "stopping",
+    stopReason === "max-duration"
+      ? "Max clip length reached. Stopping audio and pausing video."
+      : "Subtitle changed. Stopping audio and pausing video.",
+    stopReason === "max-duration" ? "warning" : "info"
+  );
 
   await sendMessageToTab(session.tabId, {
     type: "stop-subtitle-capture",
@@ -587,8 +623,141 @@ async function finalizeSubtitleClip(message) {
 
   await chrome.runtime.sendMessage({
     type: "stop-audio-recording",
-    tabId: session.tabId
+    tabId: session.tabId,
+    metadata: {
+      durationMs: session.startedAt ? stoppedAt - session.startedAt : undefined,
+      stopReason,
+      videoStartTime: session.videoStartTime,
+      videoEndTime: Number.isFinite(message.videoEndTime) ? message.videoEndTime : undefined
+    }
   });
+
+  await chrome.storage.local.remove(SESSION_KEY);
+}
+
+async function recordAudioRange(payload) {
+  const startOffsetMs = Math.max(0, Number(payload.startOffsetMs) || 0);
+  const endOffsetMs = Math.max(startOffsetMs + 250, Number(payload.endOffsetMs) || 0);
+  const latestCapture = await getLatestCapture();
+  const audio = latestCapture?.audio;
+
+  if (!audio?.videoStartTime && audio?.videoStartTime !== 0) {
+    throw new Error("This audio clip has no video timing metadata yet. Capture again once, then range re-record will be available.");
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.windowId || !tab.url?.startsWith("https://inoriginal.cc/")) {
+    throw new Error("Open the original InOriginal tab before re-recording a range.");
+  }
+
+  const startSeconds = Math.max(0, audio.videoStartTime + startOffsetMs / 1000);
+  const endSeconds = Math.max(startSeconds + 0.25, audio.videoStartTime + endOffsetMs / 1000);
+  const prepared = await sendMessageToTab(tab.id, {
+    type: "prepare-audio-range",
+    startSeconds,
+    endSeconds
+  });
+
+  if (!prepared?.ok) {
+    throw new Error(prepared?.error || "Could not prepare the video range.");
+  }
+
+  const startedAt = Date.now();
+  await ensureOffscreenDocument();
+  const streamId = await chrome.tabCapture.getMediaStreamId({
+    targetTabId: tab.id
+  });
+
+  await chrome.storage.local.set({
+    [SESSION_KEY]: {
+      mode: "range",
+      requestedAt: startedAt,
+      startedAt,
+      tabId: tab.id,
+      pageTitle: latestCapture?.pageTitle || tab.title || "inoriginal",
+      pageUrl: latestCapture?.pageUrl || tab.url || "",
+      targetSubtitle: latestCapture?.subtitle || "",
+      videoStartTime: startSeconds,
+      videoEndTime: endSeconds
+    }
+  });
+
+  await mergeLatestCapture({
+    cardState: "capturing",
+    captureStep: "recording-audio",
+    error: ""
+  });
+  await addCaptureEvent("recording-audio", `Re-recording selected audio range: ${formatSeconds(startOffsetMs / 1000)} to ${formatSeconds(endOffsetMs / 1000)}.`);
+
+  const response = await chrome.runtime.sendMessage({
+    type: "start-audio-recording",
+    streamId,
+    tabId: tab.id,
+    startedAt,
+    metadata: {
+      mode: "range",
+      stopReason: "range",
+      videoStartTime: startSeconds,
+      videoEndTime: endSeconds
+    }
+  });
+
+  if (!response?.ok) {
+    await chrome.storage.local.remove(SESSION_KEY);
+    throw new Error(response?.error || "Chrome could not start tab audio capture.");
+  }
+
+  await sendMessageToTab(tab.id, {
+    type: "play-prepared-audio-range",
+    endSeconds
+  });
+
+  const durationMs = Math.ceil((endSeconds - startSeconds) * 1000);
+  setTimeout(() => {
+    void stopCurrentCapture("range").catch(() => null);
+  }, durationMs + 500);
+
+  return getLatestCapture();
+}
+
+async function stopCurrentCapture(stopReason = "manual") {
+  const session = await getSession();
+  if (!session?.tabId) {
+    throw new Error("There is no active audio capture to stop.");
+  }
+
+  const stoppedAt = Date.now();
+  const subtitles = await sendMessageToTab(session.tabId, {
+    type: "stop-subtitle-capture",
+    stoppedAt
+  }).catch(() => ({ currentSubtitle: session.targetSubtitle || "", previousSubtitle: "", nextSubtitle: "", videoTime: undefined }));
+  await sendMessageToTab(session.tabId, {
+    type: "pause-video-playback"
+  }).catch(() => null);
+
+  await mergeLatestCapture({
+    capturedAt: stoppedAt,
+    pageTitle: session.pageTitle || "inoriginal",
+    pageUrl: session.pageUrl || "",
+    subtitle: session.targetSubtitle || subtitles.currentSubtitle || "",
+    previousSubtitle: subtitles.previousSubtitle || "",
+    nextSubtitle: subtitles.nextSubtitle || "",
+    cardState: "review",
+    captureStep: "stopping",
+    error: ""
+  });
+  await addCaptureEvent("stopping", stopReason === "range" ? "Selected audio range finished." : "Audio recording stopped manually.", "success");
+
+  await chrome.runtime.sendMessage({
+    type: "stop-audio-recording",
+    tabId: session.tabId,
+    metadata: {
+      durationMs: session.startedAt ? stoppedAt - session.startedAt : undefined,
+      stopReason,
+      videoStartTime: session.videoStartTime,
+      videoEndTime: session.videoEndTime ?? subtitles.videoTime
+    }
+  }).catch(() => null);
 
   await chrome.storage.local.remove(SESSION_KEY);
 }
@@ -776,7 +945,11 @@ async function handleAudioReady(message) {
     error: "",
     audio: {
       dataUrl: message.dataUrl,
-      filename
+      filename,
+      durationMs: message.metadata?.durationMs,
+      stopReason: message.metadata?.stopReason,
+      videoStartTime: message.metadata?.videoStartTime,
+      videoEndTime: message.metadata?.videoEndTime
     }
   });
   await addCaptureEvent("review-ready", "Audio saved. Draft is ready to review.", "success");
@@ -1241,6 +1414,10 @@ function buildFileName(prefix, extension, timestamp) {
 
 function ensureExtension(filename, extension) {
   return filename.endsWith(`.${extension}`) ? filename : `${filename}.${extension}`;
+}
+
+function formatSeconds(value) {
+  return `${value.toFixed(1)}s`;
 }
 
 function quoteAnkiQuery(value) {

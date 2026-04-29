@@ -24,9 +24,12 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const [isLookingUpWord, setIsLookingUpWord] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState("");
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
+  const [audioRangeStart, setAudioRangeStart] = useState(0);
+  const [audioRangeEnd, setAudioRangeEnd] = useState(0);
   const lastCaptureSignature = useRef("");
   const lastSavedDraftSignature = useRef("");
   const lastAutoTranslateSignature = useRef("");
+  const lastAudioRangeFile = useRef("");
   const hasHydratedEditor = useRef(false);
   const expressionRef = useRef<HTMLTextAreaElement | null>(null);
   const confirmedDuplicateExpression = useRef("");
@@ -174,6 +177,45 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     const response = await sendRuntimeMessage({ type: "cancel-capture" });
     if (!response.ok) {
       setMessage(response.error || "Could not cancel capture.");
+      return;
+    }
+
+    await refresh(false);
+  }
+
+  async function stopRecording() {
+    setMessage("Stopping audio recording...");
+    const response = await sendRuntimeMessage({ type: "stop-current-capture" });
+    if (!response.ok) {
+      await refresh(false);
+      setFlowStatus("Failed");
+      setMessage(response.error || "Could not stop recording.");
+      return;
+    }
+
+    await refresh(false);
+  }
+
+  async function recaptureSelectedAudioRange() {
+    if (!audioDuration || audioRangeEnd <= audioRangeStart) {
+      setMessage("Choose a valid audio range first.");
+      return;
+    }
+
+    setFlowStatus("Recording subtitle audio");
+    setMessage("Re-recording selected range...");
+    const response = await sendRuntimeMessage({
+      type: "record-audio-range",
+      payload: {
+        startOffsetMs: Math.round(audioRangeStart * 1000),
+        endOffsetMs: Math.round(audioRangeEnd * 1000)
+      }
+    });
+
+    if (!response.ok) {
+      await refresh(false);
+      setFlowStatus("Failed");
+      setMessage(response.error || "Selected range re-record failed.");
       return;
     }
 
@@ -354,6 +396,8 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setUrl("");
     setDuplicateWarning("");
     setAudioDuration(null);
+    setAudioRangeStart(0);
+    setAudioRangeEnd(0);
     lastCaptureSignature.current = "";
     lastSavedDraftSignature.current = "";
     lastAutoTranslateSignature.current = "";
@@ -427,6 +471,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const draft = { expression, word, translation, definition, example, source, url };
   const ready = canSendToAnki(context, expression);
   const isRecording = Boolean(context?.isRecording);
+  const canStopRecording = context?.sessionMode === "clip" || context?.sessionMode === "range";
 
   if (mode === "popup") {
     return (
@@ -450,6 +495,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
         <div className="quick-actions">
           <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture current subtitle</button>
+          {canStopRecording && <button className="secondary" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary" onClick={cancelCapture}>Cancel capture</button>}
           <button className="secondary" onClick={openSidePanel}>Open review panel</button>
           <button className="secondary" disabled={!ready || isRecording} onClick={createCard}>Send to Anki</button>
@@ -470,6 +516,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
         <div className="hero-actions">
           <StatusPill status={flowStatus} />
           <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture</button>
+          {canStopRecording && <button className="secondary ghost-button" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary ghost-button" onClick={cancelCapture}>Cancel</button>}
           <button className="secondary ghost-button" onClick={() => chrome.runtime.openOptionsPage()}>Settings</button>
         </div>
@@ -509,9 +556,51 @@ export function CaptureApp({ mode }: CaptureAppProps) {
               <>
                 <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
                   const duration = event.currentTarget.duration;
-                  setAudioDuration(Number.isFinite(duration) ? duration : null);
+                  const nextDuration = Number.isFinite(duration) ? duration : null;
+                  setAudioDuration(nextDuration);
+                  if (nextDuration && lastAudioRangeFile.current !== capture.audio?.filename) {
+                    lastAudioRangeFile.current = capture.audio?.filename || "";
+                    setAudioRangeStart(0);
+                    setAudioRangeEnd(Number(nextDuration.toFixed(2)));
+                  }
                 }} />
-                <p className="status">{audioDuration ? `Audio: ${audioDuration.toFixed(1)}s` : "Audio ready"}</p>
+                <p className="status">{formatAudioStatus(capture, audioDuration)}</p>
+                {audioDuration && (
+                  <div className="range-editor">
+                    <div className="range-editor__labels">
+                      <span>Range: {audioRangeStart.toFixed(1)}s</span>
+                      <span>{audioRangeEnd.toFixed(1)}s</span>
+                    </div>
+                    <input
+                      aria-label="Audio range start"
+                      max={Math.max(0, audioRangeEnd - 0.1)}
+                      min={0}
+                      step={0.1}
+                      type="range"
+                      value={audioRangeStart}
+                      onChange={(event) => setAudioRangeStart(Math.min(Number(event.target.value), audioRangeEnd - 0.1))}
+                    />
+                    <input
+                      aria-label="Audio range end"
+                      max={audioDuration}
+                      min={Math.min(audioDuration, audioRangeStart + 0.1)}
+                      step={0.1}
+                      type="range"
+                      value={audioRangeEnd || audioDuration}
+                      onChange={(event) => setAudioRangeEnd(Math.max(Number(event.target.value), audioRangeStart + 0.1))}
+                    />
+                    <button
+                      className="secondary inline-action"
+                      disabled={isRecording || capture.audio.videoStartTime === undefined}
+                      onClick={recaptureSelectedAudioRange}
+                    >
+                      Re-record selected range
+                    </button>
+                    {capture.audio.videoStartTime === undefined && (
+                      <p className="muted media-empty">Capture once again to enable exact video-range re-recording.</p>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <p className="muted media-empty">No audio yet.</p>
@@ -780,6 +869,20 @@ function formatTranslationMode(mode?: string) {
     return "Manual";
   }
   return "Auto after Capture";
+}
+
+function formatAudioStatus(capture: CaptureData, audioDuration: number | null) {
+  const parts = [audioDuration ? `Audio: ${audioDuration.toFixed(1)}s` : "Audio ready"];
+  if (capture.audio?.stopReason === "max-duration") {
+    parts.push("stopped at max length");
+  }
+  if (capture.audio?.stopReason === "manual") {
+    parts.push("stopped manually");
+  }
+  if (capture.audio?.stopReason === "range") {
+    parts.push("selected range");
+  }
+  return parts.join(" | ");
 }
 
 function canSendToAnki(context: PopupContext | null, expression: string) {

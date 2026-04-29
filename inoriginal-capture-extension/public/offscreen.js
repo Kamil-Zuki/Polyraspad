@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "stop-audio-recording") {
-    void stopRecording(message.tabId)
+    void stopRecording(message.tabId, message.metadata || {})
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
         chrome.runtime.sendMessage({
@@ -30,7 +30,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-async function startRecording({ streamId, tabId, startedAt }) {
+async function startRecording({ streamId, tabId, startedAt, metadata = {} }) {
   if (recordings.has(tabId)) {
     await stopRecording(tabId);
   }
@@ -62,6 +62,7 @@ async function startRecording({ streamId, tabId, startedAt }) {
 
   recordings.set(tabId, {
     chunks,
+    metadata,
     monitor,
     recorder,
     startedAt,
@@ -71,7 +72,7 @@ async function startRecording({ streamId, tabId, startedAt }) {
   recorder.start(1000);
 }
 
-async function stopRecording(tabId) {
+async function stopRecording(tabId, metadata = {}) {
   const entry = recordings.get(tabId);
   if (!entry) {
     return;
@@ -90,6 +91,10 @@ async function stopRecording(tabId) {
   await chrome.runtime.sendMessage({
     type: "audio-recording-ready",
     dataUrl,
+    metadata: {
+      ...entry.metadata,
+      ...metadata
+    },
     startedAt: entry.startedAt
   });
 }
