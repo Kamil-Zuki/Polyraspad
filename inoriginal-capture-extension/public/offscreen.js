@@ -93,7 +93,9 @@ async function stopRecording(tabId, metadata = {}) {
     dataUrl,
     metadata: {
       ...entry.metadata,
-      ...metadata
+      ...metadata,
+      recordingStartedAt: entry.startedAt,
+      recordingStoppedAt: Date.now()
     },
     startedAt: entry.startedAt
   });

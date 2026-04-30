@@ -56,7 +56,7 @@
     }
 
     if (message?.type === "start-subtitle-clip") {
-      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0, message.maxClipMs || 8000, message.cue || null);
+      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0, message.maxClipMs || 8000, message.cue || null, message.captureMode || "auto-vtt");
       sendResponse({ ok: true });
       return;
     }
@@ -236,10 +236,33 @@
     };
   }
 
-  function startSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue) {
+  function startSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue, captureMode) {
+    if (captureMode === "dom-fallback") {
+      startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs);
+      return;
+    }
+
     if (cue && Number.isFinite(cue.start) && Number.isFinite(cue.end) && cue.end > cue.start) {
       void startCueAwareSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue)
-        .catch(() => startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs));
+        .catch(() => {
+          if (captureMode === "manual-range") {
+            chrome.runtime.sendMessage({
+              type: "recording-error",
+              error: "Manual range capture could not seek to the selected VTT cue."
+            });
+            return;
+          }
+
+          startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs);
+        });
+      return;
+    }
+
+    if (captureMode === "manual-range") {
+      chrome.runtime.sendMessage({
+        type: "recording-error",
+        error: "Manual range mode needs a selected VTT cue."
+      });
       return;
     }
 

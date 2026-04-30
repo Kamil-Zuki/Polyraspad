@@ -4,8 +4,10 @@ const CAPTURE_KEY = "latestCapture";
 const DRAFT_KEY = "sentenceDraft";
 const ANKI_SETTINGS_KEY = "ankiSettings";
 const CARD_HISTORY_KEY = "cardHistory";
+const LAST_UNDOABLE_CARD_KEY = "lastUndoableCard";
 
 const DEFAULT_ANKI_SETTINGS = {
+  captureMode: "auto-vtt",
   endpoint: "http://127.0.0.1:8765",
   deckName: "Default",
   modelName: "Basic",
@@ -153,6 +155,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "open-anki-note") {
     void openAnkiNote(message.noteId)
       .then((result) => sendResponse({ ok: true, result }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "undo-last-anki-card") {
+    void undoLastAnkiCard(message.noteId)
+      .then((capture) => sendResponse({ ok: true, capture }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -333,8 +342,13 @@ async function captureSubtitleClip(options = {}) {
     throw new Error("No active subtitle found to capture.");
   }
 
-  const startedAt = Date.now();
   const settings = await getAnkiSettings();
+  const startedAt = Date.now();
+  const captureMode = options.captureMode || settings.captureMode || "auto-vtt";
+  const selectedCue = captureMode === "dom-fallback" ? null : subtitleContext.cue;
+  if (captureMode === "manual-range" && !selectedCue) {
+    throw new Error("Manual range mode needs a VTT subtitle cue. Select a cue in the timeline or switch to DOM fallback.");
+  }
   const draft = normalizeSentenceDraft({
     expression: subtitleContext.currentSubtitle,
     example: buildContextText({
@@ -354,8 +368,9 @@ async function captureSubtitleClip(options = {}) {
     subtitle: subtitleContext.currentSubtitle,
     previousSubtitle: subtitleContext.previousSubtitle || "",
     nextSubtitle: subtitleContext.nextSubtitle || "",
-    subtitleCue: subtitleContext.cue,
+    subtitleCue: selectedCue,
     subtitleTimeline: subtitleContext.timeline,
+    captureMode,
     cardState: "capturing",
     captureStep: takeScreenshot ? "screenshot" : "rewinding",
     error: "",
@@ -378,8 +393,9 @@ async function captureSubtitleClip(options = {}) {
       pageUrl: tab.url || "",
       targetSubtitle: subtitleContext.currentSubtitle,
       previousSubtitle: subtitleContext.previousSubtitle || "",
-      subtitleCue: subtitleContext.cue,
-      subtitleTimeline: subtitleContext.timeline
+      subtitleCue: selectedCue,
+      subtitleTimeline: subtitleContext.timeline,
+      captureMode
     }
   });
 
@@ -390,8 +406,9 @@ async function captureSubtitleClip(options = {}) {
     subtitle: subtitleContext.currentSubtitle,
     previousSubtitle: subtitleContext.previousSubtitle || "",
     nextSubtitle: subtitleContext.nextSubtitle || "",
-    subtitleCue: subtitleContext.cue,
+    subtitleCue: selectedCue,
     subtitleTimeline: subtitleContext.timeline,
+    captureMode,
     cardState: "capturing",
     captureStep: "rewinding",
     ...(screenshotCapture ? { screenshot: screenshotCapture.screenshot } : {})
@@ -403,7 +420,8 @@ async function captureSubtitleClip(options = {}) {
       type: "start-subtitle-clip",
       startedAt,
       targetSubtitle: subtitleContext.currentSubtitle,
-      cue: subtitleContext.cue,
+      cue: selectedCue,
+      captureMode,
       rewindMs: settings.rewindMs,
       maxClipMs: settings.maxClipMs
     });
@@ -450,6 +468,7 @@ async function startSubtitleClipRecording(message = {}) {
       ...session,
       mode: "clip",
       startedAt,
+      captureMode: session.captureMode || "auto-vtt",
       plannedDurationMs: Number.isFinite(message.plannedDurationMs) ? message.plannedDurationMs : session.plannedDurationMs,
       videoEndTime,
       videoStartTime
@@ -474,6 +493,7 @@ async function startSubtitleClipRecording(message = {}) {
     startedAt,
     metadata: {
       mode: "clip",
+      captureMode: session.captureMode || "auto-vtt",
       videoEndTime,
       videoStartTime
     }
@@ -726,6 +746,7 @@ async function recordAudioRange(payload) {
   await chrome.storage.local.set({
     [SESSION_KEY]: {
       mode: "range",
+      captureMode: "manual-range",
       requestedAt: startedAt,
       startedAt,
       tabId: tab.id,
@@ -751,6 +772,7 @@ async function recordAudioRange(payload) {
     startedAt,
     metadata: {
       mode: "range",
+      captureMode: "manual-range",
       stopReason: "range",
       videoStartTime: startSeconds,
       videoEndTime: endSeconds
@@ -850,6 +872,7 @@ async function stopCurrentCapture(stopReason = "manual") {
     metadata: {
       durationMs: session.startedAt ? stoppedAt - session.startedAt : undefined,
       stopReason,
+      captureMode: session.captureMode || (session.mode === "range" ? "manual-range" : undefined),
       videoStartTime: session.videoStartTime,
       videoEndTime: session.videoEndTime ?? subtitles.videoTime
     }
@@ -924,19 +947,27 @@ async function createAnkiCardFromActiveTab(overrides = {}) {
     throw error;
   }
 
+  const createdAt = Date.now();
   await mergeLatestCapture({
     cardState: "created",
     captureStep: "created",
     noteId,
-    createdAt: Date.now()
+    createdAt
   });
   await addCaptureEvent("created", `Anki note created: ${noteId}.`, "success");
+  latestCapture = await getLatestCapture();
+  await saveLastUndoableCard({
+    noteId,
+    createdAt,
+    capture: latestCapture,
+    sentenceDraft: draft
+  });
   await addCardHistory({
     noteId,
     subtitle,
     pageTitle: latestCapture?.pageTitle || "",
     pageUrl: latestCapture?.pageUrl || "",
-    createdAt: Date.now()
+    createdAt
   });
   return { noteId };
 }
@@ -1034,6 +1065,7 @@ async function validateFieldMapping(settings) {
 
 async function handleAudioReady(message) {
   const filename = buildFileName("audio", "webm", message.startedAt);
+  const currentCapture = await getLatestCapture();
   await mergeLatestCapture({
     capturedAt: Date.now(),
     cardState: "review",
@@ -1045,8 +1077,11 @@ async function handleAudioReady(message) {
       durationMs: message.metadata?.durationMs,
       stopReason: message.metadata?.stopReason,
       videoStartTime: message.metadata?.videoStartTime,
-      videoEndTime: message.metadata?.videoEndTime
-    }
+      videoEndTime: message.metadata?.videoEndTime,
+      recordingStartedAt: message.metadata?.recordingStartedAt,
+      recordingStoppedAt: message.metadata?.recordingStoppedAt
+    },
+    captureMode: message.metadata?.captureMode || currentCapture?.captureMode || "auto-vtt"
   });
   await addCaptureEvent("review-ready", "Audio saved. Draft is ready to review.", "success");
 }
@@ -1307,7 +1342,8 @@ async function getActiveTabSubtitleContext() {
     previousSubtitle: context.previousSubtitle || "",
     nextSubtitle: context.nextSubtitle || "",
     subtitleCue: context.cue,
-    subtitleTimeline: context.timeline
+    subtitleTimeline: context.timeline,
+    currentVideoTime: context.videoTime
   };
 }
 
@@ -1365,6 +1401,11 @@ async function getCardHistory() {
   return data[CARD_HISTORY_KEY] || [];
 }
 
+async function getLastUndoableCard() {
+  const data = await chrome.storage.local.get(LAST_UNDOABLE_CARD_KEY);
+  return data[LAST_UNDOABLE_CARD_KEY] || null;
+}
+
 async function getMergedAnkiSettings(partialSettings) {
   const stored = await getAnkiSettings();
   return normalizeAnkiSettings({
@@ -1399,13 +1440,26 @@ async function saveSentenceDraft(draft) {
 }
 
 async function clearDraft() {
-  await chrome.storage.local.remove([CAPTURE_KEY, DRAFT_KEY]);
+  await chrome.storage.local.remove([CAPTURE_KEY, DRAFT_KEY, LAST_UNDOABLE_CARD_KEY]);
 }
 
 async function addCardHistory(entry) {
   const previous = await getCardHistory();
   await chrome.storage.local.set({
     [CARD_HISTORY_KEY]: [entry, ...previous].slice(0, 3)
+  });
+}
+
+async function saveLastUndoableCard(entry) {
+  await chrome.storage.local.set({
+    [LAST_UNDOABLE_CARD_KEY]: entry
+  });
+}
+
+async function removeCardHistoryItem(noteId) {
+  const previous = await getCardHistory();
+  await chrome.storage.local.set({
+    [CARD_HISTORY_KEY]: previous.filter((entry) => entry.noteId !== noteId)
   });
 }
 
@@ -1417,6 +1471,46 @@ async function openAnkiNote(noteId) {
   return invokeAnki("guiBrowse", {
     query: `nid:${noteId}`
   });
+}
+
+async function undoLastAnkiCard(noteIdOverride) {
+  const capture = await getLatestCapture();
+  const undoableCard = await getLastUndoableCard();
+  const noteId = Number(noteIdOverride || capture?.noteId || undoableCard?.noteId);
+  if (!noteId) {
+    throw new Error("No created Anki note is available to undo.");
+  }
+
+  await invokeAnki("deleteNotes", {
+    notes: [noteId]
+  });
+  await removeCardHistoryItem(noteId);
+
+  const snapshot = undoableCard?.noteId === noteId ? undoableCard : null;
+  const captureToRestore = snapshot?.capture || capture || {};
+  const restoredCapture = {
+    ...captureToRestore,
+    cardState: "review",
+    captureStep: "review-ready",
+    error: "",
+    captureEvents: [
+      buildCaptureEvent("review-ready", `Deleted Anki note ${noteId}. Draft restored for editing.`, "warning"),
+      ...((captureToRestore.captureEvents || []).filter((event) => event.step !== "created"))
+    ].slice(0, 8)
+  };
+  delete restoredCapture.noteId;
+  delete restoredCapture.createdAt;
+
+  const storageUpdate = {
+    [CAPTURE_KEY]: restoredCapture
+  };
+  if (snapshot?.sentenceDraft) {
+    storageUpdate[DRAFT_KEY] = normalizeSentenceDraft(snapshot.sentenceDraft);
+  }
+
+  await chrome.storage.local.set(storageUpdate);
+  await chrome.storage.local.remove(LAST_UNDOABLE_CARD_KEY);
+  return restoredCapture;
 }
 
 async function openSidePanelForActiveWindow() {
@@ -1478,6 +1572,7 @@ function normalizeAnkiSettings(value) {
   return {
     ...DEFAULT_ANKI_SETTINGS,
     ...value,
+    captureMode: ["auto-vtt", "manual-range", "dom-fallback"].includes(value.captureMode) ? value.captureMode : DEFAULT_ANKI_SETTINGS.captureMode,
     qualityRules: {
       ...DEFAULT_ANKI_SETTINGS.qualityRules,
       ...(value.qualityRules || {})

@@ -42,6 +42,7 @@ const QUALITY_PRESETS: Array<{
 ];
 
 const DEFAULT_SETTINGS: AnkiSettings = {
+  captureMode: "auto-vtt",
   endpoint: "http://127.0.0.1:8765",
   deckName: "Default",
   modelName: "Basic",
@@ -178,6 +179,15 @@ function OptionsApp() {
       <p className="muted">Configure AnkiConnect, the target deck, the note type, and which note fields receive subtitle, screenshot, and audio content.</p>
 
       <form className="form-grid" onSubmit={handleSubmit}>
+        <label>
+          <span>Capture mode</span>
+          <select value={settings.captureMode} onChange={(event) => setSettings({ ...settings, captureMode: event.target.value as AnkiSettings["captureMode"] })}>
+            <option value="auto-vtt">Auto by VTT</option>
+            <option value="manual-range">Manual range</option>
+            <option value="dom-fallback">DOM subtitle fallback</option>
+          </select>
+        </label>
+
         <label>
           <span>AnkiConnect URL</span>
           <input value={settings.endpoint} onChange={(event) => setSettings({ ...settings, endpoint: event.target.value })} />

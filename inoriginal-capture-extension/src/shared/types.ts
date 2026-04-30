@@ -23,6 +23,7 @@ export type QualityRules = {
 };
 
 export type AnkiSettings = {
+  captureMode: "auto-vtt" | "manual-range" | "dom-fallback";
   endpoint: string;
   deckName: string;
   modelName: string;
@@ -60,7 +61,11 @@ export type CaptureData = {
     stopReason?: "subtitle-change" | "manual" | "max-duration" | "range" | "cue-end";
     videoStartTime?: number;
     videoEndTime?: number;
+    recordingStartedAt?: number;
+    recordingStoppedAt?: number;
   };
+  captureMode?: "auto-vtt" | "manual-range" | "dom-fallback";
+  currentVideoTime?: number;
   cardState?: "capturing" | "review" | "created";
   captureStep?: "idle" | "screenshot" | "rewinding" | "waiting-subtitle" | "recording-audio" | "stopping" | "review-ready" | "sending-anki" | "created" | "failed" | "cancelled";
   captureEvents?: Array<{

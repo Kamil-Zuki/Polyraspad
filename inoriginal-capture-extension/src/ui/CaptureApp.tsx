@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getPopupContext, saveAnkiSettings, sendRuntimeMessage } from "../shared/chromeApi";
-import type { CaptureData, FieldMapping, PopupContext, SentenceDraft } from "../shared/types";
+import type { AnkiSettings, CaptureData, FieldMapping, PopupContext, SentenceDraft } from "../shared/types";
 import "./styles.css";
 
 type CaptureAppProps = {
@@ -30,6 +30,12 @@ type CardQuality = {
   nextAction: SmartAction;
   score: number;
   status: "Blocked" | "Needs review" | "Ready";
+};
+type HealthIssue = {
+  detail: string;
+  fix: string;
+  title: string;
+  tone: "error" | "warning" | "info";
 };
 
 export function CaptureApp({ mode }: CaptureAppProps) {
@@ -356,6 +362,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       return;
     }
 
+    const plannedDuration = getPlannedAudioDuration(context?.capture);
+    const effectiveDuration = getEffectiveAudioDuration(context?.capture, audioDuration);
+    if (plannedDuration && effectiveDuration && effectiveDuration < plannedDuration * 0.65) {
+      setShowAudioAdvanced(true);
+      setMessage(`Audio looks too short (${effectiveDuration.toFixed(1)}s vs planned ${plannedDuration.toFixed(1)}s). Re-record selected range before sending.`);
+      return;
+    }
+
     let finalTranslation = translation;
     if (context?.settings.translationMode === "before-send" && !finalTranslation.trim()) {
       const translatedText = await translateSubtitle({ silent: true });
@@ -674,6 +688,33 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setMessage(response.ok ? "Opened in Anki." : response.error || "Could not open Anki.");
   }
 
+  async function undoLastCard() {
+    const noteId = context?.capture?.noteId;
+    if (!noteId) {
+      setMessage("No created Anki note is available to undo.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete Anki note ${noteId} and restore this draft for editing?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setMessage("Deleting last Anki card...");
+    const response = await sendRuntimeMessage({
+      type: "undo-last-anki-card",
+      noteId
+    });
+    if (!response.ok) {
+      setMessage(response.error || "Could not undo the last Anki card.");
+      return;
+    }
+
+    setFlowStatus("Ready to review");
+    setMessage("Last Anki card deleted. Draft restored for editing.");
+    await refresh(false);
+  }
+
   async function openSidePanel() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.windowId) {
@@ -698,6 +739,17 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     }
 
     await refresh(false);
+  }
+
+  async function copyDiagnostics() {
+    const report = buildDiagnosticsReport(capture, effectiveAudioDuration);
+    if (!report) {
+      setMessage("No diagnostics available yet.");
+      return;
+    }
+
+    await navigator.clipboard.writeText(report);
+    setMessage("Diagnostics copied.");
   }
 
   async function runSmartAction(action: SmartAction) {
@@ -760,6 +812,15 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     await refresh(false);
   }
 
+  async function updateCaptureMode(captureMode: AnkiSettings["captureMode"]) {
+    if (!context) {
+      return;
+    }
+
+    const settings = await saveAnkiSettings({ captureMode });
+    setContext({ ...context, settings });
+  }
+
   async function updateFieldMapping(key: keyof FieldMapping, value: string) {
     if (!context) {
       return;
@@ -791,6 +852,9 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const normalizedAudioRangeEnd = effectiveAudioDuration
     ? Math.min(audioRangeEnd || effectiveAudioDuration, effectiveAudioDuration)
     : audioRangeEnd;
+  const plannedAudioDuration = getPlannedAudioDuration(capture);
+  const audioHealthIssues = capture ? buildCaptureHealthIssues(capture, effectiveAudioDuration, plannedAudioDuration) : [];
+  const blockingAudioIssue = audioHealthIssues.find((issue) => issue.tone === "error" && /Audio|Recorder|range/i.test(issue.title));
 
   if (mode === "popup") {
     return (
@@ -805,6 +869,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
         <p className="subtitle subtitle--current quick-subtitle">{capture?.subtitle || "No current subtitle yet."}</p>
         <CardQualityMini quality={cardQuality} />
+        <CaptureModeSelect mode={context?.settings.captureMode || "auto-vtt"} onChange={updateCaptureMode} compact />
 
         {capture?.audio?.dataUrl && (
           <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
@@ -835,6 +900,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
         </div>
         <div className="hero-actions">
           <StatusPill status={flowStatus} />
+          <CaptureModeSelect mode={context?.settings.captureMode || "auto-vtt"} onChange={updateCaptureMode} />
           <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture</button>
           {canStopRecording && <button className="secondary ghost-button" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary ghost-button" onClick={cancelCapture}>Cancel</button>}
@@ -852,6 +918,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <p className="subtitle subtitle--current subtitle--hero">{capture?.subtitle || "No current subtitle yet."}</p>
           <p className="subtitle subtitle--muted subtitle--context">{capture?.nextSubtitle || "No next subtitle."}</p>
           <TimelineReview capture={capture} onSelect={selectSubtitleCue} />
+          <CaptureDiagnostics capture={capture} effectiveAudioDuration={effectiveAudioDuration} onCopy={copyDiagnostics} />
           <CaptureTimeline capture={capture} />
         </section>
 
@@ -881,6 +948,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                   setAudioDuration(nextDuration);
                 }} />
                 <p className="status">{formatAudioStatus(capture, effectiveAudioDuration)}</p>
+                {blockingAudioIssue && (
+                  <AudioQualityGuard
+                    issue={blockingAudioIssue}
+                    disabled={isRecording || capture.audio.videoStartTime === undefined}
+                    onRepair={recaptureSelectedAudioRange}
+                    onSwitchMode={() => updateCaptureMode("manual-range")}
+                  />
+                )}
                 {effectiveAudioDuration && (
                   <div className="range-editor">
                     <div>
@@ -900,7 +975,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
                         disabled={isRecording || capture.audio.videoStartTime === undefined}
                         onClick={recaptureSelectedAudioRange}
                       >
-                        Re-record clean range
+                        Re-record selected range
                       </button>
                       <button className="secondary inline-action" onClick={() => setShowAudioAdvanced(!showAudioAdvanced)}>
                         {showAudioAdvanced ? "Hide manual controls" : "Adjust manually"}
@@ -1077,6 +1152,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
             <div className="created-actions">
               <span className="created-label">Card created</span>
               <button className="secondary" onClick={makeAnother}>Make another</button>
+              <button className="secondary danger-action" onClick={undoLastCard}>Undo last card</button>
               <button className="secondary" onClick={openInAnki}>Open in Anki</button>
             </div>
           ) : (
@@ -1154,6 +1230,133 @@ function TimelineReview({ capture, onSelect }: { capture?: CaptureData; onSelect
             <span>{cue.text}</span>
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function CaptureDiagnostics({
+  capture,
+  effectiveAudioDuration,
+  onCopy
+}: {
+  capture?: CaptureData;
+  effectiveAudioDuration: number | null;
+  onCopy: () => void;
+}) {
+  if (!capture) {
+    return null;
+  }
+
+  const cue = capture.subtitleCue;
+  const audio = capture.audio;
+  const plannedDuration = getPlannedAudioDuration(capture);
+  const timelineMode = cue ? "VTT cue-aware" : capture.subtitleTimeline?.cues?.length ? "VTT loaded" : "DOM fallback";
+  const healthIssues = buildCaptureHealthIssues(capture, effectiveAudioDuration, plannedDuration);
+  const rows = [
+    ["Capture mode", formatCaptureMode(capture.captureMode)],
+    ["Mode", timelineMode],
+    ["Step", capture.captureStep || "unknown"],
+    ["Stop reason", audio?.stopReason || "not recorded"],
+    ["VTT source", capture.subtitleTimeline?.sourceLabel || "not loaded"],
+    ["Cue", cue ? `#${cue.index} ${formatCueTime(cue.start)} - ${formatCueTime(cue.end)}` : "none"],
+    ["Video now", capture.currentVideoTime !== undefined ? formatSecondsForUi(capture.currentVideoTime) : "unknown"],
+    ["Recording started", audio?.recordingStartedAt ? new Date(audio.recordingStartedAt).toLocaleTimeString() : "none"],
+    ["Recording stopped", audio?.recordingStoppedAt ? new Date(audio.recordingStoppedAt).toLocaleTimeString() : "none"],
+    ["Planned audio", plannedDuration !== null ? `${formatSecondsForUi(audio?.videoStartTime || 0)} - ${formatSecondsForUi(audio?.videoEndTime || 0)} (${plannedDuration.toFixed(2)}s)` : "none"],
+    ["Recorder metadata", audio?.durationMs ? `${(audio.durationMs / 1000).toFixed(2)}s` : "none"],
+    ["Decoded audio", effectiveAudioDuration ? `${effectiveAudioDuration.toFixed(2)}s` : "not decoded"],
+    ["Audio file", audio?.filename || "none"],
+    ["Timeline cues", capture.subtitleTimeline?.cues?.length ? `${capture.subtitleTimeline.cues.length} visible` : "none"],
+    ["Error", capture.error || "none"]
+  ];
+
+  return (
+    <details className="diagnostics-panel" open={healthIssues.length > 0}>
+      <summary>
+        <span>Capture diagnostics</span>
+        <button className="secondary inline-action" onClick={(event) => {
+          event.preventDefault();
+          onCopy();
+        }} type="button">
+          Copy debug report
+        </button>
+      </summary>
+      <div className="diagnostics-health">
+        {healthIssues.length === 0 ? (
+          <div className="health-issue health-issue--ok">
+            <strong>Capture health looks good</strong>
+            <p>No obvious timing or metadata issues detected.</p>
+          </div>
+        ) : healthIssues.map((issue) => (
+          <div className={`health-issue health-issue--${issue.tone}`} key={`${issue.tone}-${issue.title}`}>
+            <strong>{issue.title}</strong>
+            <p>{issue.detail}</p>
+            <small>{issue.fix}</small>
+          </div>
+        ))}
+      </div>
+      <div className="diagnostics-grid">
+        {rows.map(([label, value]) => (
+          <div className="diagnostics-row" key={label}>
+            <span>{label}</span>
+            <p>{value}</p>
+          </div>
+        ))}
+      </div>
+      {capture.subtitleTimeline?.sourceUrl && (
+        <p className="diagnostics-url">{capture.subtitleTimeline.sourceUrl}</p>
+      )}
+    </details>
+  );
+}
+
+function CaptureModeSelect({
+  compact = false,
+  mode,
+  onChange
+}: {
+  compact?: boolean;
+  mode: AnkiSettings["captureMode"];
+  onChange: (mode: AnkiSettings["captureMode"]) => void;
+}) {
+  return (
+    <label className={compact ? "capture-mode capture-mode--compact" : "capture-mode"}>
+      <span>Capture mode</span>
+      <select value={mode} onChange={(event) => onChange(event.target.value as AnkiSettings["captureMode"])}>
+        <option value="auto-vtt">Auto by VTT</option>
+        <option value="manual-range">Manual range</option>
+        <option value="dom-fallback">DOM subtitle fallback</option>
+      </select>
+    </label>
+  );
+}
+
+function AudioQualityGuard({
+  disabled,
+  issue,
+  onRepair,
+  onSwitchMode
+}: {
+  disabled: boolean;
+  issue: HealthIssue;
+  onRepair: () => void;
+  onSwitchMode: () => void;
+}) {
+  return (
+    <div className="audio-guard">
+      <div>
+        <strong>Audio looks suspicious</strong>
+        <p>{issue.detail}</p>
+        <small>{issue.fix}</small>
+      </div>
+      <div className="audio-guard__actions">
+        <button className="primary-action inline-action" disabled={disabled} onClick={onRepair} type="button">
+          Re-record selected range
+        </button>
+        <button className="secondary inline-action" onClick={onSwitchMode} type="button">
+          Use manual range mode
+        </button>
       </div>
     </div>
   );
@@ -1511,6 +1714,8 @@ function buildCardQuality({
   const requireTranslation = qualityRules?.requireTranslation ?? false;
   const maxRecommendedAudioMs = qualityRules?.maxRecommendedAudioMs ?? 8500;
   const audioTooLong = Boolean(effectiveAudioDuration && effectiveAudioDuration * 1000 > maxRecommendedAudioMs);
+  const plannedDuration = getPlannedAudioDuration(capture);
+  const audioTooShort = Boolean(plannedDuration && effectiveAudioDuration && effectiveAudioDuration < plannedDuration * 0.65);
   const hasDuplicateWarning = Boolean(duplicateWarning);
   const captureAction: QualityItem["action"] = "capture";
   const settingsAction: QualityItem["action"] = "open-settings";
@@ -1554,6 +1759,7 @@ function buildCardQuality({
   const allRequired = [...required, ...requiredByRules];
 
   const risks: QualityItem[] = [
+    { action: "fix-audio", actionLabel: "Re-record", label: "Audio timing", done: !audioTooShort, detail: audioTooShort && plannedDuration && effectiveAudioDuration ? `Audio is ${effectiveAudioDuration.toFixed(1)}s, but the planned subtitle range is ${plannedDuration.toFixed(1)}s.` : "Audio timing matches the planned range.", tone: "risk" },
     { action: "fix-audio", actionLabel: "Fix audio", label: "Audio length", done: !audioTooLong, detail: audioTooLong ? `Clip is longer than ${(maxRecommendedAudioMs / 1000).toFixed(1)}s. Trim or re-record the clean range.` : "Clip length looks focused.", tone: "risk" },
     { action: "send", actionLabel: "Send anyway", label: "Duplicate", done: !hasDuplicateWarning, detail: hasDuplicateWarning ? "This expression may already exist in Anki." : "No duplicate warning for this draft.", tone: "risk" }
   ];
@@ -1564,7 +1770,8 @@ function buildCardQuality({
   const positiveItems = [...allRequired, ...recommended];
   const baseScore = Math.round((positiveItems.filter((item) => item.done).length / positiveItems.length) * 100);
   const score = Math.max(0, Math.min(100, baseScore - activeRisks.length * 8));
-  const status = requiredMissing.length > 0 ? "Blocked" : recommendedMissing.length > 0 || activeRisks.length > 0 ? "Needs review" : "Ready";
+  const hasCriticalAudioRisk = audioTooShort;
+  const status = requiredMissing.length > 0 || hasCriticalAudioRisk ? "Blocked" : recommendedMissing.length > 0 || activeRisks.length > 0 ? "Needs review" : "Ready";
   const qualityItems = [...allRequired, ...recommended, ...risks];
 
   if (isRecording) {
@@ -1605,6 +1812,10 @@ function buildCardQuality({
     nextAction = "translate";
     cta = "Translate";
     footerCopy = "Your quality rules require translation before sending.";
+  } else if (audioTooShort) {
+    nextAction = "fix-audio";
+    cta = "Re-record selected range";
+    footerCopy = "Audio looks too short for the subtitle range. Repair it before sending.";
   } else if (recommendedMissing.length > 0 || audioTooLong) {
     footerCopy = "Optional improvements are available, but this card can be sent.";
   }
@@ -1649,6 +1860,24 @@ function getEffectiveAudioDuration(capture: CaptureData | undefined, metadataDur
   }
 
   return null;
+}
+
+function getPlannedAudioDuration(capture: CaptureData | undefined) {
+  const videoStart = capture?.audio?.videoStartTime;
+  const videoEnd = capture?.audio?.videoEndTime;
+  return videoStart !== undefined && videoEnd !== undefined && videoEnd > videoStart
+    ? videoEnd - videoStart
+    : null;
+}
+
+function formatCaptureMode(mode?: AnkiSettings["captureMode"]) {
+  if (mode === "manual-range") {
+    return "Manual range";
+  }
+  if (mode === "dom-fallback") {
+    return "DOM subtitle fallback";
+  }
+  return "Auto by VTT";
 }
 
 function getAudioRangeStartMin(capture: CaptureData | undefined) {
@@ -1766,6 +1995,159 @@ function formatCueTime(value: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function formatSecondsForUi(value: number) {
+  return `${value.toFixed(2)}s`;
+}
+
+function buildCaptureHealthIssues(capture: CaptureData, effectiveAudioDuration: number | null, plannedDuration: number | null): HealthIssue[] {
+  const issues: HealthIssue[] = [];
+  const audio = capture.audio;
+  const cue = capture.subtitleCue;
+  const hasTimeline = Boolean(capture.subtitleTimeline?.cues?.length);
+
+  if (capture.error) {
+    issues.push({
+      detail: capture.error,
+      fix: "Try Capture again. If it repeats, copy diagnostics.",
+      title: "Capture reported an error",
+      tone: "error"
+    });
+  }
+
+  if (!hasTimeline) {
+    issues.push({
+      detail: "The extension could not load a VTT timeline and may rely on DOM subtitle changes.",
+      fix: "Reload the InOriginal page. If VTT still does not load, use DOM fallback diagnostics.",
+      title: "VTT timeline not loaded",
+      tone: "warning"
+    });
+  } else if (!cue) {
+    issues.push({
+      detail: "A timeline is visible, but no selected cue is attached to this capture.",
+      fix: "Click the desired subtitle in VTT timeline, then Capture again.",
+      title: "No selected VTT cue",
+      tone: "warning"
+    });
+  }
+
+  if (audio?.videoStartTime !== undefined && audio.videoEndTime !== undefined && audio.videoEndTime <= audio.videoStartTime) {
+    issues.push({
+      detail: `Audio range is invalid: ${formatSecondsForUi(audio.videoStartTime)} to ${formatSecondsForUi(audio.videoEndTime)}.`,
+      fix: "Recapture after selecting a VTT cue. If it repeats, copy diagnostics.",
+      title: "Invalid audio range",
+      tone: "error"
+    });
+  }
+
+  if (cue && cue.end - cue.start < 0.8) {
+    issues.push({
+      detail: `The selected VTT cue is very short: ${(cue.end - cue.start).toFixed(2)}s.`,
+      fix: "This is okay if the line is short. Use audio trim/range controls if the clip needs more context.",
+      title: "Very short subtitle cue",
+      tone: "info"
+    });
+  }
+
+  if (audio?.dataUrl && !audio.durationMs) {
+    issues.push({
+      detail: "The audio file exists, but recorder duration metadata is missing.",
+      fix: "Play the audio preview. If it sounds wrong, recapture and copy diagnostics.",
+      title: "Missing recorder duration",
+      tone: "warning"
+    });
+  }
+
+  if (audio?.dataUrl && !effectiveAudioDuration) {
+    issues.push({
+      detail: "The audio file exists, but the browser has not decoded its duration yet.",
+      fix: "Wait for the audio preview to load, or play it once.",
+      title: "Decoded duration unavailable",
+      tone: "info"
+    });
+  }
+
+  if (plannedDuration && effectiveAudioDuration && effectiveAudioDuration < plannedDuration * 0.65) {
+    issues.push({
+      detail: `Decoded audio is ${effectiveAudioDuration.toFixed(2)}s, planned range was ${plannedDuration.toFixed(2)}s.`,
+      fix: "Recapture. If it repeats, the recorder is stopping early; copy diagnostics.",
+      title: "Audio shorter than planned",
+      tone: "error"
+    });
+  }
+
+  if (plannedDuration && audio?.durationMs && audio.durationMs / 1000 < plannedDuration * 0.65) {
+    issues.push({
+      detail: `Recorder metadata is ${(audio.durationMs / 1000).toFixed(2)}s, planned range was ${plannedDuration.toFixed(2)}s.`,
+      fix: "Recapture after reloading the page. If it repeats, copy diagnostics.",
+      title: "Recorder stopped early",
+      tone: "error"
+    });
+  }
+
+  if (audio?.stopReason && cue && audio.stopReason !== "cue-end" && audio.stopReason !== "range") {
+    issues.push({
+      detail: `Stop reason was "${audio.stopReason}" even though a VTT cue was selected.`,
+      fix: "DOM fallback or manual stop may have interrupted capture. Recapture and inspect events.",
+      title: "Unexpected stop reason",
+      tone: "warning"
+    });
+  }
+
+  return issues;
+}
+
+function buildDiagnosticsReport(capture: CaptureData | undefined, effectiveAudioDuration: number | null) {
+  if (!capture) {
+    return "";
+  }
+
+  const audio = capture.audio;
+  const cue = capture.subtitleCue;
+  const plannedDuration = audio?.videoStartTime !== undefined && audio.videoEndTime !== undefined
+    ? Math.max(0, audio.videoEndTime - audio.videoStartTime)
+    : null;
+  const healthIssues = buildCaptureHealthIssues(capture, effectiveAudioDuration, plannedDuration);
+  const lines = [
+    "InOriginal Capture Diagnostics",
+    `Generated: ${new Date().toISOString()}`,
+    `Page: ${capture.pageTitle || ""}`,
+    `URL: ${capture.pageUrl || ""}`,
+    `Capture step: ${capture.captureStep || "unknown"}`,
+    `Card state: ${capture.cardState || "unknown"}`,
+    `Capture mode: ${formatCaptureMode(capture.captureMode)}`,
+    `Subtitle: ${capture.subtitle || ""}`,
+    `Previous: ${capture.previousSubtitle || ""}`,
+    `Next: ${capture.nextSubtitle || ""}`,
+    `Timeline mode: ${cue ? "VTT cue-aware" : capture.subtitleTimeline?.cues?.length ? "VTT loaded" : "DOM fallback"}`,
+    `VTT label: ${capture.subtitleTimeline?.sourceLabel || ""}`,
+    `VTT URL: ${capture.subtitleTimeline?.sourceUrl || ""}`,
+    `Cue index: ${cue?.index ?? ""}`,
+    `Cue start: ${cue?.start ?? ""}`,
+    `Cue end: ${cue?.end ?? ""}`,
+    `Current video time: ${capture.currentVideoTime ?? ""}`,
+    `Audio filename: ${audio?.filename || ""}`,
+    `Stop reason: ${audio?.stopReason || ""}`,
+    `Video start: ${audio?.videoStartTime ?? ""}`,
+    `Video end: ${audio?.videoEndTime ?? ""}`,
+    `Planned duration: ${plannedDuration ?? ""}`,
+    `Recorder durationMs: ${audio?.durationMs ?? ""}`,
+    `Recording started at: ${audio?.recordingStartedAt ?? ""}`,
+    `Recording stopped at: ${audio?.recordingStoppedAt ?? ""}`,
+    `Decoded audio seconds: ${effectiveAudioDuration ?? ""}`,
+    `Error: ${capture.error || ""}`,
+    "",
+    "Health:",
+    ...(healthIssues.length
+      ? healthIssues.map((issue) => `[${issue.tone}] ${issue.title}: ${issue.detail} Fix: ${issue.fix}`)
+      : ["No obvious timing or metadata issues detected."]),
+    "",
+    "Events:",
+    ...(capture.captureEvents || []).map((event) => `${new Date(event.at).toISOString()} [${event.level}] ${event.step}: ${event.message}`)
+  ];
+
+  return lines.join("\n");
 }
 
 function canSendToAnki(context: PopupContext | null, expression: string) {
