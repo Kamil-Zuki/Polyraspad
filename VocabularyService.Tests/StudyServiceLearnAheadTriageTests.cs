@@ -20,8 +20,10 @@ namespace VocabularyService.Tests;
 /// </summary>
 public class StudyServiceLearnAheadTriageTests
 {
-    [Fact]
-    public async Task StartStudySessionAsync_Should_IncludeLearningCard_When_DueIn5Minutes()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public async Task StartStudySessionAsync_Should_IncludeLearningOrRelearningCard_When_DueIn5Minutes(short state)
     {
         // Arrange
         var dbName = Guid.NewGuid().ToString("N");
@@ -88,7 +90,7 @@ public class StudyServiceLearnAheadTriageTests
                 UserId = userId,
                 CardId = cardId,
                 ProjectId = projectId,
-                State = 1, // LEARNING
+                State = state,
                 Step = 0,
                 Stability = 0,
                 Difficulty = 0,

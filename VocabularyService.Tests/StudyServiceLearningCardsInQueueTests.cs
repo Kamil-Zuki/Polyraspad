@@ -19,8 +19,10 @@ namespace VocabularyService.Tests;
 /// </summary>
 public class StudyServiceLearningCardsInQueueTests
 {
-    [Fact]
-    public async Task GetNextCard_Should_ReturnCard_When_DeckHasLearningCardDueNow()
+    [Theory]
+    [InlineData(1, "LEARNING")]
+    [InlineData(3, "RELEARNING")]
+    public async Task GetNextCard_Should_ReturnCard_When_DeckHasLearningOrRelearningCardDueNow(short state, string expectedState)
     {
         var dbName = Guid.NewGuid().ToString("N");
         var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
@@ -84,7 +86,7 @@ public class StudyServiceLearningCardsInQueueTests
                 UserId = userId,
                 CardId = cardId,
                 ProjectId = projectId,
-                State = 1, // LEARNING
+                State = state,
                 Step = 0,
                 Stability = 0,
                 Difficulty = 0,
@@ -124,13 +126,24 @@ public class StudyServiceLearningCardsInQueueTests
             mediaServiceMock.Object,
             Mock.Of<ILogger<CardService>>());
 
+        var fsrsMock = new Mock<IFsrsScheduler>();
+        fsrsMock
+            .Setup(f => f.GetNextStateAsync(It.IsAny<UserCardProgress>(), It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<FsrsSettings?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserCardProgress progress, int _, DateTime reviewAt, int _, FsrsSettings? _, CancellationToken _) =>
+                new FsrsNextState(
+                    Stability: progress.Stability,
+                    Difficulty: progress.Difficulty,
+                    Due: reviewAt.AddMinutes(10),
+                    State: progress.State,
+                    Step: progress.Step));
+
         var sut = new StudyService(
             actContext,
             Mock.Of<ILogger<StudyService>>(),
             cardService,
             Mock.Of<IDeckService>(),
             userSettingsMock.Object,
-            Mock.Of<IFsrsScheduler>(),
+            fsrsMock.Object,
             Mock.Of<IAnswerValidationService>(),
             mediaServiceMock.Object,
             RedisTestHelper.CreateConnectionMultiplexer());
@@ -139,13 +152,13 @@ public class StudyServiceLearningCardsInQueueTests
         var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);
         session.Should().NotBeNull();
         session.Id.Should().NotBeEmpty();
-        session.QueueStats.Learning.Should().Be(1, "в очереди должна быть одна LEARNING-карточка");
+        session.QueueStats.Learning.Should().Be(1, "в очереди должна быть одна LEARNING/RELEARNING-карточка");
 
         // Следующая карточка должна быть возвращена, а не "сессия завершена"
         var nextCard = await sut.GetNextCardAsync(session.Id, userId, CancellationToken.None);
         nextCard.Should().NotBeNull("при наличии LEARNING-карточки GetNextCard не должен возвращать null");
         nextCard!.Id.Should().Be(cardId);
-        nextCard.SrsState.State.Should().Be("LEARNING");
+        nextCard.SrsState.State.Should().Be(expectedState);
     }
 
     private sealed class TestVocabularyServiceContext : VocabularyServiceContext

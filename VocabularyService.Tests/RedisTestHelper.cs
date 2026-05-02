@@ -9,6 +9,7 @@ internal static class RedisTestHelper
     {
         var lists = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var sets = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var hashes = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
 
         var databaseMock = new Mock<IDatabase>(MockBehavior.Strict);
 
@@ -111,6 +112,34 @@ internal static class RedisTestHelper
             });
 
         databaseMock
+            .Setup(db => db.HashGetAsync(
+                It.IsAny<RedisKey>(),
+                It.IsAny<RedisValue>(),
+                It.IsAny<CommandFlags>()))
+            .ReturnsAsync((RedisKey key, RedisValue field, CommandFlags _) =>
+            {
+                var hash = GetOrCreateHash(hashes, key!);
+                return hash.TryGetValue(field.ToString(), out var value)
+                    ? (RedisValue)value
+                    : RedisValue.Null;
+            });
+
+        databaseMock
+            .Setup(db => db.HashSetAsync(
+                It.IsAny<RedisKey>(),
+                It.IsAny<RedisValue>(),
+                It.IsAny<RedisValue>(),
+                It.IsAny<When>(),
+                It.IsAny<CommandFlags>()))
+            .ReturnsAsync((RedisKey key, RedisValue field, RedisValue value, When _, CommandFlags _) =>
+            {
+                var hash = GetOrCreateHash(hashes, key!);
+                var isNew = !hash.ContainsKey(field.ToString());
+                hash[field.ToString()] = value.ToString();
+                return isNew;
+            });
+
+        databaseMock
             .Setup(db => db.KeyExpireAsync(
                 It.IsAny<RedisKey>(),
                 It.IsAny<TimeSpan?>(),
@@ -148,5 +177,19 @@ internal static class RedisTestHelper
         }
 
         return set;
+    }
+
+    private static Dictionary<string, string> GetOrCreateHash(
+        Dictionary<string, Dictionary<string, string>> storage,
+        RedisKey key)
+    {
+        var normalizedKey = key.ToString();
+        if (!storage.TryGetValue(normalizedKey, out var hash))
+        {
+            hash = new Dictionary<string, string>(StringComparer.Ordinal);
+            storage[normalizedKey] = hash;
+        }
+
+        return hash;
     }
 }

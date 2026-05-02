@@ -137,7 +137,6 @@ services:
       ConnectionStrings__Redis: "redis:6379"
       Inclusive__GrpcAddress: "http://inclusive:40051"
       Media__GrpcAddress: "http://media-service:5121"
-      Inclusive__UseForFsrs: "true"
       DOTNET_RUNNING_IN_CONTAINER: "true"
 
   media-service:
