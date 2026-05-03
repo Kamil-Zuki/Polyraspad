@@ -88,6 +88,9 @@ services:
     build:
       context: ./authorization-module
       dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_10_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_10_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
     restart: unless-stopped
     networks:
       - backend
@@ -117,6 +120,9 @@ services:
     build:
       context: ./VocabularyService
       dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_8_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:8.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_8_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:8.0}
     restart: unless-stopped
     networks:
       - backend
@@ -144,6 +150,9 @@ services:
     build:
       context: ./MediaService
       dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_8_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:8.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_8_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:8.0}
     restart: unless-stopped
     networks:
       - backend
@@ -170,6 +179,9 @@ services:
     build:
       context: ./AggregatorService
       dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_10_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_10_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
     restart: unless-stopped
     ports:
       - "5000:5206"

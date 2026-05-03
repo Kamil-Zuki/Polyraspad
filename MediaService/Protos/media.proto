@@ -92,6 +92,7 @@ message ReaderLibraryBook {
   string owner_user_id = 12;
   string owner_user_name = 13;
   string owner_email = 14;
+  int32 last_page_number = 15;
 }
 
 message ReaderCollectionCollaborator {

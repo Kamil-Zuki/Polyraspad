@@ -7,6 +7,7 @@ public sealed class ReaderLibraryBookRecord
     public string Title { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
     public int? PageCount { get; set; }
+    public int? LastPageNumber { get; set; }
     public string UploadedAt { get; set; } = string.Empty;
     public string? LastOpenedAt { get; set; }
     public string? CollectionId { get; set; }

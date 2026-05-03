@@ -25,6 +25,10 @@
 - Этап 2 завершён: `AnalyzeText` и frontend fallback работают по real terms, reader UI не показывает lemma, known percentage считается по уникальным real terms.
 - Этап 3 завершён: reader actions могут менять статус term без карточки, создание LingQ и карточки остаются разделёнными действиями, дубликаты ищутся по точной нормализованной форме/фразе.
 - Этап 3.5 завершён: карточки связаны с `ProjectTerm` через `Card.ProjectTermId`, legacy `ProjectLemma`/`ILemmaService`/`LemmaService` удалены из runtime-кода, `lemma` удалена из reader text-token API, статистика переименована на terms.
+- Этап 4 завершён: reader inspector теперь term-first; `Create LingQ`, `Known`, `Ignore` меняют статус term без создания карточки; карточка остаётся отдельным SRS-действием; добавлены counters текущей страницы: new terms, LingQs, known %, review.
+- Этап 5 завершён: reader поддерживает phrase LingQ через Shift+click по соседним словам, отправляет `type: PHRASE` в term API, сохраняет фразу с meaning/context и подсвечивает созданную phrase поверх отдельных word statuses.
+- Этап 5.5 завершён: заложен Content & Immersion Foundation — добавлены display modes `Learning`/`Focus`/`Clean`, progress bar, сохранение `lastPageNumber` для PDF-книг, Continue Reading и sentence highlight при выборе term/phrase.
+- Этап 5.6 завершён: добавлен Sentence UX — выбранное предложение можно перевести через integration translator proxy и сохранить в deck как sentence card с текущим term/phrase и source context.
 
 ## Цель
 
