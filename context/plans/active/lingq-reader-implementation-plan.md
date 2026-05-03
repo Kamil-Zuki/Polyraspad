@@ -2,6 +2,30 @@
 
 Дата: 2026-05-02
 
+## Статус выполнения
+
+Обновлено 2026-05-03:
+
+- добавлены backend-модели `ProjectTerm` и `UserTermStatus`, EF-конфигурация и миграция;
+- добавлен `TermService` для нормализации real terms, создания term/status без карточки и получения статусов по списку форм;
+- `VocabularyService.Services.TextService` переведён с lemma/status lookup на `ProjectTerm` + `UserTermStatus`;
+- `AnalyzeText` теперь возвращает `termText`; поле `lemma` удалено из нового token API и считает unique/known по реальным формам;
+- frontend reader fallback больше не создаёт `lemma`, UI reader больше не показывает lemma labels;
+- добавлен Aggregator REST endpoint `/api/text/analyze`, который проксирует reader-анализ в VocabularyService TextService;
+- новые `CreateCard`, `CaptureCard` и `BulkCreateCards` создают/переиспользуют `ProjectTerm`, ставят `UserTermStatus = LINGQ` и заполняют `Card.ProjectTermId`;
+- duplicate check для карточек использует точное нормализованное `targetWord`, поэтому `go` и `went` не блокируют друг друга;
+- добавлены regression tests для `sleep`/`slept`, точных дублей карточек и reader fallback без lemma.
+- добавлен gRPC/REST API для LingQ-действий с terms: `CreateOrUpdateTerm`, `MarkTermKnown`, `IgnoreTerm`, `BulkMarkKnown`, `GetTermDetails`, `SearchTermDuplicates`;
+- добавлен frontend `TermClient` и типы DTO для term actions;
+- восстановлена совместимость `PublishedDeckDto` в proto после синхронизации контрактов Aggregator/VocabularyService.
+
+Итог по этапам:
+
+- Этап 1 завершён: модель, миграция/snapshot, создание term/status без карточки и lookup статусов по `termText` реализованы.
+- Этап 2 завершён: `AnalyzeText` и frontend fallback работают по real terms, reader UI не показывает lemma, known percentage считается по уникальным real terms.
+- Этап 3 завершён: reader actions могут менять статус term без карточки, создание LingQ и карточки остаются разделёнными действиями, дубликаты ищутся по точной нормализованной форме/фразе.
+- Этап 3.5 завершён: карточки связаны с `ProjectTerm` через `Card.ProjectTermId`, legacy `ProjectLemma`/`ILemmaService`/`LemmaService` удалены из runtime-кода, `lemma` удалена из reader text-token API, статистика переименована на terms.
+
 ## Цель
 
 Перевести обучение в Library/Reader/Card creation с лемматизированной модели на модель реальных форм и фраз, как в LingQ:
@@ -147,6 +171,26 @@
 - создание LingQ и создание карточки могут быть раздельными действиями;
 - дубликаты ищутся по точной форме/фразе, не по лемме.
 
+## Этап 3.5. Единая экосистема terms и карточек
+
+### Что делаем
+
+Связываем карточки с LingQ-моделью напрямую:
+
+- `Card.ProjectTermId` становится связью карточки с real term/phrase;
+- создание карточки находит или создаёт `ProjectTerm` и переводит `UserTermStatus` в `LINGQ`;
+- study sibling burying группирует карточки по `ProjectTermId`, а не по lemma;
+- `ProjectLemma`, `Card.LemmaId`, `ILemmaService` и `LemmaService` удаляются из runtime-модели;
+- reader text-token API больше не содержит `lemma`;
+- пользовательские и frontend/API stats используют terms: `totalTerms`, `knownTerms`, `learningTerms`.
+
+### Критерии готовности
+
+- карточка и LingQ относятся к одному `ProjectTerm`;
+- LingQ может существовать без карточки, карточка является опциональным SRS-инструментом поверх term;
+- новая карточка не создаёт и не использует lemma data;
+- дубликаты и review работают по exact term/phrase;
+- в новом reader/card flow нет `lemma` как поля или UI-понятия.
 ## Этап 4. Reader как основной учебный экран
 
 ### Что делаем

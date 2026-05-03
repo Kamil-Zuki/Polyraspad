@@ -126,8 +126,8 @@ public class StudyServiceLearnAheadTriageTests
 
         var cardService = new CardService(
             actContext,
-            Mock.Of<ILemmaService>(),
             mediaServiceMock.Object,
+            new TermService(actContext),
             Mock.Of<ILogger<CardService>>());
 
         var sut = new StudyService(
@@ -162,3 +162,4 @@ public class StudyServiceLearnAheadTriageTests
         }
     }
 }
+

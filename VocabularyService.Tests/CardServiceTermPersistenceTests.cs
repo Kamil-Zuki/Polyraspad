@@ -11,10 +11,10 @@ using Xunit;
 
 namespace VocabularyService.Tests;
 
-public class CardServiceLemmaPersistenceTests
+public class CardServiceTermPersistenceTests
 {
     [Fact]
-    public async Task CreateCardAsync_WhenLemmaNeedsPersistedMainCard_ShouldBackfillMainCardAfterSave()
+    public async Task CreateCardAsync_ShouldAssignProjectTermToNewCards()
     {
         var dbName = Guid.NewGuid().ToString();
         var userId = Guid.NewGuid();
@@ -32,8 +32,8 @@ public class CardServiceLemmaPersistenceTests
         {
             var sut = new CardService(
                 actContext,
-                new PersistedMainCardLemmaService(actContext),
                 new StubMediaService(),
+                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
             createdCard = await sut.CreateCardAsync(new CreateCardDto
@@ -48,18 +48,18 @@ public class CardServiceLemmaPersistenceTests
 
         await using (var assertContext = CreateContext(dbName))
         {
-            var lemma = await assertContext.ProjectLemmas.AsNoTracking().SingleAsync();
             var deck = await assertContext.Decks.AsNoTracking().SingleAsync(d => d.Id == deckId);
             var card = await assertContext.Cards.AsNoTracking().SingleAsync(c => c.Id == createdCard.Id);
 
-            card.LemmaId.Should().Be(lemma.Id);
-            lemma.MainCardId.Should().Be(createdCard.Id);
+            card.ProjectTermId.Should().NotBeNull();
+            (await assertContext.ProjectTerms.AsNoTracking().CountAsync()).Should().Be(1);
+            (await assertContext.UserTermStatuses.AsNoTracking().CountAsync()).Should().Be(1);
             deck.CardCount.Should().Be(1);
         }
     }
 
     [Fact]
-    public async Task BulkCreateCardsAsync_WhenMultipleCardsShareNewLemma_ShouldPersistOnceAndBackfillFirstCard()
+    public async Task BulkCreateCardsAsync_ShouldAssignTermsToNewCards()
     {
         var dbName = Guid.NewGuid().ToString();
         var userId = Guid.NewGuid();
@@ -72,16 +72,15 @@ public class CardServiceLemmaPersistenceTests
             await arrangeContext.SaveChangesAsync();
         }
 
-        List<Card> createdCards;
         await using (var actContext = CreateContext(dbName))
         {
             var sut = new CardService(
                 actContext,
-                new PersistedMainCardLemmaService(actContext),
                 new StubMediaService(),
+                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
-            createdCards = await sut.BulkCreateCardsAsync(
+            await sut.BulkCreateCardsAsync(
                 userId,
                 deckId,
                 [
@@ -106,15 +105,68 @@ public class CardServiceLemmaPersistenceTests
 
         await using (var assertContext = CreateContext(dbName))
         {
-            var lemma = await assertContext.ProjectLemmas.AsNoTracking().SingleAsync();
             var deck = await assertContext.Decks.AsNoTracking().SingleAsync(d => d.Id == deckId);
             var cards = await assertContext.Cards.AsNoTracking().OrderBy(c => c.CreatedAt).ToListAsync();
 
             cards.Should().HaveCount(2);
-            cards.Select(card => card.LemmaId).Distinct().Should().ContainSingle().Which.Should().Be(lemma.Id);
-            lemma.MainCardId.Should().Be(createdCards[0].Id);
+            cards.Should().OnlyContain(card => card.ProjectTermId != null);
+            (await assertContext.ProjectTerms.AsNoTracking().CountAsync()).Should().Be(1);
+            (await assertContext.UserTermStatuses.AsNoTracking().CountAsync()).Should().Be(1);
             deck.CardCount.Should().Be(2);
         }
+    }
+
+    [Fact]
+    public async Task CheckDuplicatesAsync_UsesExactRealTermInsteadOfLemma()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var deckId = Guid.NewGuid();
+
+        await using (var arrangeContext = CreateContext(dbName))
+        {
+            ArrangeProjectAndDeck(arrangeContext, userId, projectId, deckId);
+            arrangeContext.Cards.Add(new Card
+            {
+                Id = Guid.NewGuid(),
+                DeckId = deckId,
+                CreatorId = userId,
+                Sentence = "I go home",
+                TargetWord = "go",
+                Translation = "идти",
+                TargetIndex = new TargetIndex { Start = 2, Len = 2 },
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await arrangeContext.SaveChangesAsync();
+        }
+
+        await using var actContext = CreateContext(dbName);
+        var sut = new CardService(
+            actContext,
+            new StubMediaService(),
+            new TermService(actContext),
+            NullLogger<CardService>.Instance);
+
+        var went = await sut.CheckDuplicatesAsync(
+            userId,
+            new CheckCardDuplicatesRequestDto
+            {
+                ProjectId = projectId,
+                TargetWord = "went"
+            });
+        var go = await sut.CheckDuplicatesAsync(
+            userId,
+            new CheckCardDuplicatesRequestDto
+            {
+                ProjectId = projectId,
+                TargetWord = "Go"
+            });
+
+        went.IsDuplicate.Should().BeFalse();
+        go.IsDuplicate.Should().BeTrue();
+        go.ExistingCards.Should().ContainSingle(card => card.TargetWord == "go");
     }
 
     private static VocabularyServiceContext CreateContext(string dbName)
@@ -188,57 +240,6 @@ public class CardServiceLemmaPersistenceTests
             Task.CompletedTask;
     }
 
-    private sealed class PersistedMainCardLemmaService(VocabularyServiceContext context) : ILemmaService
-    {
-        public string Normalize(string word) => word.Trim().ToLowerInvariant();
-
-        public async Task<ProjectLemma?> ResolveForCardAsync(
-            Guid projectId,
-            string targetWord,
-            Guid? mainCardId = null,
-            CancellationToken cancellationToken = default)
-        {
-            if (mainCardId.HasValue
-                && !await context.Cards.AnyAsync(card => card.Id == mainCardId.Value, cancellationToken))
-            {
-                throw new InvalidOperationException("Main card must be persisted before assigning it to a lemma.");
-            }
-
-            var lemmaText = Normalize(targetWord);
-            if (string.IsNullOrWhiteSpace(lemmaText))
-            {
-                return null;
-            }
-
-            var existing = context.ProjectLemmas.Local
-                .FirstOrDefault(lemma => lemma.ProjectId == projectId && lemma.Text == lemmaText)
-                ?? await context.ProjectLemmas.FirstOrDefaultAsync(
-                    lemma => lemma.ProjectId == projectId && lemma.Text == lemmaText,
-                    cancellationToken);
-
-            if (existing != null)
-            {
-                if (!existing.MainCardId.HasValue && mainCardId.HasValue)
-                {
-                    existing.MainCardId = mainCardId;
-                    existing.UpdatedAt = DateTime.UtcNow;
-                }
-
-                return existing;
-            }
-
-            var created = new ProjectLemma
-            {
-                Id = Guid.NewGuid(),
-                ProjectId = projectId,
-                Text = lemmaText,
-                Status = "LEARNING",
-                MainCardId = mainCardId,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            context.ProjectLemmas.Add(created);
-            return created;
-        }
-    }
 }
+
+

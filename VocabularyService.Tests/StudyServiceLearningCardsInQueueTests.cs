@@ -122,8 +122,8 @@ public class StudyServiceLearningCardsInQueueTests
 
         var cardService = new CardService(
             actContext,
-            Mock.Of<ILemmaService>(),
             mediaServiceMock.Object,
+            new TermService(actContext),
             Mock.Of<ILogger<CardService>>());
 
         var fsrsMock = new Mock<IFsrsScheduler>();
@@ -173,3 +173,4 @@ public class StudyServiceLearningCardsInQueueTests
         }
     }
 }
+

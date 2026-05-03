@@ -96,8 +96,8 @@ public class StudyServiceLearnAheadTests
 
         var cardService = new CardService(
             actContext,
-            Mock.Of<ILemmaService>(),
             mediaServiceMock.Object,
+            new TermService(actContext),
             Mock.Of<ILogger<CardService>>());
 
         var fsrsMock = new Mock<IFsrsScheduler>();
@@ -143,7 +143,7 @@ public class StudyServiceLearnAheadTests
     }
 
     [Fact]
-    public async Task GetNextCardAsync_DoesNotBurySameLearningCard_WhenLemmaWasAlreadySeen()
+    public async Task GetNextCardAsync_DoesNotBurySameLearningCard_WhenTermWasAlreadySeen()
     {
         var dbName = Guid.NewGuid().ToString("N");
         var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
@@ -154,7 +154,7 @@ public class StudyServiceLearnAheadTests
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
         var deckId = Guid.NewGuid();
-        var lemmaId = Guid.NewGuid();
+        var termId = Guid.NewGuid();
         var cardId = Guid.NewGuid();
         var now = DateTime.UtcNow;
 
@@ -188,12 +188,15 @@ public class StudyServiceLearnAheadTests
                 UpdatedAt = now
             });
 
-            arrangeContext.ProjectLemmas.Add(new ProjectLemma
+            arrangeContext.ProjectTerms.Add(new ProjectTerm
             {
-                Id = lemmaId,
+                Id = termId,
                 ProjectId = projectId,
                 Text = "test",
-                Status = "LEARNING",
+                NormalizedText = "test",
+                Type = TermService.WordType,
+                Language = "en",
+                CreatedAt = now,
                 UpdatedAt = now
             });
 
@@ -202,7 +205,7 @@ public class StudyServiceLearnAheadTests
                 Id = cardId,
                 DeckId = deckId,
                 CreatorId = userId,
-                LemmaId = lemmaId,
+                ProjectTermId = termId,
                 Sentence = "Test sentence",
                 Translation = "Test translation",
                 TargetWord = "Test",
@@ -234,8 +237,8 @@ public class StudyServiceLearnAheadTests
 
         var cardService = new CardService(
             actContext,
-            Mock.Of<ILemmaService>(),
             mediaServiceMock.Object,
+            new TermService(actContext),
             Mock.Of<ILogger<CardService>>());
 
         var fsrsMock = new Mock<IFsrsScheduler>();
@@ -285,3 +288,4 @@ public class StudyServiceLearnAheadTests
         }
     }
 }
+
