@@ -1,3 +1,7 @@
+# EF Core миграции применяются автоматически при старте контейнеров (после готовности postgres):
+# - authorization-module → Migrate() для БД auth-module (см. authorization-module.API/Program.cs).
+# - vocabulary-service → Migrate() для БД vocabulary_service (см. VocabularyService/Program.cs).
+# Базы создаёт скрипт docker/postgres/init/01-create-dbs.sql при первом запуске тома Postgres.
 services:
   postgres:
     container_name: postgres

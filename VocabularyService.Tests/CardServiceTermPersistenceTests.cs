@@ -32,8 +32,9 @@ public class CardServiceTermPersistenceTests
         {
             var sut = new CardService(
                 actContext,
+                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+                new TermService(actContext, NullLogger<TermService>.Instance),
                 new StubMediaService(),
-                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
             createdCard = await sut.CreateCardAsync(new CreateCardDto
@@ -76,8 +77,9 @@ public class CardServiceTermPersistenceTests
         {
             var sut = new CardService(
                 actContext,
+                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+                new TermService(actContext, NullLogger<TermService>.Instance),
                 new StubMediaService(),
-                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
             await sut.BulkCreateCardsAsync(
@@ -145,8 +147,9 @@ public class CardServiceTermPersistenceTests
         await using var actContext = CreateContext(dbName);
         var sut = new CardService(
             actContext,
+            new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+            new TermService(actContext, NullLogger<TermService>.Instance),
             new StubMediaService(),
-            new TermService(actContext),
             NullLogger<CardService>.Instance);
 
         var went = await sut.CheckDuplicatesAsync(

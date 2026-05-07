@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using StackExchange.Redis;
 using VocabularyService.Data;
@@ -126,8 +127,9 @@ public class StudyServiceLearnAheadTriageTests
 
         var cardService = new CardService(
             actContext,
+            new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+            new TermService(actContext, NullLogger<TermService>.Instance),
             mediaServiceMock.Object,
-            new TermService(actContext),
             Mock.Of<ILogger<CardService>>());
 
         var sut = new StudyService(

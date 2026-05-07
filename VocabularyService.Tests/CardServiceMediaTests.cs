@@ -36,8 +36,9 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
+                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+                new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
-                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
@@ -83,8 +84,9 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
+                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+                new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
-                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
@@ -132,8 +134,9 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
+                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+                new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
-                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dtos = new List<CreateCardDto>
@@ -211,8 +214,9 @@ public class CardServiceMediaTests
 
             var sut = new CardService(
                 actContext,
+                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
+                new TermService(actContext, NullLogger<TermService>.Instance),
                 mockStorage.Object,
-                new TermService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dto = new CaptureCardDto
