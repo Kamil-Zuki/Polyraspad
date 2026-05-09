@@ -7,7 +7,8 @@ const CARD_HISTORY_KEY = "cardHistory";
 const LAST_UNDOABLE_CARD_KEY = "lastUndoableCard";
 
 const DEFAULT_ANKI_SETTINGS = {
-  captureMode: "auto-vtt",
+  settingsVersion: 2,
+  captureMode: "dom-fallback",
   endpoint: "http://127.0.0.1:8765",
   deckName: "Default",
   modelName: "Basic",
@@ -334,17 +335,18 @@ async function captureSubtitleClip(options = {}) {
     await stopRecording(existingSession.tabId);
   }
 
+  const settings = await getAnkiSettings();
+  const captureMode = options.captureMode || settings.captureMode || "dom-fallback";
   const subtitleContext = await sendMessageToTab(tab.id, {
-    type: "get-current-subtitle-context"
+    type: "get-current-subtitle-context",
+    captureMode
   });
 
   if (!subtitleContext?.currentSubtitle) {
     throw new Error("No active subtitle found to capture.");
   }
 
-  const settings = await getAnkiSettings();
   const startedAt = Date.now();
-  const captureMode = options.captureMode || settings.captureMode || "auto-vtt";
   const selectedCue = captureMode === "dom-fallback" ? null : subtitleContext.cue;
   if (captureMode === "manual-range" && !selectedCue) {
     throw new Error("Manual range mode needs a VTT subtitle cue. Select a cue in the timeline or switch to DOM fallback.");
@@ -468,7 +470,7 @@ async function startSubtitleClipRecording(message = {}) {
       ...session,
       mode: "clip",
       startedAt,
-      captureMode: session.captureMode || "auto-vtt",
+      captureMode: session.captureMode || "dom-fallback",
       plannedDurationMs: Number.isFinite(message.plannedDurationMs) ? message.plannedDurationMs : session.plannedDurationMs,
       videoEndTime,
       videoStartTime
@@ -493,7 +495,7 @@ async function startSubtitleClipRecording(message = {}) {
     startedAt,
     metadata: {
       mode: "clip",
-      captureMode: session.captureMode || "auto-vtt",
+      captureMode: session.captureMode || "dom-fallback",
       videoEndTime,
       videoStartTime
     }
@@ -645,9 +647,14 @@ async function finalizeSubtitleClip(message) {
     : Number.isFinite(safeVideoStartTime)
       ? safeVideoStartTime + plannedDurationMs / 1000
       : undefined;
+  // Для режима next-cue-start и ручной остановки важнее фактическая длительность,
+  // иначе UI/диагностика показывают "план", который может отличаться от реального конца.
+  const effectiveDurationMs = Number.isFinite(safeVideoStartTime) && Number.isFinite(safeVideoEndTime)
+    ? Math.max(250, Math.round((safeVideoEndTime - safeVideoStartTime) * 1000))
+    : plannedDurationMs;
   const subtitleEntry = {
     atMs: 0,
-    endMs: plannedDurationMs,
+    endMs: effectiveDurationMs,
     sessionStartedAt: session.startedAt,
     text: subtitle
   };
@@ -687,6 +694,10 @@ async function finalizeSubtitleClip(message) {
       ? "Subtitle cue ended. Stopping audio and pausing video."
       : stopReason === "max-duration"
       ? "Max clip length reached. Stopping audio and pausing video."
+      : stopReason === "next-cue-start"
+      ? "Next subtitle cue started. Stopping audio and pausing video."
+      : stopReason === "subtitle-ended"
+      ? "Subtitle disappeared from the screen. Stopping audio and pausing video."
       : "Subtitle changed. Stopping audio and pausing video.",
     stopReason === "max-duration" ? "warning" : "info"
   );
@@ -700,7 +711,7 @@ async function finalizeSubtitleClip(message) {
     type: "stop-audio-recording",
     tabId: session.tabId,
     metadata: {
-      durationMs: plannedDurationMs,
+      durationMs: effectiveDurationMs,
       stopReason,
       videoStartTime: safeVideoStartTime,
       videoEndTime: safeVideoEndTime
@@ -1081,7 +1092,7 @@ async function handleAudioReady(message) {
       recordingStartedAt: message.metadata?.recordingStartedAt,
       recordingStoppedAt: message.metadata?.recordingStoppedAt
     },
-    captureMode: message.metadata?.captureMode || currentCapture?.captureMode || "auto-vtt"
+    captureMode: message.metadata?.captureMode || currentCapture?.captureMode || "dom-fallback"
   });
   await addCaptureEvent("review-ready", "Audio saved. Draft is ready to review.", "success");
 }
@@ -1569,10 +1580,19 @@ async function mergeLatestCapture(partialCapture) {
 }
 
 function normalizeAnkiSettings(value) {
+  const storedVersion = Number(value?.settingsVersion) || 0;
+  const storedCaptureMode = value?.captureMode;
+  const captureMode = ["auto-vtt", "manual-range", "dom-fallback"].includes(storedCaptureMode)
+    ? storedVersion < 2 && storedCaptureMode === "auto-vtt"
+      ? "dom-fallback"
+      : storedCaptureMode
+    : DEFAULT_ANKI_SETTINGS.captureMode;
+
   return {
     ...DEFAULT_ANKI_SETTINGS,
     ...value,
-    captureMode: ["auto-vtt", "manual-range", "dom-fallback"].includes(value.captureMode) ? value.captureMode : DEFAULT_ANKI_SETTINGS.captureMode,
+    settingsVersion: DEFAULT_ANKI_SETTINGS.settingsVersion,
+    captureMode,
     qualityRules: {
       ...DEFAULT_ANKI_SETTINGS.qualityRules,
       ...(value.qualityRules || {})

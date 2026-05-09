@@ -19,8 +19,21 @@
     lastText: "",
     clipMode: null,
     timeline: null,
-    timelinePromise: null
+    timelinePromise: null,
+    // Только URL страницы (path/query/hash). Не включать video.currentSrc: у HLS это часто blob:, меняется во время воспроизведения и ломает загрузку VTT и запись аудио.
+    timelinePageSignature: null
   };
+
+  /** Сброс кэша таймлайна при навигации без полной перезагрузки (другой сериал/эпизод). */
+  function clearSubtitleTimelineCache() {
+    state.timeline = null;
+    state.timelinePageSignature = null;
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("popstate", clearSubtitleTimelineCache);
+    window.addEventListener("hashchange", clearSubtitleTimelineCache);
+  }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "start-subtitle-capture") {
@@ -49,6 +62,11 @@
     }
 
     if (message?.type === "get-current-subtitle-context") {
+      if (message.captureMode === "dom-fallback") {
+        sendResponse(getDomSubtitleContext());
+        return;
+      }
+
       void getSubtitleContext()
         .then((context) => sendResponse(context))
         .catch(() => sendResponse(getDomSubtitleContext()));
@@ -56,7 +74,7 @@
     }
 
     if (message?.type === "start-subtitle-clip") {
-      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0, message.maxClipMs || 8000, message.cue || null, message.captureMode || "auto-vtt");
+      startSubtitleClip(message.startedAt, message.targetSubtitle, message.rewindMs || 0, message.maxClipMs || 8000, message.cue || null, message.captureMode || "dom-fallback");
       sendResponse({ ok: true });
       return;
     }
@@ -103,6 +121,9 @@
 
   function stopCapture(stoppedAt) {
     state.isRecording = false;
+    if (state.clipMode?.retryRecordingTimer) {
+      clearTimeout(state.clipMode.retryRecordingTimer);
+    }
     state.clipMode = null;
 
     if (state.observer) {
@@ -202,16 +223,28 @@
   }
 
   function findSubtitleSpan() {
-    return document.querySelector("#pjs_playerjs_subtitle > span");
+    // Прямой потомок или вложенный span (у плеера часто обёртка + стилизованный span с текстом)
+    return (
+      document.querySelector("#pjs_playerjs_subtitle span")
+      || document.querySelector("#pjs_playerjs_subtitle > span")
+    );
   }
 
   function normalizeText(value) {
-    return value.replace(/\s+/g, " ").trim();
+    return String(value || "")
+      .normalize("NFKC")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   function getCurrentSubtitle() {
     const element = findSubtitleSpan();
     return normalizeText(element?.textContent || "") || state.lastText || "";
+  }
+
+  function getDisplayedSubtitle() {
+    const element = findSubtitleSpan();
+    return normalizeText(element?.textContent || "");
   }
 
   async function getSubtitleContext() {
@@ -271,6 +304,10 @@
 
   async function startCueAwareSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue) {
     startCapture(startedAt);
+    const timeline = state.timeline;
+    const nextCue = timeline?.cues?.[cue.index + 1];
+    const nextCueStart = nextCue && Number.isFinite(nextCue.start) ? nextCue.start : null;
+
     state.clipMode = {
       active: true,
       cue,
@@ -280,7 +317,9 @@
       targetSubtitle,
       recordingRequested: true,
       recordingStarted: false,
-      forcedStart: true
+      forcedStart: true,
+      nextCueStart,
+      targetNormalized: normalizeText(targetSubtitle)
     };
 
     const mediaElement = getVideoElement();
@@ -297,6 +336,8 @@
     const maxEndSeconds = startSeconds + Math.max(0.5, Number(maxClipMs) || 8000) / 1000;
     const endSeconds = Math.min(naturalEndSeconds, maxEndSeconds);
     const plannedDurationMs = Math.max(minCueClipMs, Math.round((endSeconds - startSeconds) * 1000));
+    const safetyCapMs = Math.max(3000, Number(maxClipMs) || 8000);
+
     state.clipMode.plannedVideoStartTime = startSeconds;
     state.clipMode.plannedVideoEndTime = endSeconds;
     mediaElement.pause();
@@ -330,9 +371,50 @@
         }
 
         void mediaElement.play().catch(() => {});
+
+        // Остановка при начале следующей реплики:
+        // 1) по факту смены активного VTT cue (более надежно при дрейфе таймингов),
+        // 2) по времени nextCueStart как быстрый резерв.
+        state.clipPollTimer = window.setInterval(() => {
+          if (!state.clipMode?.active || !state.clipMode.cueAware) {
+            return;
+          }
+          const media = getVideoElement();
+          if (!media) {
+            return;
+          }
+          const t = media.currentTime;
+          const nextAt = state.clipMode.nextCueStart;
+          const activeCue = timeline?.cues?.find((item) => t >= item.start && t <= item.end + 0.03) || null;
+          if (activeCue && activeCue.index > cue.index) {
+            completeClipByCue(cue, "next-cue-start", getVideoTime());
+            return;
+          }
+          if (nextAt != null && t >= nextAt - 0.03) {
+            completeClipByCue(cue, "next-cue-start", getVideoTime());
+            return;
+          }
+          // Резерв по DOM только если в VTT нет следующего куя: иначе текст в DOM может быть многострочным блоком,
+          // а targetSubtitle — одна строка, и запись оборвётся сразу.
+          if (nextAt == null) {
+            const domNorm = normalizeText(findSubtitleSpan()?.textContent || "");
+            if (domNorm && domNorm !== state.clipMode.targetNormalized) {
+              completeClipByCue(cue, "subtitle-change", getVideoTime());
+            }
+          }
+        }, 85);
+
+        // Нет следующего куя — как раньше: обрезка по рассчитанному концу реплики
+        // Есть следующий — верхняя граница только safetyCap (если не сработала смена реплики)
+        const timerMs = nextCueStart != null ? safetyCapMs : plannedDurationMs;
+        const stopReason = nextCueStart != null ? "max-duration" : "cue-end";
+
         state.clipMaxTimer = window.setTimeout(() => {
-          completeClipByCue(cue, "cue-end");
-        }, plannedDurationMs);
+          if (!state.clipMode?.active) {
+            return;
+          }
+          completeClipByCue(cue, stopReason);
+        }, timerMs);
       }, recorderWarmupMs);
     });
   }
@@ -340,22 +422,39 @@
   function startDomSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs) {
     startCapture(startedAt);
     const rewound = rewindVideoPlayback(rewindMs);
+    const normalizedTarget = normalizeText(targetSubtitle);
     state.clipMode = {
       active: true,
       targetSubtitle,
+      targetNormalized: normalizedTarget,
+      targetWasVisible: false,
       recordingRequested: false,
       recordingStarted: false,
-      forcedStart: false
+      forcedStart: false,
+      recordingStartAttempts: 0
     };
 
-    maybeRequestClipRecording(getCurrentSubtitle());
+    maybeRequestClipRecording(getDisplayedSubtitle());
 
     state.clipPollTimer = window.setInterval(() => {
-      const currentText = getCurrentSubtitle();
-      if (currentText) {
-        maybeRequestClipRecording(currentText);
+      const displayedText = getDisplayedSubtitle();
+      const displayedNormalized = normalizeText(displayedText);
+
+      if (displayedNormalized === state.clipMode?.targetNormalized) {
+        state.clipMode.targetWasVisible = true;
+        maybeRequestClipRecording(displayedText);
       }
-      maybeCompleteClip(currentText, state.lastText);
+
+      // Для аудио важен не "последний известный текст", а реальный конец реплики на экране:
+      // как только текущий DOM-субтитр исчез или сменился после старта записи — останавливаем запись и player.
+      if (
+        state.clipMode?.recordingStarted
+        && state.clipMode.targetWasVisible
+        && displayedNormalized !== state.clipMode.targetNormalized
+      ) {
+        completeClip(displayedText, displayedNormalized ? "subtitle-change" : "subtitle-ended");
+        return;
+      }
     }, 100);
 
     state.clipFallbackTimer = window.setTimeout(() => {
@@ -376,7 +475,10 @@
     }, Math.max(3000, Number(maxClipMs) || 8000));
   }
 
-  function completeClipByCue(cue, stopReason) {
+  /**
+   * @param {number} [videoEndTimeOverride] — фактическое время остановки (следующая реплика / смена DOM)
+   */
+  function completeClipByCue(cue, stopReason, videoEndTimeOverride) {
     if (!state.clipMode?.active) {
       return;
     }
@@ -399,7 +501,17 @@
       state.clipMaxTimer = null;
     }
 
+    if (state.clipMode?.retryRecordingTimer) {
+      clearTimeout(state.clipMode.retryRecordingTimer);
+      state.clipMode.retryRecordingTimer = null;
+    }
+
     pauseVideoPlayback();
+    const endT =
+      Number.isFinite(videoEndTimeOverride)
+        ? videoEndTimeOverride
+        : state.clipMode.plannedVideoEndTime || cue.end;
+
     void chrome.runtime.sendMessage({
       type: "subtitle-clip-complete",
       subtitle: cue.text,
@@ -407,7 +519,7 @@
       nextSubtitle: timeline?.cues?.[cue.index + 1]?.text || "",
       stopReason,
       cue,
-      videoEndTime: state.clipMode.plannedVideoEndTime || cue.end,
+      videoEndTime: endT,
       videoStartTime: state.clipMode.plannedVideoStartTime
     });
   }
@@ -418,7 +530,7 @@
   }
 
   function pauseVideoPlayback() {
-    const mediaElement = document.querySelector("video");
+    const mediaElement = getVideoElement();
     if (mediaElement && !mediaElement.paused) {
       mediaElement.pause();
       return;
@@ -501,7 +613,7 @@
   }
 
   function rewindVideoPlayback(rewindMs) {
-    const mediaElement = document.querySelector("video");
+    const mediaElement = getVideoElement();
     if (!mediaElement || !Number.isFinite(mediaElement.currentTime)) {
       return false;
     }
@@ -512,10 +624,20 @@
     }
 
     mediaElement.currentTime = Math.max(0, mediaElement.currentTime - rewindSeconds);
-    mediaElement.addEventListener("seeked", () => {
+
+    // Некоторые HLS/PlayerJS не всегда шлют seeked — дублируем запуск опроса по таймауту
+    let seekHandled = false;
+    const afterSeek = () => {
+      if (seekHandled) {
+        return;
+      }
+      seekHandled = true;
+      clearTimeout(seekFallbackTimer);
       state.lastText = "";
-      maybeRequestClipRecording(getCurrentSubtitle());
-    }, { once: true });
+      maybeRequestClipRecording(getDisplayedSubtitle());
+    };
+    const seekFallbackTimer = window.setTimeout(afterSeek, 700);
+    mediaElement.addEventListener("seeked", afterSeek, { once: true });
 
     if (mediaElement.paused) {
       void mediaElement.play().catch(() => {});
@@ -525,11 +647,12 @@
   }
 
   function maybeRequestClipRecording(text, force = false) {
+    const displayedNorm = normalizeText(text || "");
     if (
       !state.clipMode?.active
       || state.clipMode.cueAware
       || state.clipMode.recordingRequested
-      || (!force && text !== state.clipMode.targetSubtitle)
+      || (!force && displayedNorm !== state.clipMode.targetNormalized)
     ) {
       return;
     }
@@ -541,10 +664,34 @@
     }, (response) => {
       if (chrome.runtime.lastError || !response?.ok) {
         state.clipMode.recordingRequested = false;
+        // Повтор через 2 с при временном сбое tabCapture (не более 4 попыток)
+        const attempts = (state.clipMode.recordingStartAttempts || 0) + 1;
+        if (state.clipMode) {
+          state.clipMode.recordingStartAttempts = attempts;
+        }
+        if (
+          state.clipMode?.active
+          && !state.clipMode.recordingStarted
+          && !state.clipMode.retryRecordingTimer
+          && attempts <= 4
+        ) {
+          state.clipMode.retryRecordingTimer = window.setTimeout(() => {
+            if (!state.clipMode?.active) {
+              return;
+            }
+            state.clipMode.retryRecordingTimer = null;
+            maybeRequestClipRecording(state.clipMode.targetSubtitle, true);
+          }, 2000);
+        }
         return;
       }
 
+      if (state.clipMode.retryRecordingTimer) {
+        clearTimeout(state.clipMode.retryRecordingTimer);
+        state.clipMode.retryRecordingTimer = null;
+      }
       state.clipMode.recordingStarted = true;
+      state.clipMode.targetWasVisible = true;
       state.startedAt = Date.now();
       state.entries = [{
         atMs: 0,
@@ -561,8 +708,8 @@
       !state.clipMode?.active
       || state.clipMode.cueAware
       || !state.clipMode.recordingStarted
-      || (!state.clipMode.forcedStart && previousText !== state.clipMode.targetSubtitle)
-      || text === state.clipMode.targetSubtitle
+      || (!state.clipMode.forcedStart && normalizeText(previousText) !== state.clipMode.targetNormalized)
+      || normalizeText(text) === state.clipMode.targetNormalized
     ) {
       return;
     }
@@ -576,6 +723,7 @@
     }
 
     state.clipMode.active = false;
+    const videoEndTime = getVideoTime();
 
     if (state.clipPollTimer) {
       clearInterval(state.clipPollTimer);
@@ -592,6 +740,11 @@
       state.clipMaxTimer = null;
     }
 
+    if (state.clipMode?.retryRecordingTimer) {
+      clearTimeout(state.clipMode.retryRecordingTimer);
+      state.clipMode.retryRecordingTimer = null;
+    }
+
     pauseVideoPlayback();
     void chrome.runtime.sendMessage({
       type: "subtitle-clip-complete",
@@ -600,7 +753,7 @@
       nextSubtitle: nextSubtitle && nextSubtitle !== state.clipMode.targetSubtitle ? nextSubtitle : "",
       stopReason,
       cue: state.clipMode.cue || null,
-      videoEndTime: getVideoTime()
+      videoEndTime
     });
   }
 
@@ -620,18 +773,32 @@
     return getCueContext(timeline, cue);
   }
 
+  /** Смена эпизода на SPA обычно меняет path/search/hash; этого достаточно, чтобы сбросить кэш VTT. */
+  function getPageLocationSignature() {
+    return `${location.pathname}${location.search}${location.hash}`;
+  }
+
   async function getSubtitleTimeline() {
-    if (state.timeline?.cues?.length) {
+    const pageSig = getPageLocationSignature();
+    if (state.timeline?.cues?.length && state.timelinePageSignature === pageSig) {
       return state.timeline;
     }
+
+    state.timeline = null;
 
     if (state.timelinePromise) {
       return state.timelinePromise;
     }
 
+    const loadStartedPage = pageSig;
     state.timelinePromise = loadSubtitleTimeline()
       .then((timeline) => {
+        if (getPageLocationSignature() !== loadStartedPage) {
+          clearSubtitleTimelineCache();
+          throw new Error("Страница сменилась во время загрузки субтитров.");
+        }
         state.timeline = timeline;
+        state.timelinePageSignature = loadStartedPage;
         return timeline;
       })
       .finally(() => {
@@ -642,9 +809,15 @@
   }
 
   async function loadSubtitleTimeline() {
-    const source = findSubtitleSource();
+    const candidates = collectVttCandidatesSync();
+    let source = pickPreferredVttSource(candidates);
+    if (!source) {
+      source = await tryPickVttFromHlsManifest();
+    }
     if (!source?.url) {
-      throw new Error("No VTT subtitle URL found in Playerjs config.");
+      throw new Error(
+        "No VTT URL on the page: checked inline scripts, #playerjs markup, <track>, bare .vtt URLs, and HLS master playlist."
+      );
     }
 
     const response = await fetch(source.url, { credentials: "include" });
@@ -664,43 +837,257 @@
     };
   }
 
-  function findSubtitleSource() {
-    const scripts = Array.from(document.scripts).map((script) => script.textContent || "").join("\n");
-    const subtitleConfig = scripts.match(/["']subtitle["']\s*:\s*["']([^"']+)["']/)?.[1]
-      || scripts.match(/subtitle\s*:\s*["']([^"']+)["']/)?.[1]
-      || "";
-    const sources = [];
-    const pattern = /\[([^\]]+)\]([^,\s]+?\.vtt(?:\?[^,\s]*)?)/gi;
-    let match = pattern.exec(subtitleConfig);
-    while (match) {
-      sources.push({
-        label: match[1],
-        url: new URL(match[2], window.location.href).href
-      });
-      match = pattern.exec(subtitleConfig);
+  /** Собираем текст страницы, где часто лежит конфиг Playerjs / ссылки на VTT (внешние .js без доступа к телу не сканируем). */
+  function getSubtitleScanText() {
+    const parts = [];
+    for (const script of document.scripts) {
+      parts.push(script.textContent || "");
     }
+    // Разметка и data-* контейнеров плеера (субтитры могут быть только в innerHTML, не в inline script).
+    const roots = document.querySelectorAll(
+      "#playerjs, #pjs_playerjs, [id*='playerjs' i], [id^='pjs_'], [class*='playerjs' i]"
+    );
+    for (const el of roots) {
+      parts.push(el.innerHTML);
+      for (const attr of el.attributes) {
+        parts.push(attr.value);
+      }
+    }
+    return parts.join("\n");
+  }
 
-    if (sources.length === 0) {
-      const direct = subtitleConfig.match(/https?:\/\/[^,\s"']+?\.vtt(?:\?[^,\s"']*)?/i)?.[0]
-        || subtitleConfig.match(/\/[^,\s"']+?\.vtt(?:\?[^,\s"']*)?/i)?.[0];
-      if (direct) {
-        sources.push({
-          label: "Subtitles",
-          url: new URL(direct, window.location.href).href
-        });
+  /**
+   * Все обнаруженные пары label + url (без приоритета). Разные режимы: VTT с таймлайном vs DOM — по-прежнему
+   * раздельно; здесь только то, откуда реально можно скачать .vtt для режима auto-vtt.
+   */
+  function collectVttCandidatesSync() {
+    const seen = new Set();
+    /** @type {{ label: string, url: string }[]} */
+    const list = [];
+
+    function add(label, urlRaw) {
+      if (!urlRaw || typeof urlRaw !== "string") {
+        return;
+      }
+      const trimmed = urlRaw.trim();
+      if (!/\.vtt(\?|#|$)/i.test(trimmed)) {
+        return;
+      }
+      try {
+        const url = new URL(trimmed, window.location.href).href;
+        if (seen.has(url)) {
+          return;
+        }
+        seen.add(url);
+        list.push({ label: label || "Subtitles", url });
+      } catch (_) {
+        /* ignore */
       }
     }
 
-    return sources.find((source) => /english|eng|англ/i.test(source.label)) || sources[0] || null;
+    const fullText = getSubtitleScanText();
+
+    // Нативные дорожки у <video> — то, что плеер мог подставить в разметку.
+    for (const track of document.querySelectorAll("video track, track")) {
+      const kind = (track.getAttribute("kind") || "").toLowerCase();
+      if (kind && kind !== "subtitles" && kind !== "captions") {
+        continue;
+      }
+      add(
+        track.getAttribute("label") || track.getAttribute("srclang") || "track",
+        track.getAttribute("src")
+      );
+    }
+
+    // Playerjs: subtitle: "[Label]url.vtt, ..." или отдельная строка только с квадратными скобками.
+    const subtitleBlock =
+      fullText.match(/["']subtitle["']\s*:\s*["']([^"']+)["']/i)?.[1]
+      || fullText.match(/\bsubtitle\s*:\s*["']([^"']+)["']/i)?.[1]
+      || "";
+    const textsToScan = [subtitleBlock, fullText];
+
+    for (const text of textsToScan) {
+      if (!text) {
+        continue;
+      }
+      const bracket = /\[([^\]]+)\]\s*([^\s,]+\.vtt[^\s,]*)/gi;
+      let m = bracket.exec(text);
+      while (m) {
+        add(m[1], m[2]);
+        m = bracket.exec(text);
+      }
+    }
+
+    // JSON-подобные поля в скриптах: "file"|"src"|"url" -> *.vtt
+    const jsonUrl = /"(?:file|src|url)"\s*:\s*"([^"]+\.vtt[^"]*)"/gi;
+    for (let jm = jsonUrl.exec(fullText); jm; jm = jsonUrl.exec(fullText)) {
+      add("Subtitles", jm[1]);
+    }
+
+    // Первый попавшийся абсолютный или относительный .vtt в том же тексте (запасной путь).
+    const bare =
+      fullText.match(/https?:\/\/[^\s"'<>]+\.vtt(?:\?[^\s"'<>]*)?/i)?.[0]
+      || fullText.match(/\/[^\s"'<>]+\.vtt(?:\?[^\s"'<>]*)?/i)?.[0];
+    if (bare) {
+      add("Subtitles", bare);
+    }
+
+    return list;
+  }
+
+  /** Чем ближе путь .vtt к пути текущего медиа, тем вероятнее это дорожка именно этого эпизода, а не чужой .vtt со страницы. */
+  function scoreVttUrlAgainstVideo(vttUrl, videoSrc) {
+    if (!videoSrc || !vttUrl) {
+      return 0;
+    }
+    try {
+      const v = new URL(videoSrc, window.location.href);
+      const t = new URL(vttUrl, window.location.href);
+      if (v.hostname !== t.hostname) {
+        return 0;
+      }
+      const vParts = v.pathname.split("/").filter(Boolean);
+      const tParts = t.pathname.split("/").filter(Boolean);
+      let score = 0;
+      for (let i = 0; i < Math.min(vParts.length, tParts.length); i++) {
+        if (vParts[i] === tParts[i]) {
+          score += 20;
+        } else {
+          break;
+        }
+      }
+      return score;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function pickPreferredVttSource(candidates) {
+    if (!candidates?.length) {
+      return null;
+    }
+    const video = getVideoElement();
+    const videoSrc = (video && (video.currentSrc || video.src)) || "";
+    const ranked = candidates
+      .map((c, index) => {
+        let score = scoreVttUrlAgainstVideo(c.url, videoSrc);
+        if (/english|eng|англ/i.test(c.label)) {
+          score += 15;
+        }
+        return { label: c.label, url: c.url, score, _order: index };
+      })
+      .sort((a, b) => b.score - a.score || a._order - b._order);
+    const best = ranked[0];
+    return { label: best.label, url: best.url };
+  }
+
+  function collectM3u8UrlsFromText(text) {
+    const urls = [];
+    const seen = new Set();
+    const abs = /https?:\/\/[^\s"'<>]+\.m3u8(?:\?[^\s"'<>]*)?/gi;
+    let m = abs.exec(text);
+    while (m) {
+      const href = m[0];
+      if (!seen.has(href)) {
+        seen.add(href);
+        urls.push(href);
+      }
+      m = abs.exec(text);
+    }
+    const rel = /\/[^\s"'<>]+\.m3u8(?:\?[^\s"'<>]*)?/gi;
+    m = rel.exec(text);
+    while (m) {
+      try {
+        const href = new URL(m[0], window.location.href).href;
+        if (!seen.has(href)) {
+          seen.add(href);
+          urls.push(href);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      m = rel.exec(text);
+    }
+    const video = getVideoElement();
+    const videoSrc = (video && (video.currentSrc || video.src)) || "";
+    return urls
+      .map((u) => ({ url: u, score: scoreVttUrlAgainstVideo(u, videoSrc) }))
+      .sort((a, b) => b.score - a.score)
+      .map((x) => x.url);
+  }
+
+  /**
+   * Если субтитры приходят из HLS: в master .m3u8 строка #EXT-X-MEDIA:TYPE=SUBTITLES,... URI="....vtt"
+   * Несколько master на странице — берём manifest ближе к URL текущего видео.
+   */
+  async function tryPickVttFromHlsManifest() {
+    const text = getSubtitleScanText();
+    const orderedM3u8 = collectM3u8UrlsFromText(text);
+    for (const m3u8Url of orderedM3u8) {
+      try {
+        const manifestUrl = new URL(m3u8Url, window.location.href).href;
+        const res = await fetch(manifestUrl, { credentials: "include" });
+        if (!res.ok) {
+          continue;
+        }
+        const body = await res.text();
+        /** @type {{ label: string, url: string }[]} */
+        const out = [];
+        for (const line of body.split(/\r?\n/)) {
+          if (!/TYPE=SUBTITLES/i.test(line)) {
+            continue;
+          }
+          const uri = line.match(/URI="([^"]+)"/i)?.[1];
+          if (!uri || !/\.vtt/i.test(uri)) {
+            continue;
+          }
+          const label =
+            line.match(/NAME="([^"]+)"/i)?.[1]
+            || line.match(/LANGUAGE="([^"]+)"/i)?.[1]
+            || "Subtitles";
+          out.push({ label, url: new URL(uri, manifestUrl).href });
+        }
+        const picked = pickPreferredVttSource(out);
+        if (picked) {
+          return picked;
+        }
+      } catch (_) {
+        /* следующий manifest */
+      }
+    }
+    return null;
   }
 
   function parseVtt(value) {
-    const blocks = value.replace(/\r/g, "").split(/\n{2,}/);
+    // BOM + CRLF: без нормализации первая строка может быть "\uFEFFWEBVTT"
+    const normalized = value.replace(/^\uFEFF/, "").replace(/\r/g, "");
+    const blocks = normalized.split(/\n{2,}/);
     const cues = [];
 
     for (const block of blocks) {
-      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-      if (lines.length === 0 || lines[0] === "WEBVTT") {
+      let lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      if (lines.length === 0) {
+        continue;
+      }
+      // Не отбрасывать блок целиком из‑за WEBVTT: при одном \n между заголовком и первой репликой
+      // (без пустой строки) здесь же окажутся и куи — иначе файл парсился как пустой.
+      while (lines.length) {
+        const head = lines[0].replace(/^\uFEFF/, "");
+        if (head === "WEBVTT") {
+          lines.shift();
+          continue;
+        }
+        if (/^(Kind|Language|Region):/i.test(head)) {
+          lines.shift();
+          continue;
+        }
+        if (/^X-TIMESTAMP-MAP=/i.test(head)) {
+          lines.shift();
+          continue;
+        }
+        break;
+      }
+      if (lines.length === 0) {
         continue;
       }
 
@@ -760,11 +1147,24 @@
   }
 
   function findNearestCue(cues, videoTime) {
-    if (!Number.isFinite(videoTime)) {
+    if (!Number.isFinite(videoTime) || !cues?.length) {
       return null;
     }
 
-    return cues.find((cue) => videoTime < cue.start) || cues[cues.length - 1] || null;
+    // Раньше: cues.find((cue) => videoTime < cue.start) — это ПЕРВЫЙ будущий куй.
+    // В паузе между репликами показывался текст следующей фразы (иногда звуковые метки вроде [beeping]),
+    // хотя на экране ещё предыдущая или пусто. В промежутке берём последний уже закончившийся куй.
+    let lastBeforeOrInside = null;
+    for (const cue of cues) {
+      if (videoTime < cue.start) {
+        return lastBeforeOrInside;
+      }
+      if (videoTime <= cue.end) {
+        return cue;
+      }
+      lastBeforeOrInside = cue;
+    }
+    return lastBeforeOrInside;
   }
 
   function findPlaybackToggle() {

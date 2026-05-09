@@ -32,7 +32,7 @@
   "commands": {
     "take-screenshot": {
       "suggested_key": {
-        "default": "Ctrl+Shift+1"
+        "default": "Ctrl+Shift+Z"
       },
       "description": "Save a screenshot of the current tab"
     },
@@ -44,13 +44,13 @@
     },
     "capture-subtitle-clip": {
       "suggested_key": {
-        "default": "Alt+Shift+C"
+        "default": "Alt+Shift+Q"
       },
       "description": "Capture current subtitle"
     },
     "create-anki-card": {
       "suggested_key": {
-        "default": "Ctrl+Shift+3"
+        "default": "Ctrl+Shift+A"
       },
       "description": "Create an Anki note from the current subtitle and latest capture"
     }

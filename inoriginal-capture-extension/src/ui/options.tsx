@@ -42,7 +42,8 @@ const QUALITY_PRESETS: Array<{
 ];
 
 const DEFAULT_SETTINGS: AnkiSettings = {
-  captureMode: "auto-vtt",
+  settingsVersion: 2,
+  captureMode: "dom-fallback",
   endpoint: "http://127.0.0.1:8765",
   deckName: "Default",
   modelName: "Basic",

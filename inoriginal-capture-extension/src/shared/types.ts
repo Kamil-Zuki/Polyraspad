@@ -23,6 +23,7 @@ export type QualityRules = {
 };
 
 export type AnkiSettings = {
+  settingsVersion?: number;
   captureMode: "auto-vtt" | "manual-range" | "dom-fallback";
   endpoint: string;
   deckName: string;
