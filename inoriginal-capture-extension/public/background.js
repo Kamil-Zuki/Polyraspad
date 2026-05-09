@@ -441,6 +441,24 @@ async function captureSubtitleClip(options = {}) {
   return getLatestCapture();
 }
 
+async function stopClipAudioRecording(session, metadata = {}) {
+  if (!session?.tabId) {
+    return;
+  }
+  if (session.audioSource === "video-element") {
+    await sendMessageToTab(session.tabId, {
+      type: "stop-video-element-audio-recording",
+      metadata
+    }).catch(() => null);
+    return;
+  }
+  await chrome.runtime.sendMessage({
+    type: "stop-audio-recording",
+    tabId: session.tabId,
+    metadata
+  }).catch(() => null);
+}
+
 async function startSubtitleClipRecording(message = {}) {
   const session = await getSession();
   if (!session?.tabId || !["clip-waiting", "clip"].includes(session.mode)) {
@@ -451,10 +469,6 @@ async function startSubtitleClipRecording(message = {}) {
     return;
   }
 
-  await ensureOffscreenDocument();
-  const streamId = await chrome.tabCapture.getMediaStreamId({
-    targetTabId: session.tabId
-  });
   const startedAt = Date.now();
   const videoStartTime = Number.isFinite(message.videoStartTime)
     ? message.videoStartTime
@@ -464,19 +478,75 @@ async function startSubtitleClipRecording(message = {}) {
   const videoEndTime = Number.isFinite(message.videoEndTime)
     ? message.videoEndTime
     : session.videoEndTime;
+  const plannedDurationMs = Number.isFinite(message.plannedDurationMs)
+    ? message.plannedDurationMs
+    : session.plannedDurationMs;
+  const captureMode = session.captureMode || "dom-fallback";
+
+  const baseSession = {
+    ...session,
+    captureMode,
+    mode: "clip",
+    plannedDurationMs,
+    startedAt,
+    videoEndTime,
+    videoStartTime
+  };
+
+  const tryElementAudio = captureMode !== "dom-fallback";
+
+  if (tryElementAudio) {
+    const tabResponse = await sendMessageToTab(session.tabId, {
+      type: "start-video-element-audio-recording",
+      metadata: {
+        captureMode,
+        mode: "clip",
+        videoEndTime,
+        videoStartTime
+      },
+      startedAt
+    }).catch(() => ({ ok: false, error: "Content script did not respond." }));
+
+    if (tabResponse?.ok) {
+      await chrome.storage.local.set({
+        [SESSION_KEY]: {
+          ...baseSession,
+          audioSource: "video-element"
+        }
+      });
+      await addCaptureEvent("recording-audio", "Запись аудио с элемента video (Web Audio API).");
+      await mergeLatestCapture({
+        cardState: "capturing",
+        captureStep: "recording-audio"
+      });
+      if (Number.isFinite(plannedDurationMs) || Number.isFinite(videoStartTime) || Number.isFinite(videoEndTime)) {
+        await addCaptureEvent(
+          "recording-audio",
+          `План по VTT: ${formatSeconds(videoStartTime || 0)} — ${formatSeconds(videoEndTime || 0)} (${((plannedDurationMs || 0) / 1000).toFixed(1)} с).`
+        );
+      }
+      await addCaptureEvent("recording-audio", "Запись с video начата.", "success");
+      return;
+    }
+    await addCaptureEvent(
+      "recording-audio",
+      `Web Audio с video недоступен (${tabResponse?.error || "ошибка"}), используем захват вкладки.`,
+      "warning"
+    );
+  }
+
+  await ensureOffscreenDocument();
+  const streamId = await chrome.tabCapture.getMediaStreamId({
+    targetTabId: session.tabId
+  });
 
   await chrome.storage.local.set({
     [SESSION_KEY]: {
-      ...session,
-      mode: "clip",
-      startedAt,
-      captureMode: session.captureMode || "dom-fallback",
-      plannedDurationMs: Number.isFinite(message.plannedDurationMs) ? message.plannedDurationMs : session.plannedDurationMs,
-      videoEndTime,
-      videoStartTime
+      ...baseSession,
+      audioSource: "tab"
     }
   });
-  await addCaptureEvent("recording-audio", "Tab audio recording is starting.");
+  await addCaptureEvent("recording-audio", "Запуск записи звука вкладки (tabCapture).");
   await mergeLatestCapture({
     cardState: "capturing",
     captureStep: "recording-audio"
@@ -495,7 +565,7 @@ async function startSubtitleClipRecording(message = {}) {
     startedAt,
     metadata: {
       mode: "clip",
-      captureMode: session.captureMode || "dom-fallback",
+      captureMode,
       videoEndTime,
       videoStartTime
     }
@@ -702,21 +772,18 @@ async function finalizeSubtitleClip(message) {
     stopReason === "max-duration" ? "warning" : "info"
   );
 
+  await stopClipAudioRecording(session, {
+    captureMode: session.captureMode || "dom-fallback",
+    durationMs: effectiveDurationMs,
+    stopReason,
+    videoEndTime: safeVideoEndTime,
+    videoStartTime: safeVideoStartTime
+  });
+
   await sendMessageToTab(session.tabId, {
     type: "stop-subtitle-capture",
     stoppedAt
   }).catch(() => null);
-
-  await chrome.runtime.sendMessage({
-    type: "stop-audio-recording",
-    tabId: session.tabId,
-    metadata: {
-      durationMs: effectiveDurationMs,
-      stopReason,
-      videoStartTime: safeVideoStartTime,
-      videoEndTime: safeVideoEndTime
-    }
-  });
 
   await chrome.storage.local.remove(SESSION_KEY);
 }
@@ -877,17 +944,13 @@ async function stopCurrentCapture(stopReason = "manual") {
   });
   await addCaptureEvent("stopping", stopReason === "range" ? "Selected audio range finished." : "Audio recording stopped manually.", "success");
 
-  await chrome.runtime.sendMessage({
-    type: "stop-audio-recording",
-    tabId: session.tabId,
-    metadata: {
-      durationMs: session.startedAt ? stoppedAt - session.startedAt : undefined,
-      stopReason,
-      captureMode: session.captureMode || (session.mode === "range" ? "manual-range" : undefined),
-      videoStartTime: session.videoStartTime,
-      videoEndTime: session.videoEndTime ?? subtitles.videoTime
-    }
-  }).catch(() => null);
+  await stopClipAudioRecording(session, {
+    captureMode: session.captureMode || (session.mode === "range" ? "manual-range" : undefined),
+    durationMs: session.startedAt ? stoppedAt - session.startedAt : undefined,
+    stopReason,
+    videoEndTime: session.videoEndTime ?? subtitles.videoTime,
+    videoStartTime: session.videoStartTime
+  });
 
   await chrome.storage.local.remove(SESSION_KEY);
 }
@@ -1100,6 +1163,7 @@ async function handleAudioReady(message) {
 async function handleRecordingError(error) {
   const session = await getSession();
   if (session?.tabId) {
+    await stopClipAudioRecording(session, { discard: true }).catch(() => null);
     await sendMessageToTab(session.tabId, {
       type: "stop-subtitle-capture",
       stoppedAt: Date.now()
@@ -1118,14 +1182,10 @@ async function handleRecordingError(error) {
 async function cancelCapture() {
   const session = await getSession();
   if (session?.tabId) {
+    await stopClipAudioRecording(session, { discard: true }).catch(() => null);
     await sendMessageToTab(session.tabId, {
       type: "stop-subtitle-capture",
       stoppedAt: Date.now()
-    }).catch(() => null);
-
-    await chrome.runtime.sendMessage({
-      type: "stop-audio-recording",
-      tabId: session.tabId
     }).catch(() => null);
   }
 

@@ -5,6 +5,9 @@
 
   window.__inoriginalCaptureInstalled = true;
 
+  /** Один граф Web Audio на каждый элемент video (повторный createMediaElementSource вызывает ошибку). */
+  const videoElementAudioRoutes = new WeakMap();
+
   const state = {
     entries: [],
     isRecording: false,
@@ -21,7 +24,9 @@
     timeline: null,
     timelinePromise: null,
     // Только URL страницы (path/query/hash). Не включать video.currentSrc: у HLS это часто blob:, меняется во время воспроизведения и ломает загрузку VTT и запись аудио.
-    timelinePageSignature: null
+    timelinePageSignature: null,
+    /** Запись аудио с graph video→MediaStreamDestination (не захват всей вкладки). */
+    elementAudioSession: null
   };
 
   /** Сброс кэша таймлайна при навигации без полной перезагрузки (другой сериал/эпизод). */
@@ -103,6 +108,20 @@
       pauseVideoPlayback();
       sendResponse({ ok: true });
     }
+
+    if (message?.type === "start-video-element-audio-recording") {
+      void startVideoElementAudioRecording(message.startedAt, message.metadata || {})
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, error: error.message || String(error) }));
+      return true;
+    }
+
+    if (message?.type === "stop-video-element-audio-recording") {
+      void stopVideoElementAudioRecording(message.metadata || {})
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, error: error.message || String(error) }));
+      return true;
+    }
   });
 
   function startCapture(startedAt) {
@@ -124,6 +143,7 @@
     if (state.clipMode?.retryRecordingTimer) {
       clearTimeout(state.clipMode.retryRecordingTimer);
     }
+    detachCueClipTimeupdateListener();
     state.clipMode = null;
 
     if (state.observer) {
@@ -161,6 +181,30 @@
     }
   }
 
+  /** Клип по VTT: без DOM/MutationObserver, синхронизация только с video.currentTime. */
+  function startClipTimelineSession(startedAt) {
+    stopCapture(startedAt);
+    state.isRecording = true;
+    state.entries = [];
+    state.startedAt = startedAt;
+    state.lastText = "";
+    state.subtitleElement = null;
+  }
+
+  function detachCueClipTimeupdateListener() {
+    const cm = state.clipMode;
+    if (!cm) {
+      return;
+    }
+    const video = cm.clipVideoRef;
+    const handler = cm.cueClipTimeupdateHandler;
+    if (video && handler) {
+      video.removeEventListener("timeupdate", handler);
+    }
+    cm.clipVideoRef = null;
+    cm.cueClipTimeupdateHandler = null;
+  }
+
   function refreshSubtitleTarget() {
     const nextElement = findSubtitleSpan();
     if (nextElement === state.subtitleElement) {
@@ -173,23 +217,31 @@
     captureCurrentText();
   }
 
-  function observeSubtitle() {
-    if (state.observer) {
-      state.observer.disconnect();
-      state.observer = null;
-    }
-
-    if (!state.subtitleElement) {
-      return;
-    }
-
-    state.observer = new MutationObserver(() => captureCurrentText());
-    state.observer.observe(state.subtitleElement, {
-      childList: true,
-      characterData: true,
-      subtree: true
-    });
+function observeSubtitle() {
+  if (state.observer) {
+    state.observer.disconnect();
   }
+
+  if (!state.subtitleElement) return;
+
+  state.observer = new MutationObserver(() => {
+    const text = normalizeText(state.subtitleElement.textContent || "");
+    
+    // If we are recording a clip and the subtitle vanishes, stop immediately
+    if (state.clipMode?.active && state.clipMode.recordingStarted && text === "") {
+        completeClip("", "subtitle-ended");
+        return;
+    }
+    
+    captureCurrentText();
+  });
+  
+  state.observer.observe(state.subtitleElement, {
+    childList: true,
+    characterData: true,
+    subtree: true
+  });
+}
 
   function captureCurrentText() {
     if (!state.isRecording || !state.subtitleElement) {
@@ -303,7 +355,7 @@
   }
 
   async function startCueAwareSubtitleClip(startedAt, targetSubtitle, rewindMs, maxClipMs, cue) {
-    startCapture(startedAt);
+    startClipTimelineSession(startedAt);
     const timeline = state.timeline;
     const nextCue = timeline?.cues?.[cue.index + 1];
     const nextCueStart = nextCue && Number.isFinite(nextCue.start) ? nextCue.start : null;
@@ -312,6 +364,8 @@
       active: true,
       cue,
       cueAware: true,
+      clipVideoRef: null,
+      cueClipTimeupdateHandler: null,
       plannedVideoEndTime: 0,
       plannedVideoStartTime: 0,
       targetSubtitle,
@@ -372,37 +426,8 @@
 
         void mediaElement.play().catch(() => {});
 
-        // Остановка при начале следующей реплики:
-        // 1) по факту смены активного VTT cue (более надежно при дрейфе таймингов),
-        // 2) по времени nextCueStart как быстрый резерв.
-        state.clipPollTimer = window.setInterval(() => {
-          if (!state.clipMode?.active || !state.clipMode.cueAware) {
-            return;
-          }
-          const media = getVideoElement();
-          if (!media) {
-            return;
-          }
-          const t = media.currentTime;
-          const nextAt = state.clipMode.nextCueStart;
-          const activeCue = timeline?.cues?.find((item) => t >= item.start && t <= item.end + 0.03) || null;
-          if (activeCue && activeCue.index > cue.index) {
-            completeClipByCue(cue, "next-cue-start", getVideoTime());
-            return;
-          }
-          if (nextAt != null && t >= nextAt - 0.03) {
-            completeClipByCue(cue, "next-cue-start", getVideoTime());
-            return;
-          }
-          // Резерв по DOM только если в VTT нет следующего куя: иначе текст в DOM может быть многострочным блоком,
-          // а targetSubtitle — одна строка, и запись оборвётся сразу.
-          if (nextAt == null) {
-            const domNorm = normalizeText(findSubtitleSpan()?.textContent || "");
-            if (domNorm && domNorm !== state.clipMode.targetNormalized) {
-              completeClipByCue(cue, "subtitle-change", getVideoTime());
-            }
-          }
-        }, 85);
+        // Как ASBPlayer: границы реплики по VTT и video.currentTime, без MutationObserver/DOM.
+        attachCueClipTimeupdateListener(mediaElement, cue, timeline);
 
         // Нет следующего куя — как раньше: обрезка по рассчитанному концу реплики
         // Есть следующий — верхняя граница только safetyCap (если не сработала смена реплики)
@@ -476,6 +501,33 @@
   }
 
   /**
+   * Слушатель timeupdate: активная реплика по таймкодам VTT (не по DOM).
+   */
+  function attachCueClipTimeupdateListener(mediaElement, cue, timeline) {
+    detachCueClipTimeupdateListener();
+    const handler = () => {
+      if (!state.clipMode?.active || !state.clipMode.cueAware) {
+        return;
+      }
+      const t = mediaElement.currentTime;
+      const nextAt = state.clipMode.nextCueStart;
+      const activeCue = timeline?.cues?.find((item) => t >= item.start && t <= item.end + 0.03) || null;
+      if (activeCue && activeCue.index > cue.index) {
+        completeClipByCue(cue, "next-cue-start", getVideoTime());
+        return;
+      }
+      if (nextAt != null && t >= nextAt - 0.03) {
+        completeClipByCue(cue, "next-cue-start", getVideoTime());
+      }
+    };
+    mediaElement.addEventListener("timeupdate", handler);
+    if (state.clipMode) {
+      state.clipMode.clipVideoRef = mediaElement;
+      state.clipMode.cueClipTimeupdateHandler = handler;
+    }
+  }
+
+  /**
    * @param {number} [videoEndTimeOverride] — фактическое время остановки (следующая реплика / смена DOM)
    */
   function completeClipByCue(cue, stopReason, videoEndTimeOverride) {
@@ -485,6 +537,7 @@
 
     const timeline = state.timeline;
     state.clipMode.active = false;
+    detachCueClipTimeupdateListener();
 
     if (state.clipPollTimer) {
       clearInterval(state.clipPollTimer);
@@ -551,6 +604,133 @@
     return mediaElement && Number.isFinite(mediaElement.currentTime)
       ? mediaElement.currentTime
       : undefined;
+  }
+
+  function pickRecorderMimeType() {
+    if (typeof MediaRecorder === "undefined") {
+      return "";
+    }
+    if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+      return "audio/webm;codecs=opus";
+    }
+    if (MediaRecorder.isTypeSupported("audio/webm")) {
+      return "audio/webm";
+    }
+    return "";
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error("FileReader failed."));
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  /**
+   * Подключает звук видео к выходу и к MediaStreamDestination для записи только этой дорожки.
+   */
+  async function ensureRoutedVideoAudio(video) {
+    const existing = videoElementAudioRoutes.get(video);
+    if (existing) {
+      await existing.ctx.resume().catch(() => {});
+      return existing;
+    }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      throw new Error("AudioContext недоступен в этой странице.");
+    }
+    const ctx = new AudioCtx();
+    let source;
+    try {
+      source = ctx.createMediaElementSource(video);
+    } catch (err) {
+      await ctx.close().catch(() => {});
+      throw new Error(
+        `Не удалось подключить аудио элемента video (${err?.message || err}). Частая причина — CORS у источника или повторный захват того же элемента.`
+      );
+    }
+    const dest = ctx.createMediaStreamDestination();
+    source.connect(dest);
+    source.connect(ctx.destination);
+    const route = { ctx, dest, source };
+    videoElementAudioRoutes.set(video, route);
+    await ctx.resume().catch(() => {});
+    return route;
+  }
+
+  async function startVideoElementAudioRecording(startedAt, metadata) {
+    if (state.elementAudioSession?.recorder?.state === "recording") {
+      await stopVideoElementAudioRecording({ discard: true }).catch(() => {});
+    }
+    const video = getVideoElement();
+    if (!video) {
+      throw new Error("Элемент video не найден.");
+    }
+    const route = await ensureRoutedVideoAudio(video);
+    const mimeType = pickRecorderMimeType();
+    const chunks = [];
+    const outStream = route.dest.stream;
+    const options = mimeType ? { mimeType } : {};
+    const recorder = new MediaRecorder(outStream, options);
+    const session = {
+      chunks,
+      discard: false,
+      metadata: metadata || {},
+      recorder,
+      startedAt: startedAt || Date.now()
+    };
+    state.elementAudioSession = session;
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+    recorder.start(500);
+  }
+
+  async function stopVideoElementAudioRecording(metadata = {}) {
+    const session = state.elementAudioSession;
+    if (!session?.recorder) {
+      return;
+    }
+    if (metadata.discard) {
+      session.discard = true;
+    }
+    const rec = session.recorder;
+    const chunks = session.chunks;
+    const startedAt = session.startedAt;
+    const discard = session.discard;
+    const metaBase = { ...session.metadata, ...metadata };
+    state.elementAudioSession = null;
+
+    await new Promise((resolve) => {
+      rec.onstop = resolve;
+      if (rec.state === "recording") {
+        rec.stop();
+      } else {
+        resolve();
+      }
+    });
+
+    const blob = new Blob(chunks, { type: chunks[0]?.type || "audio/webm" });
+    if (discard || metaBase.discard) {
+      return;
+    }
+
+    const dataUrl = await blobToDataUrl(blob);
+    await chrome.runtime.sendMessage({
+      type: "audio-recording-ready",
+      dataUrl,
+      metadata: {
+        ...metaBase,
+        captureMode: metaBase.captureMode || "auto-vtt",
+        recordingStartedAt: startedAt,
+        recordingStoppedAt: Date.now()
+      },
+      startedAt
+    });
   }
 
   function seekVideo(mediaElement, targetSeconds) {
@@ -703,19 +883,26 @@
     });
   }
 
-  function maybeCompleteClip(text, previousText) {
-    if (
-      !state.clipMode?.active
-      || state.clipMode.cueAware
-      || !state.clipMode.recordingStarted
-      || (!state.clipMode.forcedStart && normalizeText(previousText) !== state.clipMode.targetNormalized)
-      || normalizeText(text) === state.clipMode.targetNormalized
-    ) {
-      return;
-    }
+function maybeCompleteClip(text, previousText) {
+  const normText = normalizeText(text);
+  const normPrev = normalizeText(previousText);
 
-    completeClip(text);
+  if (
+    !state.clipMode?.active ||
+    state.clipMode.cueAware ||
+    !state.clipMode.recordingStarted
+  ) {
+    return;
   }
+
+  // STOP CONDITION:
+  // 1. Text is different from what we captured (change)
+  // 2. Text is empty (subtitle disappeared)
+  if (normPrev === state.clipMode.targetNormalized && 
+     (normText !== state.clipMode.targetNormalized || normText === "")) {
+    completeClip(text, normText === "" ? "subtitle-ended" : "subtitle-change");
+  }
+}
 
   function completeClip(nextSubtitle, stopReason = "subtitle-change") {
     if (!state.clipMode?.active) {
