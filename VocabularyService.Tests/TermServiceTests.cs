@@ -1,8 +1,10 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
+using VocabularyService.Data.Entities.JsonTypes;
 using VocabularyService.Services;
 using Xunit;
 
@@ -11,76 +13,124 @@ namespace VocabularyService.Tests;
 public class TermServiceTests
 {
     [Fact]
-    public async Task CreateOrUpdateStatusAsync_CreatesWordStatusWithoutCard()
+    public async Task CreateOrUpdateAsync_DefaultHint_PersistsSavedStatus()
     {
-        await using var context = CreateContext();
-        var sut = new TermService(context);
+        var dbName = Guid.NewGuid().ToString();
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
 
-        var status = await sut.CreateOrUpdateStatusAsync(
+        await using (var arrange = CreateContext(dbName))
+        {
+            AddProject(arrange, userId, projectId);
+            await arrange.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext(dbName);
+        var sut = new TermService(ctx, NullLogger<TermService>.Instance);
+
+        var status = await sut.CreateOrUpdateAsync(
             userId,
             projectId,
             "  Slept  ",
-            TermService.WordType,
-            "EN",
-            TermService.LingqStatus,
+            "WORD",
+            "en",
+            statusHint: null,
             meaning: "спал",
-            firstSentence: "I slept well.");
+            firstSentence: "I slept well.",
+            firstSourceTitle: null,
+            firstSourceUrl: null);
 
-        var term = await context.ProjectTerms.SingleAsync();
-        var cardsCount = await context.Cards.CountAsync();
-
+        var term = await ctx.ProjectTerms.SingleAsync();
         term.Text.Should().Be("Slept");
         term.NormalizedText.Should().Be("slept");
-        term.Type.Should().Be(TermService.WordType);
+        term.Type.Should().Be("WORD");
         term.Language.Should().Be("en");
         status.ProjectTermId.Should().Be(term.Id);
-        status.Status.Should().Be(TermService.LingqStatus);
+        status.Status.Should().Be("SAVED");
         status.Meaning.Should().Be("спал");
         status.FirstSentence.Should().Be("I slept well.");
-        cardsCount.Should().Be(0);
+        (await ctx.Cards.CountAsync()).Should().Be(0);
     }
 
     [Fact]
-    public async Task GetOrCreateTermAsync_KeepsWordAndPhraseTermsSeparate()
+    public async Task CreateOrUpdateAsync_LegacyLingqHint_StoresSaved()
     {
-        await using var context = CreateContext();
-        var sut = new TermService(context);
-        var projectId = Guid.NewGuid();
-
-        var word = await sut.GetOrCreateTermAsync(projectId, "take", TermService.WordType, "en");
-        var phrase = await sut.GetOrCreateTermAsync(projectId, "take off", TermService.PhraseType, "en");
-        var samePhrase = await sut.GetOrCreateTermAsync(projectId, " take   off ", TermService.PhraseType, "en");
-        await context.SaveChangesAsync();
-
-        word.Id.Should().NotBe(phrase.Id);
-        samePhrase.Id.Should().Be(phrase.Id);
-        (await context.ProjectTerms.CountAsync()).Should().Be(2);
-    }
-
-    [Fact]
-    public async Task GetWordStatusesAsync_UsesExactNormalizedForms()
-    {
-        await using var context = CreateContext();
-        var sut = new TermService(context);
+        var dbName = Guid.NewGuid().ToString();
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
 
-        await sut.CreateOrUpdateStatusAsync(userId, projectId, "go", TermService.WordType, "en", TermService.KnownStatus);
-        await sut.CreateOrUpdateStatusAsync(userId, projectId, "went", TermService.WordType, "en", TermService.LingqStatus);
+        await using (var arrange = CreateContext(dbName))
+        {
+            AddProject(arrange, userId, projectId);
+            await arrange.SaveChangesAsync();
+        }
 
-        var statuses = await sut.GetWordStatusesAsync(userId, projectId, ["Go", "went", "gone"]);
+        await using var ctx = CreateContext(dbName);
+        var sut = new TermService(ctx, NullLogger<TermService>.Instance);
 
-        statuses["go"].Should().Be(VocabularyService.Dtos.Text.TokenStatus.Known);
-        statuses["went"].Should().Be(VocabularyService.Dtos.Text.TokenStatus.Learning);
-        statuses.Should().NotContainKey("gone");
+        var status = await sut.CreateOrUpdateAsync(
+            userId,
+            projectId,
+            "hello",
+            "WORD",
+            "en",
+            statusHint: "LINGQ",
+            meaning: "привет",
+            firstSentence: null,
+            firstSourceTitle: null,
+            firstSourceUrl: null);
+
+        status.Status.Should().Be("SAVED");
     }
 
-    private static VocabularyServiceContext CreateContext()
+    [Fact]
+    public async Task CreateOrUpdateAsync_GoAndWent_AreSeparateTerms()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+
+        await using (var arrange = CreateContext(dbName))
+        {
+            AddProject(arrange, userId, projectId);
+            await arrange.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext(dbName);
+        var sut = new TermService(ctx, NullLogger<TermService>.Instance);
+
+        await sut.CreateOrUpdateAsync(userId, projectId, "go", "WORD", "en", "KNOWN", null, null, null, null);
+        await sut.CreateOrUpdateAsync(userId, projectId, "went", "WORD", "en", "SAVED", "шёл", null, null, null);
+
+        (await ctx.ProjectTerms.CountAsync()).Should().Be(2);
+
+        var (_, goStatus) = await sut.GetDetailsAsync(userId, projectId, "go", "WORD");
+        var (_, wentStatus) = await sut.GetDetailsAsync(userId, projectId, "went", "WORD");
+
+        goStatus!.Status.Should().Be("KNOWN");
+        wentStatus!.Status.Should().Be("SAVED");
+    }
+
+    private static void AddProject(VocabularyServiceContext context, Guid userId, Guid projectId)
+    {
+        context.Projects.Add(new Project
+        {
+            Id = projectId,
+            UserId = userId,
+            Title = "English",
+            SourceLang = "en",
+            TargetLang = "ru",
+            FsrsSettings = new FsrsSettings(),
+            Stats = new ProjectStats(),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+    }
+
+    private static VocabularyServiceContext CreateContext(string dbName)
     {
         var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseInMemoryDatabase(dbName)
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
@@ -100,4 +150,3 @@ public class TermServiceTests
         }
     }
 }
-

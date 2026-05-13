@@ -1,5 +1,6 @@
 using System.Net;
 using AggregatorService.Controllers;
+using AggregatorService.Dtos.Auth;
 using AggregatorService.Dtos;
 using AggregatorService.Services;
 using FluentAssertions;
@@ -31,7 +32,7 @@ public class MediaControllerTests
                 ImageId = "11111111-1111-1111-1111-111111111111"
             });
 
-        var controller = new MediaController(mock.Object, Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance);
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance);
 
         var pngHeader = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         await using var ms = new MemoryStream(pngHeader);
@@ -74,6 +75,7 @@ public class MediaControllerTests
 
         var controller = new MediaController(
             Mock.Of<IMediaServiceClient>(),
+            Mock.Of<IAuthorizationServiceClient>(),
             httpClientFactory.Object,
             NullLogger<MediaController>.Instance);
 
@@ -112,7 +114,7 @@ public class MediaControllerTests
                 }
             });
 
-        var controller = new MediaController(mock.Object, Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
@@ -153,7 +155,17 @@ public class MediaControllerTests
                 }
             });
 
-        var controller = new MediaController(mock.Object, Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
+        var authMock = new Mock<IAuthorizationServiceClient>();
+        authMock
+            .Setup(a => a.GetUserInfoAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new UserInfoDto
+            {
+                Id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                UserName = "tester",
+                Email = "tester@example.com"
+            });
+
+        var controller = new MediaController(mock.Object, authMock.Object, Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
@@ -189,7 +201,7 @@ public class MediaControllerTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var controller = new MediaController(mock.Object, Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };

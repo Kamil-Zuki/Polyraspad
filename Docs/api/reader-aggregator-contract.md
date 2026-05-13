@@ -62,7 +62,7 @@
       "startIndex": 1,
       "endIndex": 3,
       "text": "quick brown fox",
-      "status": "LINGQ",
+      "status": "LEARNING",
       "termId": "phrase-123"
     }
   ],
@@ -111,7 +111,7 @@
   "firstSentence": "The quick brown fox...",
   "firstSourceTitle": "Example Book",
   "firstSourceUrl": "optional-url",
-  "status": "LINGQ" // NEW | LINGQ | KNOWN | IGNORED
+  "status": "SAVED" // NEW | SAVED (сохранённый термин; в старых клиентах могло быть LINGQ) | KNOWN | IGNORED
 }
 ```
 
@@ -122,7 +122,7 @@
   "text": "quick",
   "normalizedText": "quick",
   "type": "WORD",
-  "status": "LINGQ",
+  "status": "SAVED",
   "meaning": "быстрый",
   "createdAt": "2026-05-13T10:00:00Z",
   "updatedAt": "2026-05-13T10:00:00Z"
@@ -195,7 +195,7 @@
   "text": "quick",
   "normalizedText": "quick",
   "type": "WORD",
-  "status": "LINGQ",
+  "status": "SAVED",
   "meaning": "быстрый",
   "firstSentence": "The quick brown fox...",
   "firstSourceTitle": "Example Book",
@@ -236,7 +236,7 @@
     {
       "termId": "term-123",
       "text": "quick",
-      "status": "LINGQ"
+      "status": "SAVED"
     }
   ],
   "similarTerms": [

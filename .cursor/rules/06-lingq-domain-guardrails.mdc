@@ -17,7 +17,7 @@ Lemma "sleep"               ProjectTerm "sleep"
   ├─ "slept" (форма)         ProjectTerm "slept"
   └─ "sleeping" (форма)       └─ UserTermStatus = KNOWN
                               ProjectTerm "take off" (PHRASE)
-                              └─ UserTermStatus = LINGQ
+                              └─ UserTermStatus = SAVED
 ```
 
 ## Сущности
@@ -47,7 +47,7 @@ public class UserTermStatus
     public int UserId { get; set; }
     public int ProjectId { get; set; }
     public int ProjectTermId { get; set; }
-    public TermStatus Status { get; set; }              // NEW, LINGQ, KNOWN, IGNORED
+    public TermStatus Status { get; set; }              // NEW, SAVED, KNOWN, IGNORED (в БД могли быть LINGQ до миграции)
     public string? Meaning { get; set; }
     public string? FirstSentence { get; set; }
     public string? FirstSourceTitle { get; set; }
@@ -61,7 +61,7 @@ public class UserTermStatus
 | Статус | Цвет | Описание |
 |--------|------|----------|
 | NEW | Синий | Новое слово/фраза, не встречалось раньше |
-| LINGQ | Жёлтый | Сохранённое слово/фраза со значением |
+| SAVED | Жёлтый | Сохранённое слово/фраза со значением (в токенах анализа — `LEARNING`) |
 | KNOWN | Белый | Известное слово (или помечено как известное) |
 | IGNORED | Приглушённый | Игнорируемое слово (не считается в статистике) |
 
@@ -142,9 +142,9 @@ public class Card
 
 ### CreateOrUpdateTerm
 
-Создаёт жёлтый LingQ из слова или фразы:
+Создаёт жёлтый «сохранённый термин» из слова или фразы:
 - Создаёт ProjectTerm (если нет)
-- Создаёт/обновляет UserTermStatus = LINGQ
+- Создаёт/обновляет UserTermStatus = SAVED
 - Сохраняет значение и первый контекст
 - Опционально создаёт карточку
 

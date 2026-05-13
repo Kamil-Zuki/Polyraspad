@@ -1,12 +1,12 @@
 # Cursor Lead Plans
 
-`.cursor/plans/` stores temporary coordination plans created by `lead-agent`.
+`.cursor/plans/` stores coordination plans created by `lead-agent`.
 
 ## Where Plans Live
 
 - Active plans: `.cursor/plans/active/<plan-id>.md`
-- Completed plans are not archived here. Delete them after all related tasks are done.
-- Stable architecture or product decisions must be promoted to `context/decisions/`, `context/plans/`, or `Docs/` before deleting the temporary plan.
+- Completed plans: переносить в `.cursor/plans/archive/<plan-id>.md` (не удалять).
+- Stable architecture or product decisions must be promoted to `context/decisions/`, `context/plans/`, or `Docs/` before or when closing the plan (архив не заменяет авторитетные документы).
 
 ## Plan ID
 
@@ -51,16 +51,16 @@ Owner: `lead-agent`
 - <test/build/check>
 
 ## Cleanup
-- [ ] All task files deleted
-- [ ] Temporary plan deleted
+- [ ] Task-папка перенесена в archive (см. `.cursor/tasks/README.md`)
+- [ ] План перенесён в `.cursor/plans/archive/<plan-id>.md`, в шапке при желании `Status: archived`
 - [ ] Durable decisions promoted if needed
 ```
 
-## Cleanup Rule
+## Archive Rule
 
-When all task files for a plan are complete:
+When all task files for a plan are complete (или план закрыт по решению lead-agent):
 
 1. Verify the feature or plan outcome.
 2. Promote durable decisions to `context/` or `Docs/` if needed.
-3. Delete `.cursor/tasks/active/<plan-id>/`.
-4. Delete `.cursor/plans/active/<plan-id>.md`.
+3. Перенести `.cursor/tasks/active/<plan-id>/` → `.cursor/tasks/archive/<plan-id>/` (целиком, чтобы сохранить историю task-ов).
+4. Перенести `.cursor/plans/active/<plan-id>.md` → `.cursor/plans/archive/<plan-id>.md`.

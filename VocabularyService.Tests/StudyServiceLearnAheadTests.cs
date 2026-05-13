@@ -196,7 +196,7 @@ public class StudyServiceLearnAheadTests
                 ProjectId = projectId,
                 Text = "test",
                 NormalizedText = "test",
-                Type = TermService.WordType,
+                Type = "WORD",
                 Language = "en",
                 CreatedAt = now,
                 UpdatedAt = now

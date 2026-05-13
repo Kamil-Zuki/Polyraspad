@@ -1,12 +1,12 @@
 # Cursor Lead Tasks
 
-`.cursor/tasks/` stores temporary task files created by `lead-agent` for specialist agents.
+`.cursor/tasks/` stores task files created by `lead-agent` for specialist agents.
 
 ## Where Tasks Live
 
 - Active task folders: `.cursor/tasks/active/<plan-id>/`
 - Task files: `.cursor/tasks/active/<plan-id>/<agent>.md`
-- Task files are temporary and should be deleted after completion.
+- Archived task folders: `.cursor/tasks/archive/<plan-id>/` (после закрытия плана — см. Archive Rule)
 
 ## Parallel Execution Rule
 
@@ -60,10 +60,10 @@ Can run in parallel: yes | no
 - <What the lead-agent needs after completion>
 ```
 
-## Cleanup Rule
+## Archive Rule
 
 When a task is complete and its result is reflected in code/docs/tests:
 
 1. Report completion to `lead-agent`.
-2. Delete the task file.
-3. When the plan has no remaining task files, delete the plan folder.
+2. Обновить статус в task-файле (`Status: done`); файл можно не удалять — при закрытии плана переносится вся папка плана.
+3. Когда план закрыт: перенести `.cursor/tasks/active/<plan-id>/` целиком в `.cursor/tasks/archive/<plan-id>/` (вместе с оставшимися `.md`).

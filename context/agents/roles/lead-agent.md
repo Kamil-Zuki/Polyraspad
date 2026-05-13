@@ -21,7 +21,7 @@ Use this role for coordinating multi-area work across product, frontend, backend
 - Use MCP `context7` from `.cursor` for external library/framework documentation.
 - Keep backend API guidance controller-based; do not introduce Minimal API patterns.
 - Run specialist tasks in parallel only after shared contracts are locked and file ownership does not overlap.
-- Delete completed task files and delete the temporary plan when all related tasks are done.
+- When a plan is complete: move `.cursor/tasks/active/<plan-id>/` to `.cursor/tasks/archive/<plan-id>/` and move the plan file from `.cursor/plans/active/` to `.cursor/plans/archive/` (see `.cursor/plans/README.md`).
 
 ## Output
 

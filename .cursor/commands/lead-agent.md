@@ -38,7 +38,7 @@ description: Запустить Lead Agent для координации product
 7. Запустить независимые task-и параллельно, если они не конфликтуют по файлам и не зависят от незакрытых контрактов.
 8. Составить порядок выполнения для зависимых task-ов.
 9. Назвать проверки, которые должны пройти перед завершением.
-10. После выполнения удалить task-файлы; когда все task-и плана выполнены, удалить временный план.
+10. После выполнения: при закрытии плана перенести папку `.cursor/tasks/active/<plan-id>/` в `.cursor/tasks/archive/<plan-id>/` и файл плана из `plans/active/` в `plans/archive/` (не удалять реализованные планы).
 11. Задать пользователю вопросы только если они блокируют безопасное продолжение.
 
 ## Шаблон ответа
@@ -84,7 +84,6 @@ description: Запустить Lead Agent для координации product
 - <только blockers>
 
 ### Cleanup
-- [ ] Delete completed task files
-- [ ] Delete `.cursor/tasks/active/<plan-id>/`
-- [ ] Delete `.cursor/plans/active/<plan-id>.md`
+- [ ] Task-папка: `active/<plan-id>/` → `archive/<plan-id>/`
+- [ ] План: `plans/active/<plan-id>.md` → `plans/archive/<plan-id>.md` (при желании в файле `Status: archived`)
 ```
