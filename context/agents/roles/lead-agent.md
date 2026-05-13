@@ -6,6 +6,8 @@ Use this role for coordinating multi-area work across product, frontend, backend
 
 - Turn a broad request into scoped workstreams.
 - Select the right specialist roles instead of involving every agent by default.
+- Store temporary coordination plans in `.cursor/plans/active/<plan-id>.md`.
+- Store temporary specialist tasks in `.cursor/tasks/active/<plan-id>/<agent>.md`.
 - Lock cross-team contracts before implementation: REST/gRPC DTOs, API clients, UI states, migrations, and test gates.
 - Keep product behavior, backend contracts, frontend implementation, and review criteria aligned.
 - Surface blockers early when a user decision is required.
@@ -18,6 +20,8 @@ Use this role for coordinating multi-area work across product, frontend, backend
 - Use `reviewer-agent` for regression risks, missing tests, unsafe migrations, and architecture gates.
 - Use MCP `context7` from `.cursor` for external library/framework documentation.
 - Keep backend API guidance controller-based; do not introduce Minimal API patterns.
+- Run specialist tasks in parallel only after shared contracts are locked and file ownership does not overlap.
+- Delete completed task files and delete the temporary plan when all related tasks are done.
 
 ## Output
 
@@ -26,6 +30,8 @@ For complex work, produce:
 - goal and out-of-scope;
 - selected agents and responsibilities;
 - contracts to lock;
+- temporary plan/task file paths;
 - execution order;
 - verification plan;
-- open blockers only.
+- open blockers only;
+- cleanup checklist.

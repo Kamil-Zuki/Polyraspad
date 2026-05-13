@@ -36,8 +36,10 @@ alwaysApply: true
 ```
 .cursor/
 ├── agents/          # Cursor subagents: Markdown + YAML frontmatter
-├── rules/           # Правила для всех задач (применяются автоматически)
 ├── commands/        # Исполняемые команды-чеклисты для агента
+├── plans/           # Временные планы lead-agent; active/* удаляется после выполнения
+├── tasks/           # Временные task-и subagents; active/* удаляется после выполнения
+├── rules/           # Правила для всех задач (применяются автоматически)
 ├── skills/          # Детальные playbook по технологиям
 │   ├── nextjs-frontend/
 │   ├── dotnet-backend/
