@@ -6,6 +6,7 @@
 - [ ] Прочитать `.cursor/skills/dotnet-backend/SKILL.md`
 - [ ] Прочитать `.cursor/rules/04-csharp-aspnetcore-2026.mdc`
 - [ ] Найти похожие сервисы через `rg` в `*/Services/`
+- [ ] Для внешних библиотек и API-reference использовать MCP `context7` из `.cursor`
 
 ## Чеклист реализации
 
@@ -57,30 +58,37 @@ public class TermService : ITermService
 ```
 
 ### 3. API слой
-- [ ] Minimal API или Controller — консистентно с существующим кодом
-- [ ] Typed results для multiple response types
+- [ ] Controllers с `[ApiController]` и attribute routing
+- [ ] Явные `ActionResult<T>`/`ProducesResponseType` для response contracts
 - [ ] Обработка ошибок (ProblemDetails)
 
 ```csharp
-// Minimal API
-app.MapPost("/api/terms", async (
-    CreateTermRequest request,
-    ITermService service) =>
+[ApiController]
+[Route("api/[controller]")]
+public class TermsController : ControllerBase
 {
-    var result = await service.CreateAsync(request);
-    return Results.Created($"/api/terms/{result.Id}", result);
-});
+    [HttpPost]
+    [ProducesResponseType<TermDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<TermDto>> Create(
+        [FromBody] CreateTermRequest request,
+        [FromServices] ITermService service)
+    {
+        var result = await service.CreateAsync(request);
+        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+    }
 
-// Или с typed results
-app.MapPost("/api/terms", async (
-    CreateTermRequest request,
-    ITermService service,
-    IValidator<CreateTermRequest> validator) =>
-    validator.Validate(request) is { IsValid: false } validation
-        ? Results.BadRequest(validation.Errors)
-        : await service.CreateAsync(request) is { } term
-            ? Results.Created($"/api/terms/{term.Id}", term)
-            : Results.Problem("Failed to create term"));
+    [HttpGet("{id:int}")]
+    [ProducesResponseType<TermDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TermDto>> GetById(
+        int id,
+        [FromServices] ITermService service)
+    {
+        var term = await service.GetByIdAsync(id);
+        return term is null ? NotFound() : Ok(term);
+    }
+}
 ```
 
 ### 4. Данные
@@ -119,15 +127,22 @@ dotnet format --verify-no-changes
 
 ## Паттерны
 
-### Typed Results
+### API Versioning через контроллеры
 ```csharp
-app.MapGet("/api/terms/{id}", 
-    Results<Ok<TermDto>, NotFound, BadRequest> (int id) =>
-        id <= 0
-            ? TypedResults.BadRequest()
-            : await service.GetByIdAsync(id) is { } term
-                ? TypedResults.Ok(term)
-                : TypedResults.NotFound());
+[ApiController]
+[ApiVersion("1.0")]
+[ApiVersion("2.0")]
+[Route("api/v{version:apiVersion}/terms")]
+public class TermsController : ControllerBase
+{
+    [HttpGet("{id:int}")]
+    [MapToApiVersion("1.0")]
+    public ActionResult<TermDtoV1> GetV1(int id) => Ok(GetTermV1(id));
+
+    [HttpGet("{id:int}")]
+    [MapToApiVersion("2.0")]
+    public ActionResult<TermDtoV2> GetV2(int id) => Ok(GetTermV2(id));
+}
 ```
 
 ### Options Pattern

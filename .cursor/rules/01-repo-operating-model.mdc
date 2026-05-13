@@ -35,11 +35,11 @@ alwaysApply: true
 
 ```
 .cursor/
+├── agents/          # Cursor subagents: Markdown + YAML frontmatter
 ├── rules/           # Правила для всех задач (применяются автоматически)
 ├── commands/        # Исполняемые команды-чеклисты для агента
 ├── skills/          # Детальные playbook по технологиям
 │   ├── nextjs-frontend/
 │   ├── dotnet-backend/
 │   └── testing/
-└── subagents/       # Специализированные роли агента
 ```

@@ -74,24 +74,42 @@ if (term is { Type: TermType.Phrase, Text.Length: > 5 })
 
 ## ASP.NET Core архитектура
 
-### Minimal APIs
+### Controller-based APIs (основной стиль)
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 var app = builder.Build();
 
-// Простые endpoints
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-// Typed results с union types
-app.MapGet("/terms/{id}", Results<Ok<TermDto>, NotFound, BadRequest> (int id) =>
-    id <= 0 
-        ? TypedResults.BadRequest() 
-        : GetTerm(id) is { } term 
-            ? TypedResults.Ok(term) 
-            : TypedResults.NotFound());
-
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
 app.Run();
+```
+
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+public class TermsController : ControllerBase
+{
+    [HttpGet("{id:int}")]
+    [ProducesResponseType<TermDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TermDto>> GetById(int id, [FromServices] ITermService service)
+    {
+        var term = await service.GetByIdAsync(id);
+        return term is null ? NotFound() : Ok(term);
+    }
+}
 ```
 
 ### DI и Typed HttpClient
@@ -249,3 +267,4 @@ public class TermGrpcService : TermService.TermServiceBase
 4. **Options pattern для конфигурации** — валидация на старте
 5. **Integration tests для API contracts** — WebApplicationFactory
 6. **Миграции — с сохранением данных** — никаких destructive миграций без плана
+7. **Для внешних библиотек/фреймворков используйте MCP `context7` из `.cursor`** — не опирайтесь только на память модели

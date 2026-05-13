@@ -110,17 +110,20 @@ public async Task<TermDto> CreateOrUpdateTermAsync(
 ### API versioning
 
 ```csharp
-// Версионирование через URL
-app.MapGet("/api/v1/terms/{id}", GetTermV1);
-app.MapGet("/api/v2/terms/{id}", GetTermV2);
+[ApiController]
+[ApiVersion("1.0")]
+[ApiVersion("2.0")]
+[Route("api/v{version:apiVersion}/terms")]
+public class TermsController : ControllerBase
+{
+    [HttpGet("{id:int}")]
+    [MapToApiVersion("1.0")]
+    public ActionResult<TermDtoV1> GetV1(int id) => Ok(GetTermV1(id));
 
-// Или через заголовок
-app.MapGet("/api/terms/{id}", (int id, [FromHeader(Name = "X-API-Version")] string version) =>
-    version switch
-    {
-        "2" => GetTermV2(id),
-        _ => GetTermV1(id)
-    });
+    [HttpGet("{id:int}")]
+    [MapToApiVersion("2.0")]
+    public ActionResult<TermDtoV2> GetV2(int id) => Ok(GetTermV2(id));
+}
 ```
 
 ### Graceful degradation

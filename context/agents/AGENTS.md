@@ -17,8 +17,11 @@ Use a plan-driven, evidence-first workflow:
 
 ## Agent Roles
 
-Default roles live in `agents/roles/`:
+Cursor-executable subagents live in `.cursor/agents/`.
 
+Longer context role guides live in `agents/roles/`:
+
+- `lead-agent.md` - coordination across product, frontend, backend, testing, review, and docs.
 - `product-agent.md` - product behavior, UX flows, and acceptance criteria.
 - `frontend-agent.md` - Next.js UI, reader UX, state, and component work.
 - `backend-agent.md` - .NET services, API contracts, data, migrations.

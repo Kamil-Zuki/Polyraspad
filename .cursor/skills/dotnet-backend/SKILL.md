@@ -10,6 +10,7 @@
 4. Связанные тесты в `*.Tests/`
 5. `.cursor/rules/04-csharp-aspnetcore-2026.mdc`
 6. `.cursor/rules/06-lingq-domain-guardrails.mdc` (если Vocabulary)
+7. Для вопросов по библиотекам/фреймворкам — MCP `context7` из `.cursor`
 
 ## Архитектура сервисов
 
@@ -116,31 +117,40 @@ public class TermService : ITermService
 }
 ```
 
-### API слой (Minimal API)
+### API слой (Controllers)
 
 ```csharp
-// Program.cs или отдельный extension method
-app.MapPost("/api/terms", async (
-    CreateTermRequest request,
-    ITermService termService,
-    IValidator<CreateTermRequest> validator) =>
+[ApiController]
+[Route("api/[controller]")]
+public class TermsController : ControllerBase
 {
-    var validation = await validator.ValidateAsync(request);
-    if (!validation.IsValid)
-        return Results.BadRequest(validation.Errors);
-    
-    var term = await termService.CreateAsync(request);
-    return Results.Created($"/api/terms/{term.Id}", term);
-});
+    [HttpPost]
+    [ProducesResponseType<TermDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<TermDto>> Create(
+        [FromBody] CreateTermRequest request,
+        [FromServices] ITermService termService,
+        [FromServices] IValidator<CreateTermRequest> validator)
+    {
+        var validation = await validator.ValidateAsync(request);
+        if (!validation.IsValid)
+            return BadRequest(validation.Errors);
 
-// Typed results для сложных сценариев
-app.MapGet("/api/terms/{id}", 
-    Results<Ok<TermDto>, NotFound, BadRequest> (int id, ITermService service) =>
-        id <= 0
-            ? TypedResults.BadRequest()
-            : await service.GetByIdAsync(id) is { } term
-                ? TypedResults.Ok(term)
-                : TypedResults.NotFound());
+        var term = await termService.CreateAsync(request);
+        return CreatedAtAction(nameof(GetById), new { id = term.Id }, term);
+    }
+
+    [HttpGet("{id:int}")]
+    [ProducesResponseType<TermDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TermDto>> GetById(
+        int id,
+        [FromServices] ITermService service)
+    {
+        var term = await service.GetByIdAsync(id);
+        return term is null ? NotFound() : Ok(term);
+    }
+}
 ```
 
 ### gRPC сервис
