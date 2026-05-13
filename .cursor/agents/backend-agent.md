@@ -1,6 +1,7 @@
 ---
 name: backend-agent
 description: Handles .NET backend work: controllers, DTOs, gRPC contracts, services, EF Core data, migrations, and backend tests.
+model: gpt-5.3-codex
 readonly: false
 is_background: false
 ---

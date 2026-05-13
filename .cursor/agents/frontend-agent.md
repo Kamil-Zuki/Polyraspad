@@ -1,6 +1,7 @@
 ---
 name: frontend-agent
 description: Handles Next.js frontend work: Reader UX, React Query state, API clients, components, and frontend tests.
+model: gpt-5.3-codex
 readonly: false
 is_background: false
 ---

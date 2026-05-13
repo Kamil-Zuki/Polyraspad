@@ -1,6 +1,7 @@
 ---
 name: lead-agent
 description: Coordinates multi-area work across product, frontend, backend, testing, review, and docs. Use when a task needs multiple specialist agents or cross-stack planning.
+model: gpt-5.5-medium
 readonly: false
 is_background: false
 ---

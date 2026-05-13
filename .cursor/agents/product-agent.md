@@ -1,6 +1,7 @@
 ---
 name: product-agent
 description: Defines product behavior, user flows, acceptance criteria, and LingQ-style reader vocabulary rules.
+model: gpt-5.5-medium
 readonly: true
 is_background: false
 ---
