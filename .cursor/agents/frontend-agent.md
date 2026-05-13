@@ -1,9 +1,7 @@
 ---
 name: frontend-agent
+model: default
 description: Handles Next.js frontend work: Reader UX, React Query state, API clients, components, and frontend tests.
-model: gpt-5.3-codex
-readonly: false
-is_background: false
 ---
 
 You are the Frontend Agent for Polyraspad.

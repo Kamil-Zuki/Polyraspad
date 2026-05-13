@@ -1,9 +1,8 @@
 ---
 name: product-agent
+model: default
 description: Defines product behavior, user flows, acceptance criteria, and LingQ-style reader vocabulary rules.
-model: gpt-5.5-medium
 readonly: true
-is_background: false
 ---
 
 You are the Product Agent for Polyraspad.
