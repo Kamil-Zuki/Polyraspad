@@ -1,0 +1,81 @@
+---
+description: "TDD-политика: red-green-refactor цикл и уровни тестирования"
+globs: ["**/*.cs", "**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# TDD-политика и тестирование
+
+## Red-Green-Refactor цикл (обязателен)
+
+При изменении поведения соблюдать порядок:
+
+1. **Red** — написать тест, который падает (или спецификацию поведения)
+2. **Green** — минимальная реализация, чтобы тест прошёл
+3. **Refactor** — улучшить код, сохраняя зелёные тесты
+
+## Уровни тестов (по риску, не по церемонии)
+
+### Backend (.NET)
+
+| Риск | Уровень | Когда добавлять |
+|------|---------|-----------------|
+| Изменение бизнес-логики сервиса | Unit/Integration | Всегда |
+| Изменение DTO/gRPC/REST контрактов | Integration | Всегда |
+| Миграции с сохранением данных | Integration | Когда важно сохранение данных |
+| Новый endpoint | Integration | Всегда |
+
+### Frontend (Next.js)
+
+| Риск | Уровень | Когда добавлять |
+|------|---------|-----------------|
+| Reader interactions | Component/Page | Когда практично |
+| API client changes | Integration | При изменении контрактов |
+| Critical user flows | E2E | Для core flows (import → read → LingQ) |
+
+## Правила именования тестов
+
+### xUnit (Backend)
+
+```csharp
+// Факт — инвариантное поведение
+[Fact]
+public void Sleep_And_Slept_Have_Separate_Statuses()
+
+// Теория — параметризованный тест
+[Theory]
+[InlineData("sleep", "slept")]
+[InlineData("go", "went")]
+public void Different_Forms_Are_Not_Duplicates(string form1, string form2)
+```
+
+### Jest/RTL (Frontend)
+
+```typescript
+// Описываем поведение, не implementation
+it('renders blue highlight for new terms', () =>
+it('opens term inspector on word click', () =>
+it('marks term as known when clicking Known button', () =>
+```
+
+## LingQ-specific регрессионные тесты
+
+Обязательные проверки для Reader/Vocabulary работы:
+
+- `sleep` и `slept` имеют разные статусы
+- `go` и `went` — не дубли карточек
+- Точная фраза — дубль; компонентные слова — не дубль
+- Перелистывание переводит синие термины в known только при включённой настройке
+- Создание карточки сохраняет точную форму/фразу
+
+## Команды для проверки
+
+```bash
+# Backend
+dotnet test --filter "FullyQualifiedName~TermService"
+dotnet test --filter "FullyQualifiedName~CardService"
+
+# Frontend
+npm test -- --testPathPattern=reader
+npm test -- --testPathPattern=term
+```

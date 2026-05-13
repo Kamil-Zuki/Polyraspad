@@ -1,0 +1,182 @@
+---
+description: "System Design принципы: границы сервисов, контракты, отказоустойчивость"
+globs: ["**/*.cs", "**/*.ts", "**/*.proto"]
+alwaysApply: true
+---
+
+# System Design принципы
+
+## Service Boundaries
+
+### Чёткие границы ответственности
+
+```
+AggregatorService/     → API Gateway, агрегация, роутинг
+VocabularyService/     → Термины, статусы, текстовый анализ
+MediaService/          → Файлы, PDF, аудио
+authorization-module/  → Аутентификация, авторизация
+```
+
+- Каждый сервис владеет своими данными
+- Изменения через публичный API (REST/gRPC)
+- Никаких прямых обращений к БД другого сервиса
+
+### Contract-First Design
+
+```protobuf
+// Протокол — контракт между сервисами
+service TermService {
+    rpc GetTerm (GetTermRequest) returns (TermDto);
+    rpc CreateOrUpdateTerm (CreateTermRequest) returns (TermDto);
+    rpc MarkTermKnown (MarkTermRequest) returns (StatusResponse);
+    rpc IgnoreTerm (IgnoreTermRequest) returns (StatusResponse);
+    rpc BulkMarkKnown (BulkMarkRequest) returns (BulkMarkResponse);
+}
+
+// DTO — явные поля, никаких динамических объектов
+message TermDto {
+    int32 id = 1;
+    string text = 2;
+    string normalized_text = 3;
+    TermType type = 4;
+    TermStatus status = 5;
+    string meaning = 6;
+}
+```
+
+## Resilience и Observability
+
+### Resilience Patterns
+
+```csharp
+// Retry с Polly
+builder.Services.AddHttpClient("vocabulary")
+    .AddTransientHttpErrorPolicy(policy =>
+        policy.WaitAndRetryAsync(
+            3,
+            retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+            (exception, timeSpan, retryCount, context) =>
+            {
+                logger.LogWarning(
+                    "Retry {RetryCount} after {Delay}s due to {Message}",
+                    retryCount, timeSpan.TotalSeconds, exception.Message);
+            }));
+
+// Circuit Breaker
+builder.Services.AddHttpClient("external")
+    .AddTransientHttpErrorPolicy(policy =>
+        policy.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+```
+
+### Observability
+
+```csharp
+// Структурированное логирование
+logger.LogInformation(
+    "Processing term {TermId} for user {UserId} in project {ProjectId}",
+    termId, userId, projectId);
+
+// Distributed tracing
+using var activity = new Activity("ProcessText").Start();
+activity?.SetTag("project.id", projectId);
+activity?.SetTag("text.length", text.Length);
+```
+
+## Idempotency
+
+```csharp
+// Идемпотентные операции через idempotency key
+public async Task<TermDto> CreateOrUpdateTermAsync(
+    CreateTermRequest request,
+    string idempotencyKey)
+{
+    // Проверяем, не обрабатывали ли уже этот ключ
+    var existing = await _idempotencyStore.GetAsync(idempotencyKey);
+    if (existing != null)
+        return existing;
+    
+    // Создаём термин
+    var term = await _termService.CreateAsync(request);
+    
+    // Сохраняем результат
+    await _idempotencyStore.SaveAsync(idempotencyKey, term);
+    
+    return term;
+}
+```
+
+## Backward Compatibility
+
+### API versioning
+
+```csharp
+// Версионирование через URL
+app.MapGet("/api/v1/terms/{id}", GetTermV1);
+app.MapGet("/api/v2/terms/{id}", GetTermV2);
+
+// Или через заголовок
+app.MapGet("/api/terms/{id}", (int id, [FromHeader(Name = "X-API-Version")] string version) =>
+    version switch
+    {
+        "2" => GetTermV2(id),
+        _ => GetTermV1(id)
+    });
+```
+
+### Graceful degradation
+
+```csharp
+// Fallback при недоступности сервиса
+try
+{
+    var translation = await _translationService.TranslateAsync(text);
+    return translation;
+}
+catch (HttpRequestException) when (_options.EnableFallback)
+{
+    logger.LogWarning("Translation service unavailable, returning original text");
+    return new TranslationResult { Text = text, Source = "fallback" };
+}
+```
+
+## Migration Safety
+
+### Неразрушающие миграции
+
+```csharp
+// Этап 1: Добавляем новое поле (nullable или с default)
+migrationBuilder.AddColumn<string>(
+    name: "NormalizedText",
+    table: "ProjectTerms",
+    nullable: true);  // nullable для backward compatibility
+
+// Этап 2: Заполняем данные
+migrationBuilder.Sql("UPDATE ProjectTerms SET NormalizedText = LOWER(Text)");
+
+// Этап 3: Делаем обязательным (отдельная миграция)
+migrationBuilder.AlterColumn<string>(
+    name: "NormalizedText",
+    table: "ProjectTerms",
+    nullable: false);
+```
+
+### Explicit cleanup
+
+```csharp
+// Удаление только с явного запроса
+// НЕ делайте: автоматическое удаление legacy полей
+// Делайте: пометьте как obsolete, потом явный cleanup plan
+
+[Obsolete("Use ProjectTermId instead. Will be removed in v2.0")]
+public int? LemmaId { get; set; }  // nullable, obsolete
+```
+
+## Принципы принятия решений
+
+| Ситуация | Принцип |
+|----------|---------|
+| Новый сервис | Явные границы, собственные данные |
+| Изменение API | Contract-first, версионирование |
+| Вызов внешнего API | Typed client, retry, circuit breaker |
+| Миграция | Неразрушающая, с заполнением данных |
+| Удаление функциональности | Obsolete → deprecation notice → cleanup |
