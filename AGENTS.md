@@ -61,4 +61,4 @@ The active learning direction is the LingQ-style reader model:
 - reader becomes the primary learning surface.
 
 Implementation narrative: `context/plans/active/lingq-reader-implementation-plan.md`.  
-Optional Cursor-side coordination roadmap (if present): `.cursor/plans/active/reader-library-lingq-roadmap-2026-05-13.md`.
+Optional Cursor-side coordination (split into backlog hub): `.cursor/plans/backlog/reader-lingq-hub-2026-05-14.md`.
