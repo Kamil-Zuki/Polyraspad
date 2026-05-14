@@ -6,6 +6,7 @@ using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
 using VocabularyService.Dtos.Text;
+using VocabularyService.Helpers;
 using VocabularyService.Services;
 using Xunit;
 
@@ -40,17 +41,13 @@ public class TextServiceTermStatusTests
 
             arrangeContext.UserTermStatuses.AddRange(
                 AddStatus(userId, projectId, sleep.Id, "KNOWN"),
-                AddStatus(userId, projectId, slept.Id, "LINGQ"));
+                AddStatus(userId, projectId, slept.Id, "SAVED"));
 
             await arrangeContext.SaveChangesAsync();
         }
 
         await using var actContext = CreateContext(dbName);
-        var termService = new TermService(actContext);
-        var sut = new TextService(
-            actContext,
-            termService,
-            NullLogger<TextService>.Instance);
+        var sut = new TextService(actContext, NullLogger<TextService>.Instance);
 
         var result = await sut.AnalyzeTextAsync(
             userId,
@@ -70,16 +67,57 @@ public class TextServiceTermStatusTests
         result.Stats.UniqueWords.Should().Be(3);
     }
 
+    [Fact]
+    public async Task AnalyzeTextAsync_LegacyLingqStatusInDb_MapsToLearning()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+
+        await using (var arrangeContext = CreateContext(dbName))
+        {
+            arrangeContext.Projects.Add(new Project
+            {
+                Id = projectId,
+                UserId = userId,
+                Title = "English",
+                SourceLang = "en",
+                TargetLang = "ru",
+                FsrsSettings = new FsrsSettings(),
+                Stats = new ProjectStats(),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+
+            var word = AddTerm(arrangeContext, projectId, "legacy");
+            arrangeContext.UserTermStatuses.Add(AddStatus(userId, projectId, word.Id, "LINGQ"));
+            await arrangeContext.SaveChangesAsync();
+        }
+
+        await using var actContext = CreateContext(dbName);
+        var sut = new TextService(actContext, NullLogger<TextService>.Instance);
+
+        var result = await sut.AnalyzeTextAsync(
+            userId,
+            new AnalyzeTextRequestDto
+            {
+                ProjectId = projectId,
+                Text = "legacy word"
+            });
+
+        var token = result.Tokens.Single(t => t.Text == "legacy");
+        token.Status.Should().Be(TokenStatus.Learning);
+    }
+
     private static ProjectTerm AddTerm(VocabularyServiceContext context, Guid projectId, string text)
     {
-        var termService = new TermService(context);
         var term = new ProjectTerm
         {
             Id = Guid.NewGuid(),
             ProjectId = projectId,
             Text = text,
-            NormalizedText = termService.NormalizeTerm(text),
-            Type = TermService.WordType,
+            NormalizedText = TermNormalizer.Normalize(text),
+            Type = "WORD",
             Language = "en",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow

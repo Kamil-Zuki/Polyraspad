@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
 using AggregatorService.Dtos;
@@ -40,9 +41,6 @@ public class CardsControllerTests : IClassFixture<AggregatorWebApplicationFactor
             Id = TestCardId,
             DeckId = Guid.NewGuid().ToString(),
             CreatorId = TestUserId.ToString(),
-            Sentence = "Hello world",
-            Translation = "Привет",
-            TargetWord = "world",
             SrsStatus = SrsStatus.New,
             CreatedAt = Timestamp.FromDateTime(DateTime.UtcNow),
         };
@@ -56,9 +54,12 @@ public class CardsControllerTests : IClassFixture<AggregatorWebApplicationFactor
 
         var dto = new UpdateCardDto
         {
-            Sentence = "Hello world",
-            Translation = "Привет",
-            TargetWord = "world",
+            FieldValues = new Dictionary<string, NoteFieldValueDto>
+            {
+                ["Expression"] = new() { StringValue = "Hello world" },
+                ["Word"] = new() { StringValue = "world" },
+                ["Translation"] = new() { StringValue = "Привет" },
+            },
         };
 
         using var client = CreateAuthenticatedClient();
@@ -66,9 +67,9 @@ public class CardsControllerTests : IClassFixture<AggregatorWebApplicationFactor
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         captured.Should().NotBeNull();
-        captured!.Sentence.Should().Be("Hello world");
-        captured.Translation.Should().Be("Привет");
-        captured.TargetWord.Should().Be("world");
+        captured!.FieldValues["Expression"].StringValue.Should().Be("Hello world");
+        captured.FieldValues["Word"].StringValue.Should().Be("world");
+        captured.FieldValues["Translation"].StringValue.Should().Be("Привет");
         captured.CardId.Should().Be(TestCardId);
     }
 }

@@ -5,6 +5,7 @@
 - `Docs/` is authoritative documentation.
 - `context/` is operational memory for agents and active work.
 - Root `AGENTS.md` is the entry point for AI coding agents.
+- `.cursor/` holds Cursor-native rules, commands, agents, and short-lived lead coordination (`plans/`, `tasks/`).
 
 ## Implementation Rules
 

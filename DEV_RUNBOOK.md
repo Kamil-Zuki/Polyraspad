@@ -137,7 +137,7 @@ If you explicitly need to remove volumes too:
 docker compose down -v
 ```
 
-Use `-v` carefully because it removes local Postgres, Redis, MinIO and Ollama data.
+Use `-v` carefully because it removes local Postgres, Redis, MinIO and other compose volumes.
 
 ## MVP Smoke Test
 
@@ -207,6 +207,6 @@ docker compose logs vocabulary-service --since 10m
 
 ## Notes
 
-- `authorization-module`, `vocabulary-service`, `postgres`, `redis`, `inclusive` and `ollama` are internal by default in compose.
+- `authorization-module`, `vocabulary-service`, `postgres`, `redis`, and `inclusive` are internal by default in compose.
 - browser traffic should go through `polyraspad-frontend` and `aggregator-service`.
 - media URLs are expected to resolve through public MinIO access on `localhost:9000`.

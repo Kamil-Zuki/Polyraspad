@@ -6,7 +6,9 @@ using Moq;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
+using VocabularyService.Domain;
 using VocabularyService.Dtos.Cards;
+using VocabularyService.Helpers;
 using VocabularyService.Services;
 using Xunit;
 
@@ -36,20 +38,23 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
+                new NoteTypeService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
             {
                 UserId = userId,
                 DeckId = deckId,
-                Sentence = "I like apples",
-                TargetWord = "apples",
-                Translation = "Я люблю яблоки",
-                ImageUrl = imageUrl,
-                AudioUrl = audioUrl
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "I like apples" },
+                    [SentenceMiningNoteType.Word] = new() { String = "apples" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "Я люблю яблоки" },
+                    [SentenceMiningNoteType.Image] = new() { String = imageUrl },
+                    [SentenceMiningNoteType.Audio] = new() { String = audioUrl },
+                },
             };
 
             var created = await sut.CreateCardAsync(dto);
@@ -58,10 +63,14 @@ public class CardServiceMediaTests
 
         await using (var assertContext = CreateContext(dbName))
         {
-            var fromDb = await assertContext.Cards.AsNoTracking().SingleAsync(c => c.Id == createdCardId);
-            fromDb.Media.Should().NotBeNull();
-            fromDb.Media!.ImageUrl.Should().Be(imageUrl);
-            fromDb.Media.AudioUrl.Should().Be(audioUrl);
+            var fromDb = await assertContext.Cards.AsNoTracking()
+                .Include(c => c.Note)
+                .SingleAsync(c => c.Id == createdCardId);
+            fromDb.Note.Should().NotBeNull();
+            var media = NoteFieldMapHelper.BuildCardMedia(fromDb.Note!.FieldValues);
+            media.Should().NotBeNull();
+            media!.ImageUrl.Should().Be(imageUrl);
+            media.AudioUrl.Should().Be(audioUrl);
         }
     }
 
@@ -84,20 +93,21 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
+                new NoteTypeService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dto = new CreateCardDto
             {
                 UserId = userId,
                 DeckId = deckId,
-                Sentence = "I like apples",
-                TargetWord = "apples",
-                Translation = "Я люблю яблоки",
-                ImageUrl = null,
-                AudioUrl = null
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "I like apples" },
+                    [SentenceMiningNoteType.Word] = new() { String = "apples" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "Я люблю яблоки" },
+                },
             };
 
             var created = await sut.CreateCardAsync(dto);
@@ -106,8 +116,10 @@ public class CardServiceMediaTests
 
         await using (var assertContext = CreateContext(dbName))
         {
-            var fromDb = await assertContext.Cards.AsNoTracking().SingleAsync(c => c.Id == createdCardId);
-            fromDb.Media.Should().BeNull();
+            var fromDb = await assertContext.Cards.AsNoTracking()
+                .Include(c => c.Note)
+                .SingleAsync(c => c.Id == createdCardId);
+            NoteFieldMapHelper.BuildCardMedia(fromDb.Note!.FieldValues).Should().BeNull();
         }
     }
 
@@ -134,9 +146,9 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
+                new NoteTypeService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dtos = new List<CreateCardDto>
@@ -145,22 +157,27 @@ public class CardServiceMediaTests
                 {
                     UserId = userId,
                     DeckId = deckId,
-                    Sentence = "I like apples",
-                    TargetWord = "apples",
-                    Translation = "Я люблю яблоки",
-                    ImageUrl = imageUrl1,
-                    AudioUrl = audioUrl1
+                    FieldValues = new Dictionary<string, NoteFieldValue>
+                    {
+                        [SentenceMiningNoteType.Expression] = new() { String = "I like apples" },
+                        [SentenceMiningNoteType.Word] = new() { String = "apples" },
+                        [SentenceMiningNoteType.Translation] = new() { String = "Я люблю яблоки" },
+                        [SentenceMiningNoteType.Image] = new() { String = imageUrl1 },
+                        [SentenceMiningNoteType.Audio] = new() { String = audioUrl1 },
+                    },
                 },
                 new()
                 {
                     UserId = userId,
                     DeckId = deckId,
-                    Sentence = "I like bananas",
-                    TargetWord = "bananas",
-                    Translation = "Я люблю бананы",
-                    ImageUrl = null,
-                    AudioUrl = audioUrl2
-                }
+                    FieldValues = new Dictionary<string, NoteFieldValue>
+                    {
+                        [SentenceMiningNoteType.Expression] = new() { String = "I like bananas" },
+                        [SentenceMiningNoteType.Word] = new() { String = "bananas" },
+                        [SentenceMiningNoteType.Translation] = new() { String = "Я люблю бананы" },
+                        [SentenceMiningNoteType.Audio] = new() { String = audioUrl2 },
+                    },
+                },
             };
 
             var created = await sut.BulkCreateCardsAsync(userId, deckId, dtos);
@@ -170,21 +187,24 @@ public class CardServiceMediaTests
         await using (var assertContext = CreateContext(dbName))
         {
             var cards = await assertContext.Cards.AsNoTracking()
+                .Include(c => c.Note)
                 .Where(c => createdIds.Contains(c.Id))
-                .OrderBy(c => c.Sentence)
+                .OrderBy(c => NoteFieldMapHelper.GetWord(c.Note!.FieldValues))
                 .ToListAsync();
 
             cards.Should().HaveCount(2);
 
-            var apples = cards.Single(c => c.TargetWord == "apples");
-            apples.Media.Should().NotBeNull();
-            apples.Media!.ImageUrl.Should().Be(imageUrl1);
-            apples.Media.AudioUrl.Should().Be(audioUrl1);
+            var apples = cards.Single(c => NoteFieldMapHelper.GetWord(c.Note!.FieldValues) == "apples");
+            var mApples = NoteFieldMapHelper.BuildCardMedia(apples.Note!.FieldValues);
+            mApples.Should().NotBeNull();
+            mApples!.ImageUrl.Should().Be(imageUrl1);
+            mApples.AudioUrl.Should().Be(audioUrl1);
 
-            var bananas = cards.Single(c => c.TargetWord == "bananas");
-            bananas.Media.Should().NotBeNull();
-            bananas.Media!.ImageUrl.Should().BeNull();
-            bananas.Media.AudioUrl.Should().Be(audioUrl2);
+            var bananas = cards.Single(c => NoteFieldMapHelper.GetWord(c.Note!.FieldValues) == "bananas");
+            var mBananas = NoteFieldMapHelper.BuildCardMedia(bananas.Note!.FieldValues);
+            mBananas.Should().NotBeNull();
+            mBananas!.ImageUrl.Should().BeNull();
+            mBananas.AudioUrl.Should().Be(audioUrl2);
         }
     }
 
@@ -214,19 +234,22 @@ public class CardServiceMediaTests
 
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 mockStorage.Object,
+                new NoteTypeService(actContext),
                 NullLogger<CardService>.Instance);
 
             var dto = new CaptureCardDto
             {
                 UserId = userId,
                 ProjectId = projectId,
-                Sentence = "Test sentence",
-                TargetWord = "sentence",
-                Translation = "Тест",
-                ScreenshotBase64 = screenshotBase64
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "Test sentence" },
+                    [SentenceMiningNoteType.Word] = new() { String = "sentence" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "Тест" },
+                },
+                ScreenshotBase64 = screenshotBase64,
             };
 
             var created = await sut.CaptureCardAsync(dto);
@@ -235,9 +258,10 @@ public class CardServiceMediaTests
 
         await using (var assertContext = CreateContext(dbName))
         {
-            var fromDb = await assertContext.Cards.AsNoTracking().SingleAsync(c => c.Id == createdCardId);
-            fromDb.Media.Should().NotBeNull();
-            fromDb.Media!.ImageId.Should().Be(expectedImageId);
+            var fromDb = await assertContext.Cards.AsNoTracking()
+                .Include(c => c.Note)
+                .SingleAsync(c => c.Id == createdCardId);
+            fromDb.Note!.FieldValues[SentenceMiningNoteType.Image].String.Should().Be(expectedImageId.ToString());
         }
     }
 
@@ -314,4 +338,3 @@ public class CardServiceMediaTests
             Task.CompletedTask;
     }
 }
-

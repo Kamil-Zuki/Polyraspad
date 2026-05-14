@@ -1,0 +1,180 @@
+---
+description: "LingQ домен: term-first модель, границы работы со статусами и дубликатами"
+globs: ["**/*.cs", "**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# LingQ Domain Guardrails
+
+## Core Principle: Term-First Model
+
+Реальные формы и фразы — основа обучения. Леммы — legacy-метаданные.
+
+```
+Старая модель:              Новая модель:
+Lemma "sleep"               ProjectTerm "sleep"
+  ├─ "sleep" (форма)         ├─ UserTermStatus = NEW
+  ├─ "slept" (форма)         ProjectTerm "slept"
+  └─ "sleeping" (форма)       └─ UserTermStatus = KNOWN
+                              ProjectTerm "take off" (PHRASE)
+                              └─ UserTermStatus = SAVED
+```
+
+## Сущности
+
+### ProjectTerm
+
+```csharp
+public class ProjectTerm
+{
+    public int Id { get; set; }
+    public int ProjectId { get; set; }
+    public required string Text { get; set; }           // Исходная форма
+    public required string NormalizedText { get; set; } // Trim + lowercase
+    public TermType Type { get; set; }                  // WORD или PHRASE
+    public string Language { get; set; } = "en";
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+```
+
+### UserTermStatus
+
+```csharp
+public class UserTermStatus
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public int ProjectId { get; set; }
+    public int ProjectTermId { get; set; }
+    public TermStatus Status { get; set; }              // NEW, SAVED, KNOWN, IGNORED (в БД могли быть LINGQ до миграции)
+    public string? Meaning { get; set; }
+    public string? FirstSentence { get; set; }
+    public string? FirstSourceTitle { get; set; }
+    public string? FirstSourceUrl { get; set; }
+    public DateTime? LastSeenAt { get; set; }
+}
+```
+
+## Визуальные статусы (Reader)
+
+| Статус | Цвет | Описание |
+|--------|------|----------|
+| NEW | Синий | Новое слово/фраза, не встречалось раньше |
+| SAVED | Жёлтый | Сохранённое слово/фраза со значением (в токенах анализа — `LEARNING`) |
+| KNOWN | Белый | Известное слово (или помечено как известное) |
+| IGNORED | Приглушённый | Игнорируемое слово (не считается в статистике) |
+
+## Критические правила
+
+### 1. Разные формы = разные термины
+
+```csharp
+// ✅ Правильно: sleep и slept — разные ProjectTerm
+var sleepTerm = await _termService.GetOrCreateAsync("sleep", projectId);
+var sleptTerm = await _termService.GetOrCreateAsync("slept", projectId);
+// sleepTerm.Id != sleptTerm.Id
+
+// ✅ Правильно: разные статусы
+await _userTermStatus.MarkStatusAsync(sleepTerm.Id, userId, TermStatus.New);
+await _userTermStatus.MarkStatusAsync(sleptTerm.Id, userId, TermStatus.Known);
+```
+
+### 2. Проверка дубликатов по точной форме
+
+```csharp
+// ✅ Правильно: проверяем NormalizedText
+bool IsDuplicate(string text, int projectId)
+{
+    var normalized = Normalize(text);
+    return _db.ProjectTerms.Any(t => 
+        t.ProjectId == projectId && 
+        t.NormalizedText == normalized);
+}
+
+// ❌ Неправильно: проверка через лемматизацию
+// bool IsDuplicate(string text) => _lemmaService.FindLemma(text) != null;
+```
+
+### 3. Фразы — отдельные термины
+
+```csharp
+// ✅ Правильно: "take off" — отдельный ProjectTerm с Type = PHRASE
+var phraseTerm = await _termService.CreatePhraseAsync(
+    words: ["take", "off"],
+    projectId: projectId);
+
+// ✅ Приоритет отображения: фраза > отдельные слова
+// Если есть фраза "take off", подсвечиваем её как целое
+// Если есть только "take" и "off" — подсвечиваем отдельно
+```
+
+### 4. Reader — основная учебная поверхность
+
+```
+Принципы UX:
+- Все действия со словом доступны без покидания Reader
+- Инспектор слова открывается по клику
+- Создание LingQ, Known, Ignore — один клик
+- Карточка — отдельное SRS-действие (не обязательное)
+- Счётчики: new terms, LingQs, known %, review
+```
+
+### 5. Не используем леммы в новом коде
+
+```csharp
+// ❌ НЕ делайте: новый код с LemmaId
+public class NewCard  // новый код
+{
+    public int? LemmaId { get; set; }  // WRONG
+}
+
+// ✅ Делайте: связь с ProjectTerm
+public class Card
+{
+    public int? ProjectTermId { get; set; }  // CORRECT
+    public ProjectTerm? ProjectTerm { get; set; }
+    public required string TargetWord { get; set; }  // точная форма
+}
+```
+
+## API действия
+
+### CreateOrUpdateTerm
+
+Создаёт жёлтый «сохранённый термин» из слова или фразы:
+- Создаёт ProjectTerm (если нет)
+- Создаёт/обновляет UserTermStatus = SAVED
+- Сохраняет значение и первый контекст
+- Опционально создаёт карточку
+
+### MarkTermKnown
+
+Переводит real term в KNOWN:
+- Обновляет UserTermStatus.Status = KNOWN
+- НЕ требует создания карточки
+
+### IgnoreTerm
+
+Переводит term в IGNORED:
+- Слово перестаёт подсвечиваться
+- НЕ считается в статистике
+
+### BulkMarkKnown
+
+Используется при перелистывании страницы:
+- Принимает список term IDs
+- Обновляет все в одной транзакции
+- Учитывает настройку "Mark remaining blue words as known on page turn"
+
+## Регрессионные проверки
+
+При изменениях в Reader/Vocabulary проверить:
+
+- [ ] `sleep` и `slept` имеют разные статусы
+- [ ] `went` и `go` — не дубли карточек
+- [ ] Точная фраза "take off" — дубль; "take" и "off" отдельно — не дубль
+- [ ] Перелистывание переводит синие термины в known только при включённой настройке
+- [ ] Reader не показывает lemma labels
+- [ ] Phrase selection создаёт PHRASE тип
+- [ ] Phrase highlight имеет приоритет над word highlight
