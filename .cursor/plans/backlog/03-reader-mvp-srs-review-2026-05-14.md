@@ -1,11 +1,12 @@
-# MVP Step 3 — SRS (review-from-context + FSRS)
+# 03 — MVP Step 3 — SRS (review-from-context + FSRS)
 
-Plan ID: `reader-mvp-srs-review-2026-05-14`
+Plan ID: `03-reader-mvp-srs-review-2026-05-14`
+Priority: **03**
 Status: backlog
 Created: 2026-05-14
 Owner: `lead-agent`
 
-Родительский индекс: [`reader-lingq-hub-2026-05-14.md`](./reader-lingq-hub-2026-05-14.md)
+Родительский индекс: [`00-reader-lingq-hub-2026-05-14.md`](./00-reader-lingq-hub-2026-05-14.md)
 
 ## Goal
 
@@ -13,7 +14,7 @@ Owner: `lead-agent`
 
 ## Out of Scope
 
-- Импорт, подсветка, Mine — планы `reader-mvp-read-2026-05-14`, `reader-mvp-mining-2026-05-14`.
+- Импорт, подсветка, Mine — планы **`01-reader-mvp-read-2026-05-14`**, **`02-reader-mvp-mining-2026-05-14`** → [`01-reader-mvp-read-2026-05-14.md`](./01-reader-mvp-read-2026-05-14.md), [`02-reader-mvp-mining-2026-05-14.md`](./02-reader-mvp-mining-2026-05-14.md).
 - Замена ядра FSRS или самописный планировщик — запрещено; UI «карточка + AGAIN/HARD/GOOD/EASY» **уже есть** — не переписывать с нуля.
 
 ## Граница шага
@@ -46,7 +47,7 @@ Owner: `lead-agent`
 
 ## Tasks
 
-- Backlog: `.cursor/tasks/backlog/reader-mvp-srs-review-2026-05-14/`
+- Backlog: `.cursor/tasks/backlog/03-reader-mvp-srs-review-2026-05-14/`
 
 ## Verification
 

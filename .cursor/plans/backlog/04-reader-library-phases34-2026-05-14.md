@@ -1,11 +1,12 @@
-# Reader / Library — Phase 3–4 (content-first + polish)
+# 04 — Reader / Library — Phase 3–4 (content-first + polish)
 
-Plan ID: `reader-library-phases34-2026-05-14`
+Plan ID: `04-reader-library-phases34-2026-05-14`
+Priority: **04** (после стабилизации MVP **01–03**)
 Status: backlog
 Created: 2026-05-14
 Owner: `lead-agent`
 
-Родительский индекс: [`reader-lingq-hub-2026-05-14.md`](./reader-lingq-hub-2026-05-14.md)
+Родительский индекс: [`00-reader-lingq-hub-2026-05-14.md`](./00-reader-lingq-hub-2026-05-14.md)
 
 ## Goal
 
@@ -37,7 +38,7 @@ Owner: `lead-agent`
 
 ## Tasks
 
-- Backlog: `.cursor/tasks/backlog/reader-library-phases34-2026-05-14/`
+- Backlog: `.cursor/tasks/backlog/04-reader-library-phases34-2026-05-14/`
 
 ## Verification
 
@@ -47,7 +48,7 @@ Owner: `lead-agent`
 ## Risks
 
 - `MediaServiceClientImpl`: инкрементальная реализация / stub.
-- Производительность анализа текста: не блокировать MVP шагов 1–3.
+- Производительность анализа текста: не блокировать MVP планов **01–03**.
 
 ## References
 

@@ -1,11 +1,12 @@
-# MVP Step 1 — Чтение (Read)
+# 01 — MVP Step 1 — Чтение (Read)
 
-Plan ID: `reader-mvp-read-2026-05-14`
+Plan ID: `01-reader-mvp-read-2026-05-14`
+Priority: **01**
 Status: backlog
 Created: 2026-05-14
 Owner: `lead-agent`
 
-Родительский индекс: [`reader-lingq-hub-2026-05-14.md`](./reader-lingq-hub-2026-05-14.md)
+Родительский индекс: [`00-reader-lingq-hub-2026-05-14.md`](./00-reader-lingq-hub-2026-05-14.md)
 
 ## Goal
 
@@ -13,8 +14,8 @@ Owner: `lead-agent`
 
 ## Out of Scope
 
-- Pop-up словарь и Mine — план `reader-mvp-mining-2026-05-14`.
-- Запуск review и оценки карточек — план `reader-mvp-srs-review-2026-05-14`.
+- Pop-up словарь и Mine — план **`02-reader-mvp-mining-2026-05-14`** → [`02-reader-mvp-mining-2026-05-14.md`](./02-reader-mvp-mining-2026-05-14.md).
+- Запуск review и оценки карточек — план **`03-reader-mvp-srs-review-2026-05-14`** → [`03-reader-mvp-srs-review-2026-05-14.md`](./03-reader-mvp-srs-review-2026-05-14.md).
 - Phase 5 (Sentence View, YouTube, offline и т.д.) — только общий backlog.
 
 ## Граница шага
@@ -50,7 +51,7 @@ Owner: `lead-agent`
 
 ## Tasks
 
-- Backlog (при появлении): `.cursor/tasks/backlog/reader-mvp-read-2026-05-14/`
+- Backlog (при появлении): `.cursor/tasks/backlog/01-reader-mvp-read-2026-05-14/`
 
 ## Verification
 

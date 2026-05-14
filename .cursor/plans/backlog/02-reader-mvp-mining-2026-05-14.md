@@ -1,11 +1,12 @@
-# MVP Step 2 — Mining
+# 02 — MVP Step 2 — Mining
 
-Plan ID: `reader-mvp-mining-2026-05-14`
+Plan ID: `02-reader-mvp-mining-2026-05-14`
+Priority: **02**
 Status: backlog
 Created: 2026-05-14
 Owner: `lead-agent`
 
-Родительский индекс: [`reader-lingq-hub-2026-05-14.md`](./reader-lingq-hub-2026-05-14.md)
+Родительский индекс: [`00-reader-lingq-hub-2026-05-14.md`](./00-reader-lingq-hub-2026-05-14.md)
 
 ## Goal
 
@@ -13,8 +14,8 @@ Owner: `lead-agent`
 
 ## Out of Scope
 
-- Импорт форматов и «голый» reader без mining UI — план `reader-mvp-read-2026-05-14`.
-- Расчёт FSRS и прохождение review-сессии — план `reader-mvp-srs-review-2026-05-14`.
+- Импорт форматов и «голый» reader без mining UI — план **`01-reader-mvp-read-2026-05-14`** → [`01-reader-mvp-read-2026-05-14.md`](./01-reader-mvp-read-2026-05-14.md).
+- Расчёт FSRS и прохождение review-сессии — план **`03-reader-mvp-srs-review-2026-05-14`** → [`03-reader-mvp-srs-review-2026-05-14.md`](./03-reader-mvp-srs-review-2026-05-14.md).
 
 ## Граница шага
 
@@ -47,7 +48,7 @@ Owner: `lead-agent`
 
 ## Tasks
 
-- Backlog: `.cursor/tasks/backlog/reader-mvp-mining-2026-05-14/`
+- Backlog: `.cursor/tasks/backlog/02-reader-mvp-mining-2026-05-14/`
 
 ## Verification
 

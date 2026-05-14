@@ -59,6 +59,3 @@ The active learning direction is the LingQ-style reader model:
 - learn through real word forms and phrases;
 - do not use lemmas as the basis for knowledge status, duplicate checks, statistics, or card creation;
 - reader becomes the primary learning surface.
-
-Implementation narrative: `context/plans/active/lingq-reader-implementation-plan.md`.  
-Optional Cursor-side coordination (split into backlog hub): `.cursor/plans/backlog/reader-lingq-hub-2026-05-14.md`.
