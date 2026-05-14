@@ -33,7 +33,6 @@ public class CardServiceTermPersistenceTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new StubMediaService(),
                 new NoteTypeService(actContext),
@@ -82,7 +81,6 @@ public class CardServiceTermPersistenceTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new StubMediaService(),
                 new NoteTypeService(actContext),
@@ -145,7 +143,6 @@ public class CardServiceTermPersistenceTests
 
             var seed = new CardService(
                 arrangeContext,
-                new LemmaService(arrangeContext, NullLogger<LemmaService>.Instance),
                 new TermService(arrangeContext, NullLogger<TermService>.Instance),
                 new StubMediaService(),
                 new NoteTypeService(arrangeContext),
@@ -167,7 +164,6 @@ public class CardServiceTermPersistenceTests
         await using var actContext = CreateContext(dbName);
         var sut = new CardService(
             actContext,
-            new LemmaService(actContext, NullLogger<LemmaService>.Instance),
             new TermService(actContext, NullLogger<TermService>.Instance),
             new StubMediaService(),
             new NoteTypeService(actContext),

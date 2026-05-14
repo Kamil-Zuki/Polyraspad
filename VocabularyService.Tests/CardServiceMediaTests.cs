@@ -38,7 +38,6 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
                 new NoteTypeService(actContext),
@@ -94,7 +93,6 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
                 new NoteTypeService(actContext),
@@ -148,7 +146,6 @@ public class CardServiceMediaTests
         {
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 new MockMediaStorage(),
                 new NoteTypeService(actContext),
@@ -237,7 +234,6 @@ public class CardServiceMediaTests
 
             var sut = new CardService(
                 actContext,
-                new LemmaService(actContext, NullLogger<LemmaService>.Instance),
                 new TermService(actContext, NullLogger<TermService>.Instance),
                 mockStorage.Object,
                 new NoteTypeService(actContext),

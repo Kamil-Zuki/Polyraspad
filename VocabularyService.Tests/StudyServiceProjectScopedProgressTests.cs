@@ -77,7 +77,6 @@ public class StudyServiceProjectScopedProgressTests
                 .Returns(Task.CompletedTask);
             var cardSeed = new CardService(
                 arrangeContext,
-                new LemmaService(arrangeContext, NullLogger<LemmaService>.Instance),
                 new TermService(arrangeContext, NullLogger<TermService>.Instance),
                 mediaArrange.Object,
                 new NoteTypeService(arrangeContext),
@@ -155,7 +154,6 @@ public class StudyServiceProjectScopedProgressTests
 
         var cardService = new CardService(
             actContext,
-            new LemmaService(actContext, NullLogger<LemmaService>.Instance),
             new TermService(actContext, NullLogger<TermService>.Instance),
             mediaServiceMock.Object,
             new NoteTypeService(actContext),

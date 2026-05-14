@@ -4,31 +4,24 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using StackExchange.Redis;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
 using VocabularyService.Domain;
 using VocabularyService.Dtos.Cards;
-using VocabularyService.Dtos.Study;
 using VocabularyService.Services;
 using Xunit;
 
 namespace VocabularyService.Tests;
 
 /// <summary>
-/// Тесты для проверки логики Learn Ahead (обучение заранее).
-/// Проверяем, что карточки в состоянии LEARNING, которые скоро станут доступными,
-/// включаются в сессию обучения.
+/// P3: GetNextCard must expose study content derived from note.field_values (not parallel legacy columns).
 /// </summary>
-public class StudyServiceLearnAheadTriageTests
+public class StudyServiceGetNextCardNoteDerivedContentTests
 {
-    [Theory]
-    [InlineData(1)]
-    [InlineData(3)]
-    public async Task StartStudySessionAsync_Should_IncludeLearningOrRelearningCard_When_DueIn5Minutes(short state)
+    [Fact]
+    public async Task GetNextCard_Should_Map_Content_And_Source_From_Note_Fields_TermFirst_Surface_Word()
     {
-        // Arrange
         var dbName = Guid.NewGuid().ToString("N");
         var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
             .UseInMemoryDatabase(dbName)
@@ -40,6 +33,11 @@ public class StudyServiceLearnAheadTriageTests
         var deckId = Guid.NewGuid();
         Guid cardId;
         var now = DateTime.UtcNow;
+        const string expression = "They slept well that night.";
+        const string surfaceWord = "slept";
+        const string translation = "Они хорошо выспались.";
+        const string sourceTitle = "Reader";
+        const string sourceUrl = "https://example.com/page";
 
         await using (var arrangeContext = new TestVocabularyServiceContext(options))
         {
@@ -77,6 +75,7 @@ public class StudyServiceLearnAheadTriageTests
             mediaArrange
                 .Setup(s => s.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
+
             var cardSeed = new CardService(
                 arrangeContext,
                 new TermService(arrangeContext, NullLogger<TermService>.Instance),
@@ -91,27 +90,26 @@ public class StudyServiceLearnAheadTriageTests
                     DeckId = deckId,
                     FieldValues = new Dictionary<string, NoteFieldValue>
                     {
-                        [SentenceMiningNoteType.Expression] = new() { String = "Hello world" },
-                        [SentenceMiningNoteType.Word] = new() { String = "Hello" },
-                        [SentenceMiningNoteType.Translation] = new() { String = "Привет мир" },
+                        [SentenceMiningNoteType.Expression] = new() { String = expression },
+                        [SentenceMiningNoteType.Word] = new() { String = surfaceWord },
+                        [SentenceMiningNoteType.Translation] = new() { String = translation },
+                        [SentenceMiningNoteType.SourceTitle] = new() { String = sourceTitle },
+                        [SentenceMiningNoteType.SourceUrl] = new() { String = sourceUrl },
                     },
                 });
             cardId = created.Id;
 
-            // Карточка в состоянии LEARNING, due через 5 минут
-            // По умолчанию LearnAheadLimitMinutes обычно 20 минут,
-            // поэтому карточка должна попасть в очередь.
             arrangeContext.UserCardProgresses.Add(new UserCardProgress
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 CardId = cardId,
                 ProjectId = projectId,
-                State = state,
+                State = 1, // LEARNING — попадает в очередь сессии как в StudyServiceLearningCardsInQueueTests
                 Step = 0,
                 Stability = 0,
                 Difficulty = 0,
-                Due = now.AddMinutes(5), // Через 5 минут
+                Due = now,
                 ElapsedDays = 0,
                 ScheduledDays = 0,
                 Reps = 1,
@@ -148,24 +146,40 @@ public class StudyServiceLearnAheadTriageTests
             new NoteTypeService(actContext),
             Mock.Of<ILogger<CardService>>());
 
+        var fsrsMock = new Mock<IFsrsScheduler>();
+        fsrsMock
+            .Setup(f => f.GetNextStateAsync(It.IsAny<UserCardProgress>(), It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<FsrsSettings?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((UserCardProgress progress, int _, DateTime reviewAt, int _, FsrsSettings? _, CancellationToken _) =>
+                new FsrsNextState(
+                    Stability: progress.Stability,
+                    Difficulty: progress.Difficulty,
+                    Due: reviewAt.AddMinutes(10),
+                    State: progress.State,
+                    Step: progress.Step));
+
         var sut = new StudyService(
             actContext,
             Mock.Of<ILogger<StudyService>>(),
             cardService,
             Mock.Of<IDeckService>(),
             userSettingsMock.Object,
-            Mock.Of<IFsrsScheduler>(),
+            fsrsMock.Object,
             Mock.Of<IAnswerValidationService>(),
             mediaServiceMock.Object,
             RedisTestHelper.CreateConnectionMultiplexer());
 
-        // Act
-        // Запуск сессии по колоде с одной LEARNING-карточкой, которая будет доступна через 5 минут
         var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);
+        var next = await sut.GetNextCardAsync(session.Id, userId, CancellationToken.None);
 
-        // Assert
-        session.Should().NotBeNull();
-        session.QueueStats.Learning.Should().Be(1, "карточка LEARNING, доступная через 5 минут, должна быть включена в сессию (Learn Ahead)");
+        next.Should().NotBeNull();
+        next!.SrsState.State.Should().Be("LEARNING");
+        next!.Content.Sentence.Should().Be(expression);
+        next.Content.Translation.Should().Be(translation);
+        next.Content.TargetLemma.Should().Be(surfaceWord, "term-first: mined surface form from Word field, not lemma text");
+        next.SourceMeta.Should().NotBeNull();
+        next.SourceMeta!.Title.Should().Be(sourceTitle);
+        next.SourceMeta.Url.Should().Be(sourceUrl);
+        next.Content.TargetIndex.Len.Should().BeGreaterThan(0);
     }
 
     private sealed class TestVocabularyServiceContext : VocabularyServiceContext
@@ -180,4 +194,3 @@ public class StudyServiceLearnAheadTriageTests
         }
     }
 }
-
