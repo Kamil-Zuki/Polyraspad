@@ -2,7 +2,7 @@
 
 Plan ID: `02-reader-mvp-mining-2026-05-14`
 Priority: **02**
-Status: backlog
+Status: archived
 Created: 2026-05-14
 Owner: `lead-agent`
 
@@ -76,7 +76,7 @@ Owner: `lead-agent`
 
 ## Tasks
 
-- Backlog: `.cursor/tasks/backlog/02-reader-mvp-mining-2026-05-14/`
+- Archive: `.cursor/tasks/archive/02-reader-mvp-mining-2026-05-14/`
 
 ## Verification
 
@@ -92,4 +92,4 @@ Owner: `lead-agent`
 
 ## Cleanup
 
-- [ ] Перенос в `active/` при старте; по завершении — `archive/`.
+- [x] План и задачи перенесены в `archive/`.

@@ -126,6 +126,7 @@ public class StudyServiceLearningCardsInQueueTests
             new LemmaService(actContext, NullLogger<LemmaService>.Instance),
             new TermService(actContext, NullLogger<TermService>.Instance),
             mediaServiceMock.Object,
+            new NoteTypeService(actContext),
             Mock.Of<ILogger<CardService>>());
 
         var fsrsMock = new Mock<IFsrsScheduler>();

@@ -32,26 +32,17 @@ cp .env.example .env
 | Vocabulary (gRPC) | localhost:5117           |
 | Inclusive (gRPC)  | localhost:40051          |
 | Postgres          | localhost:5454 (user/pass см. в `.env`) |
-| Ollama (AI)       | http://localhost:11434 (если запущен отдельно) |
 
-### Ollama и AI-фичи
+### AI Assistant (редактор и reader)
 
-Для работы AI в редакторе (генерация примеров, перевод, грамматика) нужен запущенный [Ollama](https://ollama.com) и модель. Имя модели задаётся через переменную `OLLAMA_MODEL` (фронт) и `Ollama:Model` (AggregatorService).
+Фичи AI идут через **внешний OpenAI-compatible API** (ключ на стороне Aggregator) и BFF-маршруты Next.js `POST/GET /api/ai/*`. Общий секрет BFF → Aggregator: заголовок `X-Ai-Proxy-Key` (переменные `AI_PROXY_API_KEY` в Next и `Ai__ProxyApiKey` в Aggregator).
 
-**Локальный запуск (без Docker):**
+**Минимальная конфигурация (Docker / локально):**
 
-1. Установите Ollama и запустите сервер (если не запущен как служба):
-   ```bash
-   ollama serve
-   ```
-2. Скачайте нужную модель:
-   ```bash
-   ollama pull <model-name>
-   ```
-3. Для фронта при локальной разработке задайте (по желанию):
-   - `OLLAMA_BASE_URL=http://localhost:11434` (по умолчанию так и есть)
-   - `OLLAMA_MODEL=<model-name>` — модель для generate
+1. Задайте `OPENAI_API_KEY` (или другой провайдер с совместимым endpoint — тогда `AI_COMPLETION_BASE_URL`).
+2. Задайте одинаковый `AI_PROXY_API_KEY` для `aggregator-service` и `polyraspad-frontend` в `.env`.
+3. Опционально: `AI_COMPLETION_MODEL` (по умолчанию `gpt-4o-mini`).
 
-**Проверка:** список моделей — `GET http://localhost:11434/api/tags` или через приложение: запрос к `/api/ollama/models`. Генерация — `POST /api/ollama/generate` с телом `{ "prompt": "Hello", "model": "<model-name>" }`.
+**Альтернатива:** режим Gemini на стороне Next — `GEMINI_API_KEY` и `EDITOR_AI_PROVIDER=gemini` (см. `polyraspad-frontend/.env.example`).
 
-В Docker образ Ollama уже входит (`docker compose up`), а модель задаётся переменными `OLLAMA_MODEL` и `Ollama__Model`.
+Локальный Ollama в compose **не используется**.

@@ -1,3 +1,7 @@
+# Запускайте из каталога с этим файлом, чтобы подхватился корневой `.env` (подстановка ${VAR}).
+# После правок `.env`: `docker compose up -d --build --force-recreate polyraspad-frontend aggregator-service`
+# (только `build` без `up` не обновит env в уже запущенных контейнерах.)
+#
 # EF Core миграции применяются автоматически при старте контейнеров (после готовности postgres):
 # - authorization-module → Migrate() для БД auth-module (см. authorization-module.API/Program.cs).
 # - vocabulary-service → Migrate() для БД vocabulary_service (см. VocabularyService/Program.cs).
@@ -208,23 +212,15 @@ services:
       Jwt__Secret: "${JWT_SECRET:-change-me-use-at-least-32-characters-long-secret}"
       Jwt__Issuer: "${JWT_ISSUER:-polyraspad.local}"
       Jwt__Audience: "${JWT_AUDIENCE:-polyraspad.local}"
-      Ollama__BaseUrl: "http://ollama:11434"
-      Ollama__Model: "${OLLAMA_MODEL:-phi3:mini}"
-      Ollama__Enabled: "true"
-      Ollama__ProxyApiKey: "${OLLAMA_PROXY_API_KEY:-}"
-      Ollama__AllowClientModelOverride: "false"
+      Ai__BaseUrl: "${AI_COMPLETION_BASE_URL:-https://api.openai.com/v1}"
+      Ai__ApiKey: "${OPENAI_API_KEY:-}"
+      Ai__Model: "${AI_COMPLETION_MODEL:-gpt-4o-mini}"
+      Ai__TimeoutSeconds: "120"
+      Ai__Enabled: "${AI_COMPLETION_ENABLED:-true}"
+      # Общий секрет BFF (Next) ↔ Aggregator; без него пустой ключ в `docker compose config` и /api/ai/* в UI не работает.
+      Ai__ProxyApiKey: "${AI_PROXY_API_KEY:-}"
+      Ai__AllowClientModelOverride: "false"
       DOTNET_RUNNING_IN_CONTAINER: "true"
-
-  ollama:
-    container_name: ollama
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - backend
-    expose:
-      - "11434"
 
   polyraspad-frontend:
     container_name: polyraspad-frontend
@@ -244,10 +240,11 @@ services:
         condition: service_started
     environment:
       NODE_ENV: production
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:mini}
-      OLLAMA_PROXY_API_KEY: "${OLLAMA_PROXY_API_KEY:-}"
+      # Должен совпадать с Ai__ProxyApiKey у aggregator-service (не путать с OPENAI_API_KEY провайдера).
+      AI_PROXY_API_KEY: "${AI_PROXY_API_KEY:-}"
       AGGREGATOR_INTERNAL_URL: http://aggregator-service:5206
+      # В корневом .env может быть GEMINI_API_KEY — для Docker оставляем маршрут через Aggregator по умолчанию.
+      EDITOR_AI_PROVIDER: "${EDITOR_AI_PROVIDER:-aggregator}"
 
   polyraspad-landing:
     container_name: polyraspad-landing
@@ -273,4 +270,3 @@ volumes:
   postgres-data:
   minio-data:
   redis-data:
-  ollama-data:
