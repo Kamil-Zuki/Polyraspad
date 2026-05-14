@@ -7,6 +7,8 @@ using Moq;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
+using VocabularyService.Domain;
+using VocabularyService.Dtos.Cards;
 using VocabularyService.Services;
 using Xunit;
 
@@ -31,7 +33,7 @@ public class StudyServiceProjectScopedProgressTests
         var projectId1 = Guid.NewGuid();
         var projectId2 = Guid.NewGuid();
         var deckId = Guid.NewGuid();
-        var cardId = Guid.NewGuid();
+        Guid cardId;
         var now = DateTime.UtcNow;
 
         await using (var arrangeContext = new TestVocabularyServiceContext(options))
@@ -61,24 +63,39 @@ public class StudyServiceProjectScopedProgressTests
                 Title = "Deck",
                 ContributionPolicy = "OPEN",
                 LicenseType = "PRIVATE",
-                CardCount = 1,
+                CardCount = 0,
                 IsPublic = false,
                 CreatedAt = now,
                 UpdatedAt = now
             });
 
-            arrangeContext.Cards.Add(new Card
-            {
-                Id = cardId,
-                DeckId = deckId,
-                CreatorId = userId,
-                Sentence = "s",
-                Translation = "t",
-                TargetWord = "w",
-                TargetIndex = new TargetIndex { Start = 0, Len = 1 },
-                CreatedAt = now,
-                UpdatedAt = now
-            });
+            await arrangeContext.SaveChangesAsync();
+
+            var mediaArrange = new Mock<IMediaService>();
+            mediaArrange
+                .Setup(s => s.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+            var cardSeed = new CardService(
+                arrangeContext,
+                new LemmaService(arrangeContext, NullLogger<LemmaService>.Instance),
+                new TermService(arrangeContext, NullLogger<TermService>.Instance),
+                mediaArrange.Object,
+                new NoteTypeService(arrangeContext),
+                Mock.Of<ILogger<CardService>>());
+
+            var created = await cardSeed.CreateCardAsync(
+                new CreateCardDto
+                {
+                    UserId = userId,
+                    DeckId = deckId,
+                    FieldValues = new Dictionary<string, NoteFieldValue>
+                    {
+                        [SentenceMiningNoteType.Expression] = new() { String = "w" },
+                        [SentenceMiningNoteType.Word] = new() { String = "w" },
+                        [SentenceMiningNoteType.Translation] = new() { String = "t" },
+                    },
+                });
+            cardId = created.Id;
 
             // «Плохая» строка из другого проекта (воспроизводит исторический/сбойный дубликат).
             arrangeContext.UserCardProgresses.Add(new UserCardProgress

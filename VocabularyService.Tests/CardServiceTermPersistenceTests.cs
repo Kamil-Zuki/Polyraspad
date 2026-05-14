@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
+using VocabularyService.Domain;
 using VocabularyService.Dtos.Cards;
 using VocabularyService.Services;
 using Xunit;
@@ -42,9 +43,12 @@ public class CardServiceTermPersistenceTests
             {
                 UserId = userId,
                 DeckId = deckId,
-                Sentence = "I save the word apple",
-                TargetWord = "apple",
-                Translation = "яблоко"
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "I save the word apple" },
+                    [SentenceMiningNoteType.Word] = new() { String = "apple" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "яблоко" },
+                },
             });
         }
 
@@ -92,17 +96,23 @@ public class CardServiceTermPersistenceTests
                     {
                         UserId = userId,
                         DeckId = deckId,
-                        Sentence = "First apple sentence",
-                        TargetWord = "apple",
-                        Translation = "яблоко"
+                        FieldValues = new Dictionary<string, NoteFieldValue>
+                        {
+                            [SentenceMiningNoteType.Expression] = new() { String = "First apple sentence" },
+                            [SentenceMiningNoteType.Word] = new() { String = "apple" },
+                            [SentenceMiningNoteType.Translation] = new() { String = "яблоко" },
+                        },
                     },
                     new CreateCardDto
                     {
                         UserId = userId,
                         DeckId = deckId,
-                        Sentence = "Second apple sentence",
-                        TargetWord = "apple",
-                        Translation = "яблоко"
+                        FieldValues = new Dictionary<string, NoteFieldValue>
+                        {
+                            [SentenceMiningNoteType.Expression] = new() { String = "Second apple sentence" },
+                            [SentenceMiningNoteType.Word] = new() { String = "apple" },
+                            [SentenceMiningNoteType.Translation] = new() { String = "яблоко" },
+                        },
                     }
                 ]);
         }
@@ -131,19 +141,27 @@ public class CardServiceTermPersistenceTests
         await using (var arrangeContext = CreateContext(dbName))
         {
             ArrangeProjectAndDeck(arrangeContext, userId, projectId, deckId);
-            arrangeContext.Cards.Add(new Card
-            {
-                Id = Guid.NewGuid(),
-                DeckId = deckId,
-                CreatorId = userId,
-                Sentence = "I go home",
-                TargetWord = "go",
-                Translation = "идти",
-                TargetIndex = new TargetIndex { Start = 2, Len = 2 },
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
             await arrangeContext.SaveChangesAsync();
+
+            var seed = new CardService(
+                arrangeContext,
+                new LemmaService(arrangeContext, NullLogger<LemmaService>.Instance),
+                new TermService(arrangeContext, NullLogger<TermService>.Instance),
+                new StubMediaService(),
+                new NoteTypeService(arrangeContext),
+                NullLogger<CardService>.Instance);
+            await seed.CreateCardAsync(
+                new CreateCardDto
+                {
+                    UserId = userId,
+                    DeckId = deckId,
+                    FieldValues = new Dictionary<string, NoteFieldValue>
+                    {
+                        [SentenceMiningNoteType.Expression] = new() { String = "I go home" },
+                        [SentenceMiningNoteType.Word] = new() { String = "go" },
+                        [SentenceMiningNoteType.Translation] = new() { String = "идти" },
+                    },
+                });
         }
 
         await using var actContext = CreateContext(dbName);
