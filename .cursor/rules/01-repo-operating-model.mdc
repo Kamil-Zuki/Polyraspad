@@ -37,8 +37,8 @@ alwaysApply: true
 .cursor/
 ├── agents/          # Cursor subagents: Markdown + YAML frontmatter
 ├── commands/        # Исполняемые команды-чеклисты для агента
-├── plans/           # Планы lead-agent: active/* → archive/* после закрытия (не удалять)
-├── tasks/           # Task-и subagents: active/<plan-id>/ → archive/<plan-id>/ после закрытия плана
+├── plans/           # Планы lead-agent: backlog/* → active/* → archive/* (не удалять архив)
+├── tasks/           # Task-и subagents: backlog/<plan-id>/ → active/<plan-id>/ → archive/<plan-id>/
 ├── rules/           # Правила для всех задач (применяются автоматически)
 ├── skills/          # Детальные playbook по технологиям
 │   ├── nextjs-frontend/

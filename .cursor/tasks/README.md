@@ -2,10 +2,19 @@
 
 `.cursor/tasks/` stores task files created by `lead-agent` for specialist agents.
 
+## Lifecycle (backlog → active → archive)
+
+Согласовано с `.cursor/plans/README.md`:
+
+1. **Backlog** — черновики задач к отложенному плану: `.cursor/tasks/backlog/<plan-id>/<agent>.md` (пока план лежит в `.cursor/plans/backlog/`).
+2. **Active** — когда план перенесён в `plans/active/`, перенести эту папку в `.cursor/tasks/active/<plan-id>/` (тот же `plan-id`).
+3. **Archive** — после закрытия плана: `.cursor/tasks/archive/<plan-id>/` (см. Archive Rule).
+
 ## Where Tasks Live
 
+- Backlog task folders: `.cursor/tasks/backlog/<plan-id>/`
 - Active task folders: `.cursor/tasks/active/<plan-id>/`
-- Task files: `.cursor/tasks/active/<plan-id>/<agent>.md`
+- Task files (в backlog или active): `…/<plan-id>/<agent>.md`
 - Archived task folders: `.cursor/tasks/archive/<plan-id>/` (после закрытия плана — см. Archive Rule)
 
 ## Parallel Execution Rule
@@ -40,7 +49,7 @@ Can run in parallel: yes | no
 <What this agent must accomplish>
 
 ## Inputs
-- Plan: `.cursor/plans/active/<plan-id>.md`
+- Plan: `.cursor/plans/backlog/<plan-id>.md` или `.cursor/plans/active/<plan-id>.md` (в зависимости от стадии)
 - Files/contracts to read:
   - `<path>`
 

@@ -19,6 +19,8 @@ Use a plan-driven, evidence-first workflow:
 
 Cursor-executable subagents live in `.cursor/agents/`.
 
+Temporary **lead-agent** coordination (multi-agent runs) uses `.cursor/plans/` and `.cursor/tasks/` with lifecycle `backlog` → `active` → `archive` — see `.cursor/plans/README.md` and `.cursor/tasks/README.md`. Product and implementation roadmaps stay in `context/plans/` (see `context/README.md`).
+
 Longer context role guides live in `agents/roles/`:
 
 - `lead-agent.md` - coordination across product, frontend, backend, testing, review, and docs.

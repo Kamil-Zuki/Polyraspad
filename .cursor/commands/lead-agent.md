@@ -27,8 +27,8 @@ description: Запустить Lead Agent для координации product
 1. Сформулировать цель задачи в 1-2 предложениях.
 2. Отделить `Out of Scope`.
 3. Выбрать только нужных агентов.
-4. Создать временный план `.cursor/plans/active/<plan-id>.md`.
-5. Создать task-файлы для нужных агентов в `.cursor/tasks/active/<plan-id>/`.
+4. Создать план: черновик в `.cursor/plans/backlog/<plan-id>.md` (`Status: backlog`) или сразу рабочий `.cursor/plans/active/<plan-id>.md` (`Status: active`). При старте работы перенести backlog → active и обновить статус (см. `.cursor/plans/README.md`).
+5. Создать task-файлы в `.cursor/tasks/backlog/<plan-id>/` или `.cursor/tasks/active/<plan-id>/` в той же стадии, что и план; при переходе плана в active перенести папку задач в `tasks/active/<plan-id>/`.
 6. Зафиксировать контракты, которые нельзя рассинхронизировать:
    - REST/gRPC DTO
    - frontend API client
@@ -63,10 +63,13 @@ description: Запустить Lead Agent для координации product
 - <contract 2>
 
 ### Plan Storage
-- Plan: `.cursor/plans/active/<plan-id>.md`
-- Tasks: `.cursor/tasks/active/<plan-id>/`
+- Lifecycle: `backlog/` → `active/` → `archive/` (см. `.cursor/plans/README.md`, `.cursor/tasks/README.md`)
+- Plan: `.cursor/plans/backlog|active/<plan-id>.md`
+- Tasks: `.cursor/tasks/backlog|active/<plan-id>/`
 
 ### Parallel Tasks
+(Пока план в backlog — те же имена файлов под `.cursor/tasks/backlog/<plan-id>/`; после переноса плана в active — под `tasks/active/`.)
+
 - `product-agent`: `.cursor/tasks/active/<plan-id>/product.md` — parallel: yes/no
 - `backend-agent`: `.cursor/tasks/active/<plan-id>/backend.md` — parallel: yes/no
 - `frontend-agent`: `.cursor/tasks/active/<plan-id>/frontend.md` — parallel: yes/no

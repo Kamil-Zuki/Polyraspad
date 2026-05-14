@@ -12,8 +12,8 @@ Coordinate work across specialist agents instead of implementing everything your
 
 - Turn broad user requests into scoped workstreams.
 - Select only the needed specialist agents: `product-agent`, `frontend-agent`, `backend-agent`, `reviewer-agent`.
-- Create a temporary coordination plan in `.cursor/plans/active/<plan-id>.md`.
-- Create temporary specialist task files in `.cursor/tasks/active/<plan-id>/<agent>.md`.
+- Create a coordination plan in `.cursor/plans/backlog/<plan-id>.md` when the work is queued or not yet started (`Status: backlog`), or directly in `.cursor/plans/active/<plan-id>.md` when execution starts (`Status: active`).
+- Create specialist task files in `.cursor/tasks/backlog/<plan-id>/<agent>.md` or `.cursor/tasks/active/<plan-id>/<agent>.md` matching the plan stage; when starting work, move plan and task folder from `backlog/` to `active/` together (same `plan-id`).
 - Lock integration contracts before implementation: REST/gRPC DTOs, API clients, UI states, migrations, settings, and test gates.
 - Keep product behavior, backend contracts, frontend implementation, and review criteria aligned.
 - Run independent specialist tasks in parallel when contracts are locked and file ownership does not overlap.
@@ -49,9 +49,9 @@ Coordinate work across specialist agents instead of implementing everything your
 
 ## Plan And Task Storage
 
-- Coordination plans live in `.cursor/plans/active/<plan-id>.md`.
-- Specialist tasks live in `.cursor/tasks/active/<plan-id>/<agent>.md`.
-- Completed plans and their task folders move to `.cursor/plans/archive/` and `.cursor/tasks/archive/` respectively.
+- **Backlog:** `.cursor/plans/backlog/<plan-id>.md` and `.cursor/tasks/backlog/<plan-id>/` for drafts and queued work.
+- **Active:** `.cursor/plans/active/<plan-id>.md` and `.cursor/tasks/active/<plan-id>/<agent>.md` while executing.
+- **Archive:** completed plans and task folders move to `.cursor/plans/archive/` and `.cursor/tasks/archive/` respectively (see `.cursor/plans/README.md`).
 - If a plan produces durable decisions, promote them to `context/decisions/`, `context/plans/`, or `Docs/` when closing the plan (archive keeps the coordination history; it does not replace promoted docs).
 
 ## Parallel Delegation
@@ -65,13 +65,14 @@ Use parallel specialist work only when:
 
 Typical order:
 
-1. Create `.cursor/plans/active/<plan-id>.md`.
-2. Create one task file per needed specialist in `.cursor/tasks/active/<plan-id>/`.
-3. Start independent tasks in parallel.
-4. Collect handoffs and update the plan.
-5. Run `reviewer-agent` after implementation slices are ready.
-6. Optionally mark task files `Status: done` in place.
-7. Archive the plan and task folder when all related tasks are done and durable decisions are promoted (see `.cursor/plans/README.md`).
+1. Create `.cursor/plans/backlog/<plan-id>.md` or `.cursor/plans/active/<plan-id>.md` (and matching `tasks/backlog/` or `tasks/active/` folder).
+2. When moving from backlog to active: rename/move paths and set `Status: active` on the plan.
+3. Create one task file per needed specialist in the active (or backlog) folder for that `plan-id`.
+4. Start independent tasks in parallel.
+5. Collect handoffs and update the plan.
+6. Run `reviewer-agent` after implementation slices are ready.
+7. Optionally mark task files `Status: done` in place.
+8. Archive the plan and task folder when all related tasks are done and durable decisions are promoted (see `.cursor/plans/README.md`).
 
 ## Output Shape
 
