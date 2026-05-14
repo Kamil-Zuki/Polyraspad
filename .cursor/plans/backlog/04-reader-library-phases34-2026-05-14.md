@@ -12,9 +12,25 @@ Owner: `lead-agent`
 
 После стабилизации MVP-шагов 1–3: **Phase 3** — content-first library (Continue reading, прогресс, IA); **Phase 4** — polish и производительность (кэш анализа, virtual scroll, optimistic UI, a11y).
 
+## Onboarding и «пустой» Dashboard
+
+- Новый пользователь не должен видеть только нули без подсказки «что делать дальше».
+- **MVP:** **приветственная колода** из **~5 карточек**, демонстрирующая интерфейс изучения (**Session Review**) и базовые оценки.
+- **2–3 дефолтных коротких текста** в библиотеке — см. координацию с планом **01** (импорт/размещение контента).
+
+## UX Library (упрощение до MVP)
+
+- Сейчас пересечение понятий: Library, Collections, Project shelf, Books — звучит как дубли сущностей.
+- **MVP:** свести к понятной паре уровней — например **Texts/Books** и **Folders/Tags** (или один эквивалент «контент» + «организация»); детали IA — `Docs/library/library-content-first-ia.md`.
+
+## Mobile Web и PWA
+
+- Большинство **повторений** (Session Review) делается с телефона; **mining** может оставаться десктоп-френдли.
+- **MVP:** адаптив **Dashboard**, **Library**, **reader** и **экран Study / Session Review**; **PWA** как целевой компромисс вместо нативных приложений на запуске.
+
 ## Out of Scope
 
-- Phase 5 (Advanced): Multi-context, YouTube, mobile reader, offline — только backlog, не обязательства этого плана.
+- Phase 5 (Advanced): Multi-context, YouTube, **нативные** клиенты (отдельно от PWA), полноценный offline — backlog, не обязательства этого плана.
 - Леммы как основа статуса — запрещено (см. `.cursor/rules/06-lingq-domain-guardrails.mdc`).
 
 ## Phases (сводка)
@@ -22,7 +38,7 @@ Owner: `lead-agent`
 | Phase | Фокус | Критерий «готово» (кратко) |
 |-------|--------|---------------------------|
 | 3 | Content-first library | Continue reading, прогресс на карточках/уроках, IA |
-| 4 | Polish / performance | Кэш анализа, virtual scroll, optimistic UI, a11y |
+| 4 | Polish / performance | Кэш анализа, virtual scroll, optimistic UI, a11y; **PWA**; мобильная полировка Session Review |
 
 ## Agents
 
@@ -43,7 +59,9 @@ Owner: `lead-agent`
 ## Verification
 
 - UX review content-first vs deck-first (по критериям Docs).
+- Onboarding: новый аккаунт видит дефолтные тексты и может открыть приветственную колоду → **Session Review**.
 - Нагрузочный/ручной смоук virtual scroll и кэша — по мере реализации.
+- **PWA / install prompt** (когда включено): smoke установки и открытия Session Review с домашнего экрана.
 
 ## Risks
 
