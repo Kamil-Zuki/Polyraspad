@@ -28,13 +28,13 @@ Owner: `lead-agent`
 
 **Уже есть:** сессия повторения карточек (**Session Review** / изучение по карточкам: оценки, интервалы, интеграция с FSRS через `inclusive` — см. план **03**). Задача запуска — усилить **1-Click Mining** из reader (план **02**), **мобильный Study / Session Review** (план **03–04**), **onboarding** и упрощение Library (план **04**).
 
-| Тема | Где в планах |
-|------|----------------|
-| Идеальный импорт `.epub` / текста, PDF вторым планом | **01** |
-| AI: контекстное предложение, перевод в контексте, TTS, grammar notes, финал «Save»; **миграция с Ollama на внешние LLM API** | **02** |
-| FSRS, вход в Session Review из reader, удобство повторения на телефоне | **03** |
-| Onboarding (пустой дашборд), дефолтные тексты, приветственная колода, упрощение Library, PWA | **01**, **04** |
-| Список терминов проекта (Vocabulary screen) | **05** |
+| Тема                                                                                                                         | Где в планах   |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Идеальный импорт `.epub` / текста, PDF вторым планом                                                                         | **01**         |
+| AI: контекстное предложение, перевод в контексте, TTS, grammar notes, финал «Save»; **миграция с Ollama на внешние LLM API** | **02**         |
+| FSRS, вход в Session Review из reader, удобство повторения на телефоне                                                       | **03**         |
+| Onboarding (пустой дашборд), дефолтные тексты, приветственная колода, упрощение Library, PWA                                 | **01**, **04** |
+| Список терминов проекта (Vocabulary screen)                                                                                  | **05**         |
 
 ## Резюме: план действий до запуска (кросс-планы)
 
@@ -45,13 +45,13 @@ Owner: `lead-agent`
 
 ## Child plans (по приоритету)
 
-| Приор | MVP / тема | Plan ID | Файл |
-|-------|--------------|---------|------|
-| **01** | Шаг 1 — Чтение (форматы, reader, подсветка) | `01-reader-mvp-read-2026-05-14` | [`01-reader-mvp-read-2026-05-14.md`](../archive/01-reader-mvp-read-2026-05-14.md) (**archived**) |
-| **02** | Шаг 2 — Mining (pop-up, Mine, term actions) | `02-reader-mvp-mining-2026-05-14` | [`02-reader-mvp-mining-2026-05-14.md`](./02-reader-mvp-mining-2026-05-14.md) |
-| **03** | Шаг 3 — SRS (review-from-context, FSRS, inclusive) | `03-reader-mvp-srs-review-2026-05-14` | [`03-reader-mvp-srs-review-2026-05-14.md`](./03-reader-mvp-srs-review-2026-05-14.md) |
-| **04** | Phase 3–4 — library IA, polish | `04-reader-library-phases34-2026-05-14` | [`04-reader-library-phases34-2026-05-14.md`](./04-reader-library-phases34-2026-05-14.md) |
-| **05** | Vocabulary — список терминов по проекту (REST + UI) | `05-vocabulary-list-2026-05-14` | [`05-vocabulary-list-2026-05-14.md`](../archive/05-vocabulary-list-2026-05-14.md) (**archived**) |
+| Приор  | MVP / тема                                          | Plan ID                                 | Файл                                                                                             |
+| ------ | --------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **01** | Шаг 1 — Чтение (форматы, reader, подсветка)         | `01-reader-mvp-read-2026-05-14`         | [`01-reader-mvp-read-2026-05-14.md`](../archive/01-reader-mvp-read-2026-05-14.md) (**archived**) |
+| **02** | Шаг 2 — Mining (pop-up, Mine, term actions)         | `02-reader-mvp-mining-2026-05-14`       | [`02-reader-mvp-mining-2026-05-14.md`](./02-reader-mvp-mining-2026-05-14.md)                     |
+| **03** | Шаг 3 — SRS (review-from-context, FSRS, inclusive)  | `03-reader-mvp-srs-review-2026-05-14`   | [`03-reader-mvp-srs-review-2026-05-14.md`](./03-reader-mvp-srs-review-2026-05-14.md)             |
+| **04** | Phase 3–4 — library IA, polish                      | `04-reader-library-phases34-2026-05-14` | [`04-reader-library-phases34-2026-05-14.md`](./04-reader-library-phases34-2026-05-14.md)         |
+| **05** | Vocabulary — список терминов по проекту (REST + UI) | `05-vocabulary-list-2026-05-14`         | [`05-vocabulary-list-2026-05-14.md`](../archive/05-vocabulary-list-2026-05-14.md) (**archived**) |
 
 ## Core Learning Loop (сводка)
 
@@ -63,11 +63,11 @@ flowchart LR
   S1 --> S2 --> S3
 ```
 
-| Приор | Шаг | Plan ID |
-|-------|-----|---------|
-| **01** | Чтение | `01-reader-mvp-read-2026-05-14` |
-| **02** | Mining | `02-reader-mvp-mining-2026-05-14` |
-| **03** | SRS | `03-reader-mvp-srs-review-2026-05-14` |
+| Приор  | Шаг    | Plan ID                               |
+| ------ | ------ | ------------------------------------- |
+| **01** | Чтение | `01-reader-mvp-read-2026-05-14`       |
+| **02** | Mining | `02-reader-mvp-mining-2026-05-14`     |
+| **03** | SRS    | `03-reader-mvp-srs-review-2026-05-14` |
 
 ## Progress (перенесено с 2026-05-13 — 2026-05-14)
 
