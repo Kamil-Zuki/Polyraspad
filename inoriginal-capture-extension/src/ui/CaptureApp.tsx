@@ -644,6 +644,17 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     return false;
   }
 
+  async function clearSubtitleCache() {
+    setMessage("Clearing subtitle cache…");
+    const response = await sendRuntimeMessage({ type: "clear-subtitle-cache" });
+    setMessage(
+      response.ok
+        ? "Subtitle cache cleared. The timeline will reload on the next capture or cue request."
+        : response.error || "Could not clear cache. Focus the InOriginal tab and try again."
+    );
+    await refresh(false);
+  }
+
   async function makeAnother() {
     await sendRuntimeMessage({ type: "clear-draft" });
     setExpression("");
@@ -882,6 +893,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture current subtitle</button>
           {canStopRecording && <button className="secondary" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary" onClick={cancelCapture}>Cancel capture</button>}
+          <button type="button" className="secondary" onClick={() => void clearSubtitleCache()}>Clear subtitle cache</button>
           <button className="secondary" onClick={openSidePanel}>Open review panel</button>
           <button className="secondary" disabled={cardQuality.disabled} onClick={() => runSmartAction(cardQuality.nextAction)}>{cardQuality.cta}</button>
         </div>
@@ -904,6 +916,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture</button>
           {canStopRecording && <button className="secondary ghost-button" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary ghost-button" onClick={cancelCapture}>Cancel</button>}
+          <button type="button" className="secondary ghost-button" onClick={() => void clearSubtitleCache()}>Clear subtitle cache</button>
           <button className="secondary ghost-button" onClick={() => chrome.runtime.openOptionsPage()}>Settings</button>
         </div>
       </header>

@@ -132,6 +132,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "clear-subtitle-cache") {
+    void clearSubtitleTimelineCacheOnActiveTab()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "save-sentence-draft") {
     void saveSentenceDraft(message.draft || {})
       .then((draft) => sendResponse({ ok: true, result: draft }))
@@ -514,7 +521,7 @@ async function startSubtitleClipRecording(message = {}) {
           audioSource: "video-element"
         }
       });
-      await addCaptureEvent("recording-audio", "Запись аудио с элемента video (Web Audio API).");
+      await addCaptureEvent("recording-audio", "Recording audio from the video element (Web Audio API).");
       await mergeLatestCapture({
         cardState: "capturing",
         captureStep: "recording-audio"
@@ -522,15 +529,15 @@ async function startSubtitleClipRecording(message = {}) {
       if (Number.isFinite(plannedDurationMs) || Number.isFinite(videoStartTime) || Number.isFinite(videoEndTime)) {
         await addCaptureEvent(
           "recording-audio",
-          `План по VTT: ${formatSeconds(videoStartTime || 0)} — ${formatSeconds(videoEndTime || 0)} (${((plannedDurationMs || 0) / 1000).toFixed(1)} с).`
+          `VTT plan: ${formatSeconds(videoStartTime || 0)} — ${formatSeconds(videoEndTime || 0)} (${((plannedDurationMs || 0) / 1000).toFixed(1)} s).`
         );
       }
-      await addCaptureEvent("recording-audio", "Запись с video начата.", "success");
+      await addCaptureEvent("recording-audio", "Video-element recording started.", "success");
       return;
     }
     await addCaptureEvent(
       "recording-audio",
-      `Web Audio с video недоступен (${tabResponse?.error || "ошибка"}), используем захват вкладки.`,
+      `Web Audio from video unavailable (${tabResponse?.error || "error"}); falling back to tab capture.`,
       "warning"
     );
   }
@@ -546,7 +553,7 @@ async function startSubtitleClipRecording(message = {}) {
       audioSource: "tab"
     }
   });
-  await addCaptureEvent("recording-audio", "Запуск записи звука вкладки (tabCapture).");
+  await addCaptureEvent("recording-audio", "Starting tab audio capture (tabCapture).");
   await mergeLatestCapture({
     cardState: "capturing",
     captureStep: "recording-audio"
@@ -1445,6 +1452,20 @@ async function sendMessageToTab(tabId, message) {
   });
 
   return chrome.tabs.sendMessage(tabId, message);
+}
+
+/** Сброс закэшированного VTT-таймлайна во вкладке с плеером (SPA без смены URL). */
+async function clearSubtitleTimelineCacheOnActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    throw new Error("No active tab.");
+  }
+
+  try {
+    await sendMessageToTab(tab.id, { type: "clear-subtitle-timeline-cache" });
+  } catch (_) {
+    /* Страница без нашего content script — тихо игнорируем. */
+  }
 }
 
 async function getSession() {

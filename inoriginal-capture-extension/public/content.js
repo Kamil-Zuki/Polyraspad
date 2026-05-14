@@ -23,14 +23,19 @@
     clipMode: null,
     timeline: null,
     timelinePromise: null,
-    // Только URL страницы (path/query/hash). Не включать video.currentSrc: у HLS это часто blob:, меняется во время воспроизведения и ломает загрузку VTT и запись аудио.
+    // URL страницы + активный эпизод (SPA: path не меняется при смене серии).
     timelinePageSignature: null,
     /** Запись аудио с graph video→MediaStreamDestination (не захват всей вкладки). */
-    elementAudioSession: null
+    elementAudioSession: null,
+    episodeKeyPollTimer: null,
+    lastTrackedEpisodeKey: "",
+    /** Увеличивается при сбросе кэша — отменяет запись результата от устаревшего запроса loadSubtitleTimeline. */
+    subtitleTimelineEpoch: 0
   };
 
   /** Сброс кэша таймлайна при навигации без полной перезагрузки (другой сериал/эпизод). */
   function clearSubtitleTimelineCache() {
+    state.subtitleTimelineEpoch += 1;
     state.timeline = null;
     state.timelinePageSignature = null;
   }
@@ -38,6 +43,7 @@
   if (typeof window !== "undefined") {
     window.addEventListener("popstate", clearSubtitleTimelineCache);
     window.addEventListener("hashchange", clearSubtitleTimelineCache);
+    watchActiveEpisodeKey();
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -107,6 +113,13 @@
     if (message?.type === "pause-video-playback") {
       pauseVideoPlayback();
       sendResponse({ ok: true });
+    }
+
+    if (message?.type === "clear-subtitle-timeline-cache") {
+      state.lastTrackedEpisodeKey = getActiveEpisodeKeyFromDom() || "";
+      clearSubtitleTimelineCache();
+      sendResponse({ ok: true });
+      return;
     }
 
     if (message?.type === "start-video-element-audio-recording") {
@@ -639,7 +652,7 @@ function observeSubtitle() {
     }
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) {
-      throw new Error("AudioContext недоступен в этой странице.");
+      throw new Error("AudioContext is not available in this page.");
     }
     const ctx = new AudioCtx();
     let source;
@@ -648,7 +661,7 @@ function observeSubtitle() {
     } catch (err) {
       await ctx.close().catch(() => {});
       throw new Error(
-        `Не удалось подключить аудио элемента video (${err?.message || err}). Частая причина — CORS у источника или повторный захват того же элемента.`
+        `Could not attach audio from the video element (${err?.message || err}). Often caused by CORS or a second capture on the same element.`
       );
     }
     const dest = ctx.createMediaStreamDestination();
@@ -666,7 +679,7 @@ function observeSubtitle() {
     }
     const video = getVideoElement();
     if (!video) {
-      throw new Error("Элемент video не найден.");
+      throw new Error("No video element found.");
     }
     const route = await ensureRoutedVideoAudio(video);
     const mimeType = pickRecorderMimeType();
@@ -965,9 +978,144 @@ function maybeCompleteClip(text, previousText) {
     return `${location.pathname}${location.search}${location.hash}`;
   }
 
+  /**
+   * Сигнатура кэша таймлайна: для одностраничных сериалов добавляем активный data-episode-key,
+   * иначе при смене серии без смены URL остаётся старый VTT.
+   */
+  function getTimelineCacheSignature() {
+    const loc = getPageLocationSignature();
+    const ep = getActiveEpisodeKeyFromDom();
+    return ep ? `${loc}|ep:${ep}` : loc;
+  }
+
+  /** data-episode-key на узле или у предка (SPA: активная серия помечена классом, ключ — у обёртки). */
+  function readEpisodeKeyFromActiveElement(el) {
+    if (!el?.getAttribute) {
+      return "";
+    }
+    const direct = el.getAttribute("data-episode-key")?.trim();
+    if (direct) {
+      return direct;
+    }
+    const ancestor = el.closest("[data-episode-key]");
+    return ancestor?.getAttribute("data-episode-key")?.trim() || "";
+  }
+
+  /**
+   * Активный ключ эпизода в DOM (URL страницы для сериала один — ориентируемся на классы списка серий).
+   * Сначала PlayerJS / вкладки, потом остальные селекторы.
+   */
+  function getActiveEpisodeKeyFromDom() {
+    const prioritySelectors = [
+      ".pjs-playerjs-active-pl",
+      ".s-tabs-active",
+      ".series-mob-item.active"
+    ];
+    for (const sel of prioritySelectors) {
+      const el = document.querySelector(sel);
+      const key = readEpisodeKeyFromActiveElement(el);
+      if (key) {
+        return key;
+      }
+    }
+
+    const selectors = [
+      ".series-mob-item[data-episode-key].active",
+      ".series-mob-item.active[data-episode-key]",
+      "[data-episode-key].series-mob-item.active",
+      ".pjs-playerjs-active-pl[data-episode-key]",
+      "[data-episode-key].s-tabs-active",
+      ".s-tabs-active[data-episode-key]",
+      "[data-episode-key].active",
+      ".active[data-episode-key]"
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      const key = readEpisodeKeyFromActiveElement(el);
+      if (key) {
+        return key;
+      }
+    }
+    const cur = document.querySelector('[data-episode-key][aria-current="true"]');
+    return readEpisodeKeyFromActiveElement(cur);
+  }
+
+  /** Расширяем s3e4 → фрагменты пути в типичных именах VTT (без одиночных цифр). */
+  function expandDataEpisodeKeyToHints(raw) {
+    if (!raw || typeof raw !== "string") {
+      return [];
+    }
+    const key = raw.trim().toLowerCase();
+    if (!key) {
+      return [];
+    }
+    const hints = [key];
+    const compact = key.replace(/\s+/g, "");
+    const m = compact.match(/^s(\d+)e(\d+)$/i);
+    if (m) {
+      const sNum = m[1];
+      const eNum = m[2];
+      hints.push(`s${sNum}e${eNum}`, `s${sNum}`, `e${eNum}`, `season${sNum}`, `episode${eNum}`, `ep${eNum}`);
+      hints.push(`rus${eNum}`, `eng${eNum}`, `ru${eNum}`, `en${eNum}`);
+    }
+    return [...new Set(hints.filter(Boolean))];
+  }
+
+  /** Опрос DOM: смена data-episode-key при переключении серии без изменения URL. */
+  function watchActiveEpisodeKey() {
+    if (state.episodeKeyPollTimer) {
+      clearInterval(state.episodeKeyPollTimer);
+    }
+    state.lastTrackedEpisodeKey = getActiveEpisodeKeyFromDom() || "";
+    state.episodeKeyPollTimer = window.setInterval(() => {
+      const current = getActiveEpisodeKeyFromDom() || "";
+      if (current !== state.lastTrackedEpisodeKey) {
+        state.lastTrackedEpisodeKey = current;
+        clearSubtitleTimelineCache();
+      }
+    }, 2000);
+  }
+
+  function buildCombinedEpisodeHints() {
+    const fromUrl = buildEpisodeHintsFromLocation();
+    const fromDom = expandDataEpisodeKeyToHints(getActiveEpisodeKeyFromDom());
+    return [...new Set([...fromUrl, ...fromDom])];
+  }
+
+  /** Сильный бонус, если в URL целиком попал ключ s3e4. */
+  function scoreVttAgainstDataEpisodeKey(vttUrl, episodeKey) {
+    if (!episodeKey || !vttUrl) {
+      return 0;
+    }
+    const k = episodeKey.trim().toLowerCase();
+    if (!k) {
+      return 0;
+    }
+    return vttUrl.toLowerCase().includes(k) ? 120 : 0;
+  }
+
+  /**
+   * Если хотя бы один кандидат содержит ключ эпизода — отбрасываем остальные (иначе остаётся общий скоринг).
+   */
+  function preferCandidatesMatchingEpisodeKey(candidates, episodeKey) {
+    const k = episodeKey?.trim().toLowerCase();
+    if (!k || !candidates?.length) {
+      return candidates;
+    }
+    const hints = expandDataEpisodeKeyToHints(k);
+    const withKey = candidates.filter((c) => {
+      const u = c.url.toLowerCase();
+      if (u.includes(k)) {
+        return true;
+      }
+      return hints.some((h) => h.length >= 3 && u.includes(h.toLowerCase()));
+    });
+    return withKey.length ? withKey : candidates;
+  }
+
   async function getSubtitleTimeline() {
-    const pageSig = getPageLocationSignature();
-    if (state.timeline?.cues?.length && state.timelinePageSignature === pageSig) {
+    const cacheSig = getTimelineCacheSignature();
+    if (state.timeline?.cues?.length && state.timelinePageSignature === cacheSig) {
       return state.timeline;
     }
 
@@ -977,15 +1125,19 @@ function maybeCompleteClip(text, previousText) {
       return state.timelinePromise;
     }
 
-    const loadStartedPage = pageSig;
+    const loadStartedSig = cacheSig;
+    const epochAtLoad = state.subtitleTimelineEpoch;
     state.timelinePromise = loadSubtitleTimeline()
       .then((timeline) => {
-        if (getPageLocationSignature() !== loadStartedPage) {
+        if (state.subtitleTimelineEpoch !== epochAtLoad) {
+          throw new Error("Subtitle timeline cache was cleared while loading.");
+        }
+        if (getTimelineCacheSignature() !== loadStartedSig) {
           clearSubtitleTimelineCache();
-          throw new Error("Страница сменилась во время загрузки субтитров.");
+          throw new Error("Page or episode context changed while subtitles were loading.");
         }
         state.timeline = timeline;
-        state.timelinePageSignature = loadStartedPage;
+        state.timelinePageSignature = loadStartedSig;
         return timeline;
       })
       .finally(() => {
@@ -996,14 +1148,19 @@ function maybeCompleteClip(text, previousText) {
   }
 
   async function loadSubtitleTimeline() {
-    const candidates = collectVttCandidatesSync();
-    let source = pickPreferredVttSource(candidates);
-    if (!source) {
+    const episodeKeyDom = getActiveEpisodeKeyFromDom();
+    let source = tryPickVttFromPlayerjsApi();
+    if (!source?.url) {
+      const candidates = collectVttCandidatesSync();
+      const narrowed = preferCandidatesMatchingEpisodeKey(candidates, episodeKeyDom);
+      source = pickPreferredVttSource(narrowed, episodeKeyDom);
+    }
+    if (!source?.url) {
       source = await tryPickVttFromHlsManifest();
     }
     if (!source?.url) {
       throw new Error(
-        "No VTT URL on the page: checked inline scripts, #playerjs markup, <track>, bare .vtt URLs, and HLS master playlist."
+        "No VTT URL on the page: checked PlayerJS API, inline scripts, #playerjs markup, <track>, bare .vtt URLs, and HLS master playlist."
       );
     }
 
@@ -1024,11 +1181,207 @@ function maybeCompleteClip(text, previousText) {
     };
   }
 
+  /** Нормализация строки с .vtt в абсолютный URL. */
+  function toAbsoluteVttUrl(raw) {
+    if (!raw || typeof raw !== "string") {
+      return null;
+    }
+    const trimmed = raw.trim();
+    if (!/\.vtt(\?|#|$)/i.test(trimmed)) {
+      return null;
+    }
+    try {
+      return new URL(trimmed, window.location.href).href;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Разбор строки вида "[En]//host/a.vtt,[Ru]//host/b.vtt" из api("subtitles").
+   */
+  function parseBracketSubtitleListing(listRaw) {
+    /** @type {{ label: string, url: string }[]} */
+    const out = [];
+    if (listRaw == null || listRaw === "") {
+      return out;
+    }
+    const s = String(listRaw);
+    const re = /\[([^\]]*)]\s*(\S+\.vtt[^\s,]*)/gi;
+    let m = re.exec(s);
+    while (m) {
+      const url = toAbsoluteVttUrl(m[2]);
+      if (url) {
+        out.push({ label: (m[1] || "").trim() || "Subtitles", url });
+      }
+      m = re.exec(s);
+    }
+    return out;
+  }
+
+  /**
+   * Из значения api("subtitle"): URL, либо null если это только название языка или индекс.
+   */
+  function extractVttUrlFromSubtitleApiValue(cur) {
+    if (cur == null || cur === "") {
+      return null;
+    }
+    if (typeof cur === "number") {
+      return null;
+    }
+    const s = String(cur).trim();
+    const bracket = /\[([^\]]*)]\s*(\S+\.vtt[^\s,]*)/i.exec(s);
+    if (bracket) {
+      return toAbsoluteVttUrl(bracket[2]);
+    }
+    const bare = /(\S+\.vtt[^\s,]*)/i.exec(s);
+    if (bare) {
+      return toAbsoluteVttUrl(bare[1]);
+    }
+    return null;
+  }
+
+  /** Подбор инстансов с методом api() как у PlayerJS. */
+  function collectProbablePlayerjsInstances() {
+    /** @type {object[]} */
+    const out = [];
+    const seen = new Set();
+    const tryAdd = (obj) => {
+      if (!obj || typeof obj.api !== "function") {
+        return;
+      }
+      if (seen.has(obj)) {
+        return;
+      }
+      seen.add(obj);
+      out.push(obj);
+    };
+
+    for (const name of ["playerjs", "player3js", "player", "pjs"]) {
+      try {
+        const v = window[name];
+        if (Array.isArray(v)) {
+          v.forEach(tryAdd);
+        } else {
+          tryAdd(v);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
+    const roots = document.querySelectorAll("#playerjs, #pjs_playerjs, [id^='pjs_']");
+    for (const el of roots) {
+      tryAdd(el.player);
+      tryAdd(el.playerjs);
+      for (const k of Object.keys(el)) {
+        try {
+          const v = el[k];
+          if (v && typeof v === "object") {
+            tryAdd(v);
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+
+    return out;
+  }
+
+  /**
+   * Актуальный URL субтитров из PlayerJS (api «subtitle» / «subtitles»), без скана всех серий в скрипте.
+   */
+  function tryPickVttFromPlayerjsApi() {
+    const players = collectProbablePlayerjsInstances();
+    for (const player of players) {
+      try {
+        const cur = player.api("subtitle");
+        const direct = extractVttUrlFromSubtitleApiValue(cur);
+        if (direct) {
+          return { label: "PlayerJS (subtitle)", url: direct };
+        }
+
+        let listingRaw = "";
+        try {
+          listingRaw = player.api("subtitles");
+        } catch (_) {
+          listingRaw = "";
+        }
+        const tracks = parseBracketSubtitleListing(listingRaw);
+
+        if (typeof cur === "number" && Number.isFinite(cur) && cur >= 0 && tracks[cur]) {
+          const t = tracks[cur];
+          return { label: t.label, url: t.url };
+        }
+
+        if (typeof cur === "string" && tracks.length) {
+          const needle = cur.trim().toLowerCase();
+          const hit = tracks.find((t) => {
+            const lab = t.label.toLowerCase();
+            return lab === needle || lab.includes(needle) || needle.includes(lab);
+          });
+          if (hit) {
+            return { label: hit.label, url: hit.url };
+          }
+        }
+      } catch (_) {
+        /* следующий инстанс */
+      }
+    }
+    return null;
+  }
+
+  /** Подсказки из path страницы (s3, e4, rus4 …), чтобы не выбрать VTT другой серии при огромном списке кандидатов. */
+  function buildEpisodeHintsFromLocation() {
+    const segments = window.location.pathname.split("/").filter(Boolean);
+    /** @type {string[]} */
+    const hints = [];
+    for (const seg of segments) {
+      const lower = seg.toLowerCase();
+      if (/^s\d+$/i.test(seg) || /^season[_-]?\d+$/i.test(seg)) {
+        hints.push(lower);
+      }
+      if (/^e\d+$/i.test(seg) || /^ep\d+$/i.test(seg) || /^episode[_-]?\d+$/i.test(seg)) {
+        hints.push(lower);
+        const num = seg.match(/\d+/);
+        if (num) {
+          hints.push(num[0]);
+        }
+      }
+      const langEp = seg.match(/^(rus|eng|en|ru)(\d+)$/i);
+      if (langEp) {
+        hints.push(lower, langEp[2]);
+      }
+    }
+    return [...new Set(hints.filter(Boolean))];
+  }
+
+  function scoreVttAgainstEpisodeHints(vttUrl, hints) {
+    if (!hints?.length || !vttUrl) {
+      return 0;
+    }
+    let bonus = 0;
+    const lower = vttUrl.toLowerCase();
+    for (const h of hints) {
+      if (h && lower.includes(String(h).toLowerCase())) {
+        bonus += 35;
+      }
+    }
+    return bonus;
+  }
+
   /** Собираем текст страницы, где часто лежит конфиг Playerjs / ссылки на VTT (внешние .js без доступа к телу не сканируем). */
   function getSubtitleScanText() {
     const parts = [];
     for (const script of document.scripts) {
-      parts.push(script.textContent || "");
+      const text = script.textContent || "";
+      const vttHits = (text.match(/\.vtt\b/gi) || []).length;
+      // В каталогах серий один скрипт может перечислять .vtt для всех эпизодов — не кормим это regex-сканеру целиком.
+      if (text.length > 50000 && vttHits > 12) {
+        continue;
+      }
+      parts.push(text);
     }
     // Разметка и data-* контейнеров плеера (субтитры могут быть только в innerHTML, не в inline script).
     const roots = document.querySelectorAll(
@@ -1043,9 +1396,106 @@ function maybeCompleteClip(text, previousText) {
     return parts.join("\n");
   }
 
+  function escapeRegExp(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   /**
-   * Все обнаруженные пары label + url (без приоритета). Разные режимы: VTT с таймлайном vs DOM — по-прежнему
-   * раздельно; здесь только то, откуда реально можно скачать .vtt для режима auto-vtt.
+   * Разбор значения subtitle из конфига PlayerJS: "[Ru]a.vtt,[En]b.vtt" или список URL через запятую.
+   */
+  function parseSubtitleFieldToCandidates(subsRaw) {
+    /** @type {{ label: string, url: string }[]} */
+    const out = [];
+    if (!subsRaw || typeof subsRaw !== "string") {
+      return out;
+    }
+    const subs = subsRaw.trim();
+    const bracket = /\[([^\]]*)]\s*(\S+?\.vtt[^\s",]*)/gi;
+    let bm = bracket.exec(subs);
+    while (bm) {
+      const url = toAbsoluteVttUrl(bm[2]);
+      if (url) {
+        out.push({ label: (bm[1] || "").trim() || "Subtitles", url });
+      }
+      bm = bracket.exec(subs);
+    }
+    if (out.length) {
+      return out;
+    }
+    for (const part of subs.split(",")) {
+      const t = part.trim().replace(/^\[[^\]]*]\s*/, "");
+      const url = toAbsoluteVttUrl(t);
+      if (url) {
+        out.push({ label: "Subtitles", url });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Вытаскивает VTT только для текущего эпизода из большого JSON (все сезоны в одном скрипте).
+   * Ищем объект с "id":"s3e4", затем в том же фрагменте — "subtitle":"...".
+   */
+  function collectVttFromPlayerjsJsonByEpisodeId(episodeKey) {
+    const key = (episodeKey || "").trim();
+    if (!key) {
+      return [];
+    }
+    const escaped = escapeRegExp(key);
+
+    for (const script of document.scripts) {
+      const text = script.textContent || "";
+      if (!text.includes(key)) {
+        continue;
+      }
+
+      // Один проход по полному тексту скрипта: id → subtitle (как в конфиге серии).
+      const forward = new RegExp(
+        `["']id["']\\s*:\\s*["']${escaped}["'][\\s\\S]{0,56000}?["']subtitle["']\\s*:\\s*["']([^"']+)["']`,
+        "i"
+      );
+      const mf = text.match(forward);
+      if (mf?.[1]) {
+        const parsed = parseSubtitleFieldToCandidates(mf[1]);
+        if (parsed.length) {
+          return parsed;
+        }
+      }
+
+      // subtitle может идти в объекте раньше id.
+      const backward = new RegExp(
+        `["']subtitle["']\\s*:\\s*["']([^"']+)["'][\\s\\S]{0,56000}?["']id["']\\s*:\\s*["']${escaped}["']`,
+        "i"
+      );
+      const mb = text.match(backward);
+      if (mb?.[1]) {
+        const parsed = parseSubtitleFieldToCandidates(mb[1]);
+        if (parsed.length) {
+          return parsed;
+        }
+      }
+
+      const idRe = new RegExp(`["']id["']\\s*:\\s*["']${escaped}["']`, "gi");
+      let match = idRe.exec(text);
+      while (match) {
+        const slice = text.slice(match.index, match.index + 48000);
+        const subM = slice.match(/["']subtitle["']\s*:\s*["']([^"']+)["']/i);
+        if (subM?.[1]) {
+          const parsed = parseSubtitleFieldToCandidates(subM[1]);
+          if (parsed.length) {
+            return parsed;
+          }
+        }
+        match = idRe.exec(text);
+      }
+    }
+
+    return [];
+  }
+
+  /**
+   * Все обнаруженные пары label + url. При известном data-episode-key сначала берём subtitle из JSON объекта с этим id,
+   * иначе «глобальный» сканер цепляется за первый .vtt из всего каталога серий.
    */
   function collectVttCandidatesSync() {
     const seen = new Set();
@@ -1072,9 +1522,7 @@ function maybeCompleteClip(text, previousText) {
       }
     }
 
-    const fullText = getSubtitleScanText();
-
-    // Нативные дорожки у <video> — то, что плеер мог подставить в разметку.
+    // Нативные дорожки у <video> — привязаны к текущему воспроизведению.
     for (const track of document.querySelectorAll("video track, track")) {
       const kind = (track.getAttribute("kind") || "").toLowerCase();
       if (kind && kind !== "subtitles" && kind !== "captions") {
@@ -1085,6 +1533,23 @@ function maybeCompleteClip(text, previousText) {
         track.getAttribute("src")
       );
     }
+
+    const episodeKey = getActiveEpisodeKeyFromDom();
+    let fromEpisodeJson = [];
+    if (episodeKey) {
+      fromEpisodeJson = collectVttFromPlayerjsJsonByEpisodeId(episodeKey);
+      for (const item of fromEpisodeJson) {
+        add(item.label, item.url);
+      }
+    }
+
+    const needFallbackScan = !episodeKey || fromEpisodeJson.length === 0;
+
+    if (!needFallbackScan) {
+      return list;
+    }
+
+    const fullText = getSubtitleScanText();
 
     // Playerjs: subtitle: "[Label]url.vtt, ..." или отдельная строка только с квадратными скобками.
     const subtitleBlock =
@@ -1105,18 +1570,28 @@ function maybeCompleteClip(text, previousText) {
       }
     }
 
-    // JSON-подобные поля в скриптах: "file"|"src"|"url" -> *.vtt
+    // JSON "file"|"src"|"url" -> *.vtt; при известном эпизоде не заливаем все подряд (избегаем s1e1).
     const jsonUrl = /"(?:file|src|url)"\s*:\s*"([^"]+\.vtt[^"]*)"/gi;
+    const hintList = episodeKey ? expandDataEpisodeKeyToHints(episodeKey) : [];
     for (let jm = jsonUrl.exec(fullText); jm; jm = jsonUrl.exec(fullText)) {
+      if (episodeKey && hintList.length) {
+        const low = jm[1].toLowerCase();
+        const ok = hintList.some((h) => h.length >= 2 && low.includes(h.toLowerCase()));
+        if (!ok) {
+          continue;
+        }
+      }
       add("Subtitles", jm[1]);
     }
 
-    // Первый попавшийся абсолютный или относительный .vtt в том же тексте (запасной путь).
-    const bare =
-      fullText.match(/https?:\/\/[^\s"'<>]+\.vtt(?:\?[^\s"'<>]*)?/i)?.[0]
-      || fullText.match(/\/[^\s"'<>]+\.vtt(?:\?[^\s"'<>]*)?/i)?.[0];
-    if (bare) {
-      add("Subtitles", bare);
+    // Первый .vtt в тексте без привязки к эпизоду даёт «залипание» на чужой серии при SPA.
+    if (!episodeKey) {
+      const bare =
+        fullText.match(/https?:\/\/[^\s"'<>]+\.vtt(?:\?[^\s"'<>]*)?/i)?.[0]
+        || fullText.match(/\/[^\s"'<>]+\.vtt(?:\?[^\s"'<>]*)?/i)?.[0];
+      if (bare) {
+        add("Subtitles", bare);
+      }
     }
 
     return list;
@@ -1149,15 +1624,19 @@ function maybeCompleteClip(text, previousText) {
     }
   }
 
-  function pickPreferredVttSource(candidates) {
+  function pickPreferredVttSource(candidates, dataEpisodeKey) {
     if (!candidates?.length) {
       return null;
     }
     const video = getVideoElement();
     const videoSrc = (video && (video.currentSrc || video.src)) || "";
+    const episodeHints = buildCombinedEpisodeHints();
+    const keyForScore = dataEpisodeKey ?? getActiveEpisodeKeyFromDom();
     const ranked = candidates
       .map((c, index) => {
         let score = scoreVttUrlAgainstVideo(c.url, videoSrc);
+        score += scoreVttAgainstEpisodeHints(c.url, episodeHints);
+        score += scoreVttAgainstDataEpisodeKey(c.url, keyForScore);
         if (/english|eng|англ/i.test(c.label)) {
           score += 15;
         }
@@ -1234,7 +1713,7 @@ function maybeCompleteClip(text, previousText) {
             || "Subtitles";
           out.push({ label, url: new URL(uri, manifestUrl).href });
         }
-        const picked = pickPreferredVttSource(out);
+        const picked = pickPreferredVttSource(out, getActiveEpisodeKeyFromDom());
         if (picked) {
           return picked;
         }
