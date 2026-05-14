@@ -111,6 +111,90 @@ public class TermServiceTests
         wentStatus!.Status.Should().Be("SAVED");
     }
 
+    [Fact]
+    public async Task ListProjectTermsAsync_FilterNew_ReturnsOnlyNewTerms()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+
+        await using (var arrange = CreateContext(dbName))
+        {
+            AddProject(arrange, userId, projectId);
+            await arrange.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext(dbName);
+        var sut = new TermService(ctx, NullLogger<TermService>.Instance);
+
+        await sut.CreateOrUpdateAsync(userId, projectId, "alpha", "WORD", "en", "NEW", null, null, null, null);
+        await sut.CreateOrUpdateAsync(userId, projectId, "beta", "WORD", "en", "SAVED", "x", null, null, null);
+
+        var list = await sut.ListProjectTermsAsync(userId, projectId, "NEW", null, null, null, 50, default);
+
+        list.Items.Should().ContainSingle();
+        list.Items[0].Text.Should().Be("alpha");
+        list.NextCursor.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ListProjectTermsAsync_PageSizeOne_ReturnsNextCursor()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+
+        await using (var arrange = CreateContext(dbName))
+        {
+            AddProject(arrange, userId, projectId);
+            await arrange.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext(dbName);
+        var sut = new TermService(ctx, NullLogger<TermService>.Instance);
+
+        await sut.CreateOrUpdateAsync(userId, projectId, "alpha", "WORD", "en", "NEW", null, null, null, null);
+        await sut.CreateOrUpdateAsync(userId, projectId, "beta", "WORD", "en", "SAVED", "x", null, null, null);
+
+        var first = await sut.ListProjectTermsAsync(userId, projectId, null, null, null, null, 1, default);
+        first.Items.Should().HaveCount(1);
+        first.NextCursor.Should().NotBeNullOrWhiteSpace();
+
+        var second = await sut.ListProjectTermsAsync(userId, projectId, null, null, null, first.NextCursor, 10, default);
+        second.Items.Should().HaveCount(1);
+        second.Items[0].Text.Should().NotBe(first.Items[0].Text);
+    }
+
+    [Fact]
+    public async Task BulkMarkKnownAsync_MarksSeveralSurfaces_AsKnown()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+
+        await using (var arrange = CreateContext(dbName))
+        {
+            AddProject(arrange, userId, projectId);
+            await arrange.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext(dbName);
+        var sut = new TermService(ctx, NullLogger<TermService>.Instance);
+
+        var updated = await sut.BulkMarkKnownAsync(
+            userId,
+            projectId,
+            ["alpha", "beta"],
+            "en");
+
+        updated.Should().Be(2);
+
+        var (_, alpha) = await sut.GetDetailsAsync(userId, projectId, "alpha", "WORD");
+        var (_, beta) = await sut.GetDetailsAsync(userId, projectId, "beta", "WORD");
+        alpha!.Status.Should().Be("KNOWN");
+        beta!.Status.Should().Be("KNOWN");
+    }
+
     private static void AddProject(VocabularyServiceContext context, Guid userId, Guid projectId)
     {
         context.Projects.Add(new Project

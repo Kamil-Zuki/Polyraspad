@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using AggregatorService.Controllers;
 using AggregatorService.Dtos.Auth;
 using AggregatorService.Dtos;
@@ -32,7 +33,7 @@ public class MediaControllerTests
                 ImageId = "11111111-1111-1111-1111-111111111111"
             });
 
-        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance);
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance);
 
         var pngHeader = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         await using var ms = new MemoryStream(pngHeader);
@@ -77,6 +78,7 @@ public class MediaControllerTests
             Mock.Of<IMediaServiceClient>(),
             Mock.Of<IAuthorizationServiceClient>(),
             httpClientFactory.Object,
+            new DocumentTextExtractor(),
             NullLogger<MediaController>.Instance);
 
         var result = await controller.ServeImage(id: null, url: "http://example.test/image.png", cancellationToken: CancellationToken.None);
@@ -114,7 +116,7 @@ public class MediaControllerTests
                 }
             });
 
-        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
@@ -165,7 +167,7 @@ public class MediaControllerTests
                 Email = "tester@example.com"
             });
 
-        var controller = new MediaController(mock.Object, authMock.Object, Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, authMock.Object, Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
@@ -201,13 +203,79 @@ public class MediaControllerTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
 
         var result = await controller.DeleteReaderLibraryBook("proj-1", "11111111-1111-1111-1111-111111111111");
         result.Should().BeOfType<NoContentResult>();
+    }
+
+    [Fact]
+    public async Task ExtractDocumentText_WhenTxt_ShouldReturn200WithText()
+    {
+        var controller = new MediaController(
+            Mock.Of<IMediaServiceClient>(),
+            Mock.Of<IAuthorizationServiceClient>(),
+            Mock.Of<IHttpClientFactory>(),
+            new DocumentTextExtractor(),
+            NullLogger<MediaController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
+        };
+
+        var bytes = Encoding.UTF8.GetBytes("Hello reader pipeline.");
+        await using var ms = new MemoryStream(bytes);
+        IFormFile file = new FormFile(ms, 0, bytes.Length, "file", "lesson.txt")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "text/plain"
+        };
+
+        var actionResult = await controller.ExtractDocumentText(file, CancellationToken.None);
+        var ok = actionResult.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var dto = ok.Value.Should().BeOfType<ExtractDocumentTextResponseDto>().Subject;
+        dto.Text.Should().Be("Hello reader pipeline.");
+        dto.SourceFormat.Should().Be("txt");
+    }
+
+    [Fact]
+    public async Task ExtractDocumentText_WhenPdfHasNoTextLayer_ShouldReturn422WithStructuredBody()
+    {
+        var extractorMock = new Mock<IDocumentTextExtractor>(MockBehavior.Strict);
+        extractorMock
+            .Setup(e => e.ExtractAsync(
+                It.IsAny<Stream>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new NoExtractableDocumentTextException(
+                "pdf",
+                "PDF_NO_TEXT_LAYER",
+                "This PDF has no selectable text layer (common for scanned pages). OCR is not supported in this release."));
+
+        var controller = new MediaController(
+            Mock.Of<IMediaServiceClient>(),
+            Mock.Of<IAuthorizationServiceClient>(),
+            Mock.Of<IHttpClientFactory>(),
+            extractorMock.Object,
+            NullLogger<MediaController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
+        };
+
+        var dummyPdfBytes = new byte[] { 0x25, 0x50, 0x44, 0x46 };
+        await using var ms = new MemoryStream(dummyPdfBytes);
+        IFormFile file = new FormFile(ms, 0, dummyPdfBytes.Length, "file", "scan.pdf")
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "application/pdf"
+        };
+
+        var actionResult = await controller.ExtractDocumentText(file, CancellationToken.None);
+        var obj = actionResult.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
+        obj.StatusCode.Should().Be(422);
     }
 
     private static DefaultHttpContext CreateHttpContext()

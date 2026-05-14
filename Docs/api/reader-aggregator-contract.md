@@ -2,13 +2,14 @@
 
 **Версия:** v1.0-draft  
 **Дата:** 2026-05-13  
-**Статус:** В разработке (gRPC ready, REST missing)
+**Статус:** В разработке (Reader REST + terms list)
 
 ## Endpoints Overview
 
 | Endpoint | Method | Auth | Описание |
 |----------|--------|------|----------|
 | `/api/text/analyze` | POST | Bearer | Анализ текста, токенизация |
+| `/api/terms` | GET | Bearer | Список терминов проекта (cursor, фильтры) |
 | `/api/terms` | POST | Bearer | Создать/обновить термин |
 | `/api/terms/mark-known` | POST | Bearer | Пометить как известный |
 | `/api/terms/ignore` | POST | Bearer | Игнорировать термин |
@@ -17,6 +18,7 @@
 | `/api/terms/search-duplicates` | POST | Bearer | Поиск дубликатов |
 | `/api/Media/library/{projectId}` | GET | Bearer | Список книг |
 | `/api/Media/upload-document` | POST | Bearer | Загрузка PDF |
+| `/api/Media/extract-document-text` | POST | Bearer | Извлечение текста из PDF / EPUB / TXT |
 | `/api/Media/serve-document` | GET | Bearer | Получить файл |
 
 ---
@@ -96,6 +98,45 @@
 
 ## Term Operations
 
+### GET `/api/terms`
+
+Список терминов проекта для текущего пользователя (`ProjectTerm` + `UserTermStatus`). Сортировка: `UserTermStatus.UpdatedAt` по убыванию, затем `ProjectTerm.Id` по возрастанию. Пагинация — **keyset cursor** (строка `nextCursor`), без offset.
+
+**Query:**
+
+| Параметр | Обязательный | Описание |
+|----------|----------------|----------|
+| `projectId` | да | UUID проекта |
+| `status` | нет | `NEW`, `SAVED`, `KNOWN`, `IGNORED`. Для `SAVED` в выборку входят legacy статусы `LINGQ` / `LEARNING` в БД |
+| `type` | нет | `WORD` или `PHRASE` |
+| `q` | нет | Подстрока по отображаемому тексту и нормализованной форме |
+| `cursor` | нет | Значение `nextCursor` с предыдущего ответа |
+| `pageSize` | нет | 1–100, по умолчанию 50 |
+
+**Response 200 (фрагмент):**
+```json
+{
+  "items": [
+    {
+      "termId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "text": "slept",
+      "normalizedText": "slept",
+      "type": "WORD",
+      "language": "en",
+      "status": "SAVED",
+      "meaning": "спал",
+      "firstSentence": "I slept well.",
+      "firstSourceTitle": null,
+      "firstSourceUrl": null,
+      "updatedAt": "2026-05-14T12:00:00+00:00"
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+**Коды:** `400` — нет или неверный `projectId`, неверный `cursor`, неверный фильтр `status`; `401` — нет Bearer; `404` — проект не найден; `502` — ошибка вызова Vocabulary.
+
 ### POST `/api/terms`
 
 Создание или обновление термина (LingQ).
@@ -155,6 +196,10 @@
 ### POST `/api/terms/bulk-known`
 
 Массовая операция для page turn.
+
+**Реальный gRPC контракт (`BulkMarkKnownRequest`):** список **`term_texts`** — поверхностные формы слов (`WORD`), язык задаётся полем `language`. Идемпотентность на стороне vocabulary: повторная пометка того же терма как KNOWN безопасна.
+
+**Черновик REST ниже:** поле `termIds` зарезервировано под будущий REST-слой Aggregator (разрешение id → `ProjectTerm`); до его появления клиент должен опираться на **`term_texts`/тексты токенов**, согласованные с `POST /api/text/analyze`.
 
 **Request:**
 ```json
@@ -315,6 +360,44 @@ Content-Type: `multipart/form-data`
 }
 ```
 
+### POST `/api/Media/extract-document-text`
+
+Извлечение **plain text** на сервере для Reader (вставка текста по-прежнему через `POST /api/text/analyze`). Поддерживаются **PDF** (только текстовый слой, без OCR), **EPUB**, **TXT** (UTF-8 / BOM).
+
+Content-Type: `multipart/form-data`
+
+**Fields:**
+- `file` (required): файл `.pdf`, `.epub` или `.txt`
+
+**Response 200:**
+```json
+{
+  "text": "Chapter one...",
+  "title": "Optional title",
+  "sourceFormat": "pdf"
+}
+```
+
+`sourceFormat`: `"pdf"` | `"epub"` | `"txt"`.
+
+**Response 422 — нет извлекаемого текста** (например отсканированный PDF без текстового слоя):
+
+```json
+{
+  "error": "NoExtractableText",
+  "message": "This PDF has no selectable text layer (common for scanned pages). OCR is not supported in this release.",
+  "details": {
+    "format": "pdf",
+    "reason": "PDF_NO_TEXT_LAYER",
+    "hint": "Try a text-based PDF or paste a transcript; OCR is not available."
+  }
+}
+```
+
+Другие возможные значения `details.reason`: `EPUB_NO_TEXT`, `TXT_NO_TEXT`, `EMPTY_FILE`.
+
+**Response 400:** неподдерживаемое расширение, повреждённый PDF/EPUB (`InvalidDocument`), пустой multipart.
+
 ### GET `/api/Media/serve-document`
 
 **Query Parameters:**
@@ -336,6 +419,7 @@ Content-Type: `multipart/form-data`
 | Forbidden | 403 | Нет доступа к ресурсу |
 | NotFound | 404 | Ресурс не найден |
 | RateLimited | 429 | Превышен rate limit |
+| NoExtractableText | 422 | Документ без извлекаемого текста (напр. скан PDF без слоя текста) |
 | InternalError | 500 | Внутренняя ошибка сервера |
 
 ### Error Response Format
@@ -373,6 +457,7 @@ Content-Type: `multipart/form-data`
 | `/api/text/analyze` | 30 | 1 минута |
 | `/api/terms/*` | 60 | 1 минута |
 | `/api/Media/upload-document` | 10 | 1 минута |
+| `/api/Media/extract-document-text` | 10 | 1 минута |
 | Остальные | 120 | 1 минута |
 
 **Response Headers:**

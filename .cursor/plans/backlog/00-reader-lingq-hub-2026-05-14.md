@@ -6,11 +6,15 @@ Status: backlog
 Created: 2026-05-14
 Owner: `lead-agent`
 
-Дочерние планы пронумерованы **01–04** по приоритету MVP и пост-MVP (см. таблицу ниже).
+Дочерние планы пронумерованы **01–05** по приоритету MVP и пост-MVP (см. таблицу ниже).
 
 ## Goal
 
-Синхронизировать реализацию с [Docs/reader-library-lingq-roadmap.md](../../../Docs/reader-library-lingq-roadmap.md): закрыть разрывы до LingQ-style UX. Монолитный план **`reader-library-lingq-roadmap-2026-05-13`** (ранее в `active/`) **разбит** на дочерние планы в **backlog**; при старте работы переносите выбранный план в `active/` по правилам [`.cursor/plans/README.md`](../README.md).
+Синхронизировать реализацию с [Docs/reader-library-lingq-roadmap.md](../../../Docs/reader-library-lingq-roadmap.md): закрыть разрывы до LingQ-style UX. Монолитный план **`reader-library-lingq-roadmap-2026-05-13`** (ранее в `active/`) **разбит** на дочерние планы; при старте работы переносите выбранный план в `active/` по правилам [`.cursor/plans/README.md`](../README.md).
+
+**План 01 (архив):** [`01-reader-mvp-read-2026-05-14`](../archive/01-reader-mvp-read-2026-05-14.md) — чтение, форматы, reader, PDF messaging; follow-ups см. в архивном плане.
+
+**Сейчас в работе (active):** [`02-reader-mvp-mining-2026-05-14`](./02-reader-mvp-mining-2026-05-14.md) — mining из reader. План **05** (Vocabulary list) закрыт — см. [`05-vocabulary-list-2026-05-14`](../archive/05-vocabulary-list-2026-05-14.md).
 
 ## PVS.ai — позиционирование и киллер-фичи (vs Anki / LingQ)
 
@@ -30,6 +34,7 @@ Owner: `lead-agent`
 | AI: контекстное предложение, перевод в контексте, TTS, grammar notes, финал «Save»; **миграция с Ollama на внешние LLM API** | **02** |
 | FSRS, вход в Session Review из reader, удобство повторения на телефоне | **03** |
 | Onboarding (пустой дашборд), дефолтные тексты, приветственная колода, упрощение Library, PWA | **01**, **04** |
+| Список терминов проекта (Vocabulary screen) | **05** |
 
 ## Резюме: план действий до запуска (кросс-планы)
 
@@ -38,14 +43,15 @@ Owner: `lead-agent`
 3. **Study / Session Review:** корректный FSRS (уже `inclusive`), интерфейс повторения удобен на телефоне; связка reader → сессия → reader (план **03**).
 4. **Onboarding:** 2–3 бесплатных коротких текста в библиотеке по умолчанию + небольшая приветственная колода (~5 карточек) для демонстрации UI (планы **01**, **04**).
 
-## Child plans (backlog, по приоритету)
+## Child plans (по приоритету)
 
 | Приор | MVP / тема | Plan ID | Файл |
 |-------|--------------|---------|------|
-| **01** | Шаг 1 — Чтение (форматы, reader, подсветка) | `01-reader-mvp-read-2026-05-14` | [`01-reader-mvp-read-2026-05-14.md`](./01-reader-mvp-read-2026-05-14.md) |
+| **01** | Шаг 1 — Чтение (форматы, reader, подсветка) | `01-reader-mvp-read-2026-05-14` | [`01-reader-mvp-read-2026-05-14.md`](../archive/01-reader-mvp-read-2026-05-14.md) (**archived**) |
 | **02** | Шаг 2 — Mining (pop-up, Mine, term actions) | `02-reader-mvp-mining-2026-05-14` | [`02-reader-mvp-mining-2026-05-14.md`](./02-reader-mvp-mining-2026-05-14.md) |
 | **03** | Шаг 3 — SRS (review-from-context, FSRS, inclusive) | `03-reader-mvp-srs-review-2026-05-14` | [`03-reader-mvp-srs-review-2026-05-14.md`](./03-reader-mvp-srs-review-2026-05-14.md) |
 | **04** | Phase 3–4 — library IA, polish | `04-reader-library-phases34-2026-05-14` | [`04-reader-library-phases34-2026-05-14.md`](./04-reader-library-phases34-2026-05-14.md) |
+| **05** | Vocabulary — список терминов по проекту (REST + UI) | `05-vocabulary-list-2026-05-14` | [`05-vocabulary-list-2026-05-14.md`](../archive/05-vocabulary-list-2026-05-14.md) (**archived**) |
 
 ## Core Learning Loop (сводка)
 
