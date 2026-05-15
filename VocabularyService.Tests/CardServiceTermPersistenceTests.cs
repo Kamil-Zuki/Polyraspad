@@ -174,19 +174,20 @@ public class CardServiceTermPersistenceTests
             new CheckCardDuplicatesRequestDto
             {
                 ProjectId = projectId,
-                TargetWord = "went"
+                TermText = "went"
             });
         var go = await sut.CheckDuplicatesAsync(
             userId,
             new CheckCardDuplicatesRequestDto
             {
                 ProjectId = projectId,
-                TargetWord = "Go"
+                TermText = "Go"
             });
 
         went.IsDuplicate.Should().BeFalse();
         go.IsDuplicate.Should().BeTrue();
-        go.ExistingCards.Should().ContainSingle(card => card.TargetWord == "go");
+        go.ExistingCards.Should().ContainSingle();
+        go.ExistingCards[0].FieldValues[SentenceMiningNoteType.Word].String.Should().Be("go");
     }
 
     private static VocabularyServiceContext CreateContext(string dbName)

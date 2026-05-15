@@ -4,13 +4,6 @@
 **/bin/
 **/obj/
 
-# Temporary Cursor lead-agent coordination files.
-# Keep folder docs/placeholders tracked, but do not commit active plans/tasks.
-.cursor/plans/active/*
-!.cursor/plans/active/.gitkeep
-.cursor/tasks/active/*
-!.cursor/tasks/active/.gitkeep
-
 # Local run artifacts
 .artifacts/
 .dotnet-home/

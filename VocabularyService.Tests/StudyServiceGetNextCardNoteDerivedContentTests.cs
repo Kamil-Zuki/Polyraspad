@@ -173,9 +173,9 @@ public class StudyServiceGetNextCardNoteDerivedContentTests
 
         next.Should().NotBeNull();
         next!.SrsState.State.Should().Be("LEARNING");
-        next!.Content.Sentence.Should().Be(expression);
-        next.Content.Translation.Should().Be(translation);
-        next.Content.TargetLemma.Should().Be(surfaceWord, "term-first: mined surface form from Word field, not lemma text");
+        next.Content.FieldValues[SentenceMiningNoteType.Expression].String.Should().Be(expression);
+        next.Content.FieldValues[SentenceMiningNoteType.Translation].String.Should().Be(translation);
+        next.Content.FieldValues[SentenceMiningNoteType.Word].String.Should().Be(surfaceWord);
         next.SourceMeta.Should().NotBeNull();
         next.SourceMeta!.Title.Should().Be(sourceTitle);
         next.SourceMeta.Url.Should().Be(sourceUrl);
