@@ -92,18 +92,17 @@ public class MediaGrpcService : MediaServiceBase
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Document size must not exceed 50 MB"));
         }
 
-        var contentType = string.IsNullOrWhiteSpace(request.ContentType) ? "application/pdf" : request.ContentType;
+        var contentType = string.IsNullOrWhiteSpace(request.ContentType) ? "application/pdf" : request.ContentType.Trim();
         var fileName = request.FileName ?? string.Empty;
-        if (!string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
-            !fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        if (!TryNormalizeReaderDocumentContentType(contentType, fileName, out var normalizedContentType))
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Only PDF documents are supported"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Unsupported document type (use PDF, EPUB, or plain text)"));
         }
 
         try
         {
             await using var stream = new MemoryStream(request.DocumentData.ToByteArray());
-            var documentId = await _mediaStorage.UploadDocumentAsync(stream, "application/pdf", context.CancellationToken).ConfigureAwait(false);
+            var documentId = await _mediaStorage.UploadDocumentAsync(stream, normalizedContentType, context.CancellationToken).ConfigureAwait(false);
             var url = await _mediaStorage.GetMediaUrlAsync(documentId, "documents", context.CancellationToken).ConfigureAwait(false);
             return new UploadDocumentResponse { Url = url, DocumentId = documentId.ToString() };
         }
@@ -112,6 +111,35 @@ public class MediaGrpcService : MediaServiceBase
             _logger.LogError(ex, "S3 error uploading document");
             throw new RpcException(new Status(StatusCode.Unavailable, $"Media storage error: {ex.Message}"));
         }
+    }
+
+    private static bool TryNormalizeReaderDocumentContentType(string contentType, string fileName, out string normalized)
+    {
+        normalized = "";
+
+        if (string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "application/pdf";
+            return true;
+        }
+
+        if (string.Equals(contentType, "application/epub+zip", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(contentType, "application/x-epub+zip", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".epub", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "application/epub+zip";
+            return true;
+        }
+
+        if (string.Equals(contentType, "text/plain", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "text/plain";
+            return true;
+        }
+
+        return false;
     }
 
     public override async Task<GetImageUrlResponse> GetImageUrl(GetImageUrlRequest request, ServerCallContext context)

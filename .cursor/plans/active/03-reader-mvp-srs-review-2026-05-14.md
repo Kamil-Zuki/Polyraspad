@@ -2,11 +2,11 @@
 
 Plan ID: `03-reader-mvp-srs-review-2026-05-14`
 Priority: **03**
-Status: backlog
+Status: active
 Created: 2026-05-14
 Owner: `lead-agent`
 
-Родительский индекс: [`00-reader-lingq-hub-2026-05-14.md`](./00-reader-lingq-hub-2026-05-14.md)
+Родительский индекс: [`00-reader-lingq-hub-2026-05-14.md`](../backlog/00-reader-lingq-hub-2026-05-14.md)
 
 ## Goal
 
@@ -20,7 +20,7 @@ Owner: `lead-agent`
 
 ## Out of Scope
 
-- Импорт, подсветка, Mine — планы **`01-reader-mvp-read-2026-05-14`**, **`02-reader-mvp-mining-2026-05-14`** → [`01-reader-mvp-read-2026-05-14.md`](./01-reader-mvp-read-2026-05-14.md), [`02-reader-mvp-mining-2026-05-14.md`](./02-reader-mvp-mining-2026-05-14.md).
+- Импорт, подсветка, Mine — планы **`01-reader-mvp-read-2026-05-14`**, **`02-reader-mvp-mining-2026-05-14`** → [`01-reader-mvp-read-2026-05-14.md`](../archive/01-reader-mvp-read-2026-05-14.md), [`02-reader-mvp-mining-2026-05-14.md`](../archive/02-reader-mvp-mining-2026-05-14.md).
 - Замена ядра FSRS или самописный планировщик — запрещено; UI «карточка + AGAIN/HARD/GOOD/EASY» **уже есть** — не переписывать с нуля.
 
 ## Граница шага
@@ -54,7 +54,7 @@ Owner: `lead-agent`
 
 ## Tasks
 
-- Backlog: `.cursor/tasks/backlog/03-reader-mvp-srs-review-2026-05-14/`
+- Active: `.cursor/tasks/active/03-reader-mvp-srs-review-2026-05-14/` (при необходимости)
 
 ## Verification
 
@@ -70,4 +70,4 @@ Owner: `lead-agent`
 
 ## Cleanup
 
-- [ ] Перенос в `active/` при старте; по завершении — `archive/`.
+- [ ] По завершении — `archive/`.

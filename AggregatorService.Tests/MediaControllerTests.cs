@@ -33,7 +33,7 @@ public class MediaControllerTests
                 ImageId = "11111111-1111-1111-1111-111111111111"
             });
 
-        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance);
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), Mock.Of<ITtsAudioService>(), NullLogger<MediaController>.Instance);
 
         var pngHeader = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         await using var ms = new MemoryStream(pngHeader);
@@ -79,6 +79,7 @@ public class MediaControllerTests
             Mock.Of<IAuthorizationServiceClient>(),
             httpClientFactory.Object,
             new DocumentTextExtractor(),
+            Mock.Of<ITtsAudioService>(),
             NullLogger<MediaController>.Instance);
 
         var result = await controller.ServeImage(id: null, url: "http://example.test/image.png", cancellationToken: CancellationToken.None);
@@ -116,7 +117,7 @@ public class MediaControllerTests
                 }
             });
 
-        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), Mock.Of<ITtsAudioService>(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
@@ -167,7 +168,7 @@ public class MediaControllerTests
                 Email = "tester@example.com"
             });
 
-        var controller = new MediaController(mock.Object, authMock.Object, Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, authMock.Object, Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), Mock.Of<ITtsAudioService>(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
@@ -203,7 +204,7 @@ public class MediaControllerTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), NullLogger<MediaController>.Instance)
+        var controller = new MediaController(mock.Object, Mock.Of<IAuthorizationServiceClient>(), Mock.Of<IHttpClientFactory>(), new DocumentTextExtractor(), Mock.Of<ITtsAudioService>(), NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
         };
@@ -220,6 +221,7 @@ public class MediaControllerTests
             Mock.Of<IAuthorizationServiceClient>(),
             Mock.Of<IHttpClientFactory>(),
             new DocumentTextExtractor(),
+            Mock.Of<ITtsAudioService>(),
             NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
@@ -260,6 +262,7 @@ public class MediaControllerTests
             Mock.Of<IAuthorizationServiceClient>(),
             Mock.Of<IHttpClientFactory>(),
             extractorMock.Object,
+            Mock.Of<ITtsAudioService>(),
             NullLogger<MediaController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
@@ -276,6 +279,93 @@ public class MediaControllerTests
         var actionResult = await controller.ExtractDocumentText(file, CancellationToken.None);
         var obj = actionResult.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
         obj.StatusCode.Should().Be(422);
+    }
+
+    [Fact]
+    public async Task GenerateAudio_WhenBodyNull_ShouldReturn400()
+    {
+        var tts = new Mock<ITtsAudioService>(MockBehavior.Strict);
+        var controller = new MediaController(
+            Mock.Of<IMediaServiceClient>(),
+            Mock.Of<IAuthorizationServiceClient>(),
+            Mock.Of<IHttpClientFactory>(),
+            new DocumentTextExtractor(),
+            tts.Object,
+            NullLogger<MediaController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
+        };
+
+        var actionResult = await controller.GenerateAudio(null);
+        var bad = actionResult.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        bad.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task GenerateAudio_WhenTtsThrowsArgument_ShouldReturn400()
+    {
+        var tts = new Mock<ITtsAudioService>();
+        tts
+            .Setup(s => s.GenerateAndStoreAsync(
+                It.IsAny<GenerateAudioRequestDto>(),
+                It.IsAny<Guid>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ArgumentException("Language must be one of: en, ru, ko."));
+
+        var controller = new MediaController(
+            Mock.Of<IMediaServiceClient>(),
+            Mock.Of<IAuthorizationServiceClient>(),
+            Mock.Of<IHttpClientFactory>(),
+            new DocumentTextExtractor(),
+            tts.Object,
+            NullLogger<MediaController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
+        };
+
+        var actionResult = await controller.GenerateAudio(new GenerateAudioRequestDto { Text = "x", Language = "de" });
+        var bad = actionResult.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        bad.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task GenerateAudio_WhenTtsReturnsUrl_ShouldReturn201WithBody()
+    {
+        var expected = new GenerateAudioResponseDto
+        {
+            Url = "http://localhost:9000/polyraspad-media/audio/22222222-2222-2222-2222-222222222222",
+            AudioId = "22222222-2222-2222-2222-222222222222",
+            Provider = "openai-compatible",
+            Language = "ko",
+        };
+        var tts = new Mock<ITtsAudioService>(MockBehavior.Strict);
+        tts
+            .Setup(s => s.GenerateAndStoreAsync(
+                It.Is<GenerateAudioRequestDto>(r => r.Text.Trim() == "안녕" && r.Language == "ko"),
+                It.IsAny<Guid>(),
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        var controller = new MediaController(
+            Mock.Of<IMediaServiceClient>(),
+            Mock.Of<IAuthorizationServiceClient>(),
+            Mock.Of<IHttpClientFactory>(),
+            new DocumentTextExtractor(),
+            tts.Object,
+            NullLogger<MediaController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = CreateHttpContext() }
+        };
+
+        var actionResult = await controller.GenerateAudio(new GenerateAudioRequestDto { Text = "안녕", Language = "ko" });
+        var ok = actionResult.Result.Should().BeOfType<ObjectResult>().Subject;
+        ok.StatusCode.Should().Be(201);
+        var dto = ok.Value.Should().BeOfType<GenerateAudioResponseDto>().Subject;
+        dto.Url.Should().Be(expected.Url);
+        dto.AudioId.Should().Be(expected.AudioId);
+        dto.Language.Should().Be("ko");
     }
 
     private static DefaultHttpContext CreateHttpContext()

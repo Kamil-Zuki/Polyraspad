@@ -14,7 +14,9 @@ Owner: `lead-agent`
 
 **План 01 (архив):** [`01-reader-mvp-read-2026-05-14`](../archive/01-reader-mvp-read-2026-05-14.md) — чтение, форматы, reader, PDF messaging; follow-ups см. в архивном плане.
 
-**Сейчас в работе (active):** [`02-reader-mvp-mining-2026-05-14`](./02-reader-mvp-mining-2026-05-14.md) — mining из reader. План **05** (Vocabulary list) закрыт — см. [`05-vocabulary-list-2026-05-14`](../archive/05-vocabulary-list-2026-05-14.md).
+**План 02 (архив):** [`02-reader-mvp-mining-2026-05-14`](../archive/02-reader-mvp-mining-2026-05-14.md) — mining из reader.
+
+**Сейчас в работе (active):** [`03-reader-mvp-srs-review-2026-05-14`](../active/03-reader-mvp-srs-review-2026-05-14.md) — SRS, вход в Session Review из reader, due, FSRS через `inclusive`. План **05** (Vocabulary list) закрыт — см. [`05-vocabulary-list-2026-05-14`](../archive/05-vocabulary-list-2026-05-14.md).
 
 ## PVS.ai — позиционирование и киллер-фичи (vs Anki / LingQ)
 
@@ -24,9 +26,9 @@ Owner: `lead-agent`
 
 - **Решение:** AI Assistant (1-Click Mining, grammar notes и т.д.) — только **вызовы внешних LLM** по ключам; **Ollama не используем** и **убираем из кода и compose**.
 - **Объём удаления (ориентир):** сервис `ollama` в `docker-compose`, переменные `Ollama__*` / `OLLAMA_*`, клиенты и маршруты вида `/api/ollama/*` в Aggregator/фронте — заменить единым слоем «LLM provider» + конфиг выбранного API.
-- **Ключи:** секреты вне репозитория; политика ротации и BYOK (если нужно) — отдельные продуктовые/безопасностные решения. Документация (`README`, runbook) — обновить вместе с миграцией (ведущий план **02**).
+- **Ключи:** секреты вне репозитория; политика ротации и BYOK (если нужно) — отдельные продуктовые/безопасностные решения. Документация (`README`, runbook) — обновить вместе с миграцией (исторически план **02**).
 
-**Уже есть:** сессия повторения карточек (**Session Review** / изучение по карточкам: оценки, интервалы, интеграция с FSRS через `inclusive` — см. план **03**). Задача запуска — усилить **1-Click Mining** из reader (план **02**), **мобильный Study / Session Review** (план **03–04**), **onboarding** и упрощение Library (план **04**).
+**Уже есть:** сессия повторения карточек (**Session Review** / изучение по карточкам: оценки, интервалы, интеграция с FSRS через `inclusive`). Текущий фокус — **review-from-context** и due (план **03** активен); далее **мобильный Study / Session Review** и **onboarding** / Library (план **04**).
 
 | Тема                                                                                                                         | Где в планах   |
 | ---------------------------------------------------------------------------------------------------------------------------- | -------------- |
@@ -48,8 +50,8 @@ Owner: `lead-agent`
 | Приор  | MVP / тема                                          | Plan ID                                 | Файл                                                                                             |
 | ------ | --------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | **01** | Шаг 1 — Чтение (форматы, reader, подсветка)         | `01-reader-mvp-read-2026-05-14`         | [`01-reader-mvp-read-2026-05-14.md`](../archive/01-reader-mvp-read-2026-05-14.md) (**archived**) |
-| **02** | Шаг 2 — Mining (pop-up, Mine, term actions)         | `02-reader-mvp-mining-2026-05-14`       | [`02-reader-mvp-mining-2026-05-14.md`](./02-reader-mvp-mining-2026-05-14.md)                     |
-| **03** | Шаг 3 — SRS (review-from-context, FSRS, inclusive)  | `03-reader-mvp-srs-review-2026-05-14`   | [`03-reader-mvp-srs-review-2026-05-14.md`](./03-reader-mvp-srs-review-2026-05-14.md)             |
+| **02** | Шаг 2 — Mining (pop-up, Mine, term actions)         | `02-reader-mvp-mining-2026-05-14`       | [`02-reader-mvp-mining-2026-05-14.md`](../archive/02-reader-mvp-mining-2026-05-14.md) (**archived**) |
+| **03** | Шаг 3 — SRS (review-from-context, FSRS, inclusive)  | `03-reader-mvp-srs-review-2026-05-14`   | [`03-reader-mvp-srs-review-2026-05-14.md`](../active/03-reader-mvp-srs-review-2026-05-14.md) (**active**) |
 | **04** | Phase 3–4 — library IA, polish                      | `04-reader-library-phases34-2026-05-14` | [`04-reader-library-phases34-2026-05-14.md`](./04-reader-library-phases34-2026-05-14.md)         |
 | **05** | Vocabulary — список терминов по проекту (REST + UI) | `05-vocabulary-list-2026-05-14`         | [`05-vocabulary-list-2026-05-14.md`](../archive/05-vocabulary-list-2026-05-14.md) (**archived**) |
 
