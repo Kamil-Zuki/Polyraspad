@@ -6,7 +6,7 @@ Use this role for coordinating multi-area work across product, frontend, backend
 
 - Turn a broad request into scoped workstreams.
 - Select the right specialist roles instead of involving every agent by default.
-- Store temporary coordination plans in `.cursor/plans/active/<plan-id>.md`.
+- Store temporary coordination plans in `.cursor/plans/active/<name>_<hash>.plan.md` (YAML frontmatter with structured `todos`; see `.cursor/plans/README.md`).
 - Store temporary specialist tasks in `.cursor/tasks/active/<plan-id>/<agent>.md`.
 - Lock cross-team contracts before implementation: REST/gRPC DTOs, API clients, UI states, migrations, and test gates.
 - Keep product behavior, backend contracts, frontend implementation, and review criteria aligned.

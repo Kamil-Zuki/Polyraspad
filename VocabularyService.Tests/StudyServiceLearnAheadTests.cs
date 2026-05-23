@@ -127,16 +127,12 @@ public class StudyServiceLearnAheadTests
                 Step: 1
             ));
 
-        var sut = new StudyService(
+        var sut = StudyServiceTestFactory.Create(
             actContext,
-            Mock.Of<ILogger<StudyService>>(),
             cardService,
-            Mock.Of<IDeckService>(),
-            userSettingsMock.Object,
             fsrsMock.Object,
-            Mock.Of<IAnswerValidationService>(),
-            mediaServiceMock.Object,
-            RedisTestHelper.CreateConnectionMultiplexer());
+            userSettingsMock.Object,
+            mediaServiceMock.Object);
 
         // 2. Act
         // Start session
@@ -280,16 +276,12 @@ public class StudyServiceLearnAheadTests
                 Step: 1
             ));
 
-        var sut = new StudyService(
+        var sut = StudyServiceTestFactory.Create(
             actContext,
-            Mock.Of<ILogger<StudyService>>(),
             cardService,
-            Mock.Of<IDeckService>(),
-            userSettingsMock.Object,
             fsrsMock.Object,
-            Mock.Of<IAnswerValidationService>(),
-            mediaServiceMock.Object,
-            RedisTestHelper.CreateConnectionMultiplexer());
+            userSettingsMock.Object,
+            mediaServiceMock.Object);
 
         var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);
         var firstCard = await sut.GetNextCardAsync(session.Id, userId, CancellationToken.None);

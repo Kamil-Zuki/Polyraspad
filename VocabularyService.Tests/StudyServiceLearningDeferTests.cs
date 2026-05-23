@@ -1,3 +1,4 @@
+#nullable enable
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -15,13 +16,13 @@ using Xunit;
 namespace VocabularyService.Tests;
 
 /// <summary>
-/// Регрессия: прогресс карточки должен браться по ProjectId активной сессии, иначе при дубликатах
-/// user_card_progress (один user + card, разные проекты) FSRS видит неверный Step и залипает на одном learning-интервале.
+/// Anki parity: learning cards due in the future must not appear before their step,
+/// mixed with new/review cards in the same session.
 /// </summary>
-public class StudyServiceProjectScopedProgressTests
+public class StudyServiceLearningDeferTests
 {
     [Fact]
-    public async Task GetNextCardAsync_PassesFsrsProgress_FromSessionProject_WhenDuplicateRowsExist()
+    public async Task GetNextCardAsync_DefersFutureLearningCard_UntilOtherCardsAreShown()
     {
         var dbName = Guid.NewGuid().ToString("N");
         var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
@@ -30,35 +31,32 @@ public class StudyServiceProjectScopedProgressTests
             .Options;
 
         var userId = Guid.NewGuid();
-        var projectId1 = Guid.NewGuid();
-        var projectId2 = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
         var deckId = Guid.NewGuid();
-        Guid cardId;
+        Guid newCardId;
+        Guid learningCardId;
         var now = DateTime.UtcNow;
 
         await using (var arrangeContext = new TestVocabularyServiceContext(options))
         {
-            foreach (var pid in new[] { projectId1, projectId2 })
+            arrangeContext.Projects.Add(new Project
             {
-                arrangeContext.Projects.Add(new Project
-                {
-                    Id = pid,
-                    UserId = userId,
-                    Title = pid == projectId1 ? "P1" : "P2",
-                    SourceLang = "en",
-                    TargetLang = "ru",
-                    FsrsSettings = new FsrsSettings(),
-                    Stats = new ProjectStats(),
-                    IsArchived = false,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                });
-            }
+                Id = projectId,
+                UserId = userId,
+                Title = "P",
+                SourceLang = "en",
+                TargetLang = "ru",
+                FsrsSettings = new FsrsSettings { LearningStepsSeconds = [60, 600] },
+                Stats = new ProjectStats(),
+                IsArchived = false,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
 
             arrangeContext.Decks.Add(new Deck
             {
                 Id = deckId,
-                ProjectId = projectId1,
+                ProjectId = projectId,
                 OwnerId = userId,
                 Title = "Deck",
                 ContributionPolicy = "OPEN",
@@ -82,51 +80,43 @@ public class StudyServiceProjectScopedProgressTests
                 new NoteTypeService(arrangeContext),
                 Mock.Of<ILogger<CardService>>());
 
-            var created = await cardSeed.CreateCardAsync(
-                new CreateCardDto
+            newCardId = (await cardSeed.CreateCardAsync(new CreateCardDto
+            {
+                UserId = userId,
+                DeckId = deckId,
+                FieldValues = new Dictionary<string, NoteFieldValue>
                 {
-                    UserId = userId,
-                    DeckId = deckId,
-                    FieldValues = new Dictionary<string, NoteFieldValue>
-                    {
-                        [SentenceMiningNoteType.Expression] = new() { String = "w" },
-                        [SentenceMiningNoteType.Word] = new() { String = "w" },
-                        [SentenceMiningNoteType.Translation] = new() { String = "t" },
-                    },
-                });
-            cardId = created.Id;
+                    [SentenceMiningNoteType.Expression] = new() { String = "alpha" },
+                    [SentenceMiningNoteType.Word] = new() { String = "alpha" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "a" },
+                },
+            })).Id;
 
-            // «Плохая» строка из другого проекта (воспроизводит исторический/сбойный дубликат).
-            arrangeContext.UserCardProgresses.Add(new UserCardProgress
+            learningCardId = (await cardSeed.CreateCardAsync(new CreateCardDto
             {
-                Id = Guid.NewGuid(),
                 UserId = userId,
-                CardId = cardId,
-                ProjectId = projectId2,
-                State = 1,
-                Step = 0,
-                Stability = 1f,
-                Difficulty = 5f,
-                Due = now,
-                LastReview = now,
-                Reps = 1,
-                Lapses = 0,
-                IsSuspended = false,
-            });
+                DeckId = deckId,
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "beta" },
+                    [SentenceMiningNoteType.Word] = new() { String = "beta" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "b" },
+                },
+            })).Id;
 
             arrangeContext.UserCardProgresses.Add(new UserCardProgress
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
-                CardId = cardId,
-                ProjectId = projectId1,
+                CardId = learningCardId,
+                ProjectId = projectId,
                 State = 1,
                 Step = 1,
-                Stability = 2f,
+                Stability = 1f,
                 Difficulty = 5f,
-                Due = now,
+                Due = now.AddMinutes(10),
                 LastReview = now,
-                Reps = 2,
+                Reps = 1,
                 Lapses = 0,
                 IsSuspended = false,
             });
@@ -159,7 +149,6 @@ public class StudyServiceProjectScopedProgressTests
             new NoteTypeService(actContext),
             Mock.Of<ILogger<CardService>>());
 
-        var lastStepPassedToFsrs = -99;
         var fsrsMock = new Mock<IFsrsScheduler>();
         fsrsMock
             .Setup(f => f.GetNextStateAsync(
@@ -169,14 +158,13 @@ public class StudyServiceProjectScopedProgressTests
                 It.IsAny<int>(),
                 It.IsAny<FsrsSettings?>(),
                 It.IsAny<CancellationToken>()))
-            .Callback<UserCardProgress, int, DateTime, int, FsrsSettings?, CancellationToken>(
-                (progress, _, _, _, _, _) => lastStepPassedToFsrs = progress.Step)
-            .ReturnsAsync(new FsrsNextState(
-                Stability: 1f,
-                Difficulty: 5f,
-                Due: DateTime.UtcNow.AddMinutes(10),
-                State: 1,
-                Step: 1));
+            .ReturnsAsync((UserCardProgress p, int rating, DateTime reviewAt, int _, FsrsSettings? _, CancellationToken _) =>
+                new FsrsNextState(
+                    Stability: 1f,
+                    Difficulty: 5f,
+                    Due: reviewAt.AddMinutes(rating == 3 ? 10 : 1),
+                    State: 1,
+                    Step: 1));
 
         var sut = StudyServiceTestFactory.Create(
             actContext,
@@ -185,10 +173,11 @@ public class StudyServiceProjectScopedProgressTests
             userSettingsMock.Object,
             mediaServiceMock.Object);
 
-        var session = await sut.StartStudySessionAsync(userId, projectId1, deckId, CancellationToken.None);
-        await sut.GetNextCardAsync(session.Id, userId, CancellationToken.None);
+        var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);
+        var first = await sut.GetNextCardAsync(session.Id, userId, CancellationToken.None);
 
-        lastStepPassedToFsrs.Should().Be(1, "FSRS должен видеть шаг прогресса текущего проекта сессии, а не чужого дубликата");
+        first.Should().NotBeNull();
+        first!.Id.Should().Be(newCardId, "learning due через 10m не должна обгонять новую карту в очереди");
     }
 
     private sealed class TestVocabularyServiceContext : VocabularyServiceContext

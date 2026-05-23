@@ -73,4 +73,37 @@ public class TermsControllerTests : IClassFixture<AggregatorWebApplicationFactor
         body.Items[0].Status.Should().Be("SAVED");
         body.NextCursor.Should().Be("next-cursor-token");
     }
+
+    [Fact]
+    public async Task Purge_demo_import_returns_200_and_counts()
+    {
+        var mock = new Mock<IVocabularyServiceClient>();
+        mock.Setup(x => x.PurgeDemoImportAsync(
+                It.IsAny<PurgeDemoImportRequest>(),
+                TestUserId,
+                It.IsAny<IEnumerable<string>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PurgeDemoImportResponse
+            {
+                CardsDeleted = 3,
+                StatusesDeleted = 2,
+                TermsDeleted = 1,
+            });
+
+        _factory.VocabularyClientMockHolder.Current = mock;
+
+        using var client = CreateAuthenticatedClient();
+        var response = await client.PostAsync(
+            $"/api/terms/purge-demo-import?projectId={TestProjectId}",
+            null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadFromJsonAsync<PurgeDemoImportResponseDto>(
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        body.Should().NotBeNull();
+        body!.CardsDeleted.Should().Be(3);
+        body.StatusesDeleted.Should().Be(2);
+        body.TermsDeleted.Should().Be(1);
+    }
 }

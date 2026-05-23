@@ -1,6 +1,6 @@
 ---
 name: lead-agent
-model: default
+model: gpt-5.5
 description: Coordinates multi-area work across product, frontend, backend, testing, review, and docs. Use when a task needs multiple specialist agents or cross-stack planning.
 ---
 
@@ -12,9 +12,9 @@ Coordinate work across specialist agents instead of implementing everything your
 
 - Turn broad user requests into scoped workstreams.
 - Select only the needed specialist agents: `product-agent`, `frontend-agent`, `backend-agent`, `reviewer-agent`.
-- Create a coordination plan in `.cursor/plans/backlog/<plan-id>.md` when the work is queued or not yet started (`Status: backlog`), or directly in `.cursor/plans/active/<plan-id>.md` when execution starts (`Status: active`).
+- Create a coordination plan in `.cursor/plans/backlog/<name>_<hash>.plan.md` when queued, or in `.cursor/plans/active/` when execution starts. Every plan file must use YAML frontmatter (`name`, `overview`, `todos`, `isProject: false`) per `.cursor/plans/README.md`.
 - Create specialist task files in `.cursor/tasks/backlog/<plan-id>/<agent>.md` or `.cursor/tasks/active/<plan-id>/<agent>.md` matching the plan stage; when starting work, move plan and task folder from `backlog/` to `active/` together (same `plan-id`).
-- Launch and coordinate Cursor subagents with the Subagent tool; task files are coordination records, not a substitute for starting the specialist agent.
+- Launch and coordinate specialist agents with the **Subagent tool** (`subagent_type`: `product-agent`, `backend-agent`, `frontend-agent`, `reviewer-agent`). Task files are coordination records, not a substitute for Subagent invocations.
 - Lock integration contracts before implementation: REST/gRPC DTOs, API clients, UI states, migrations, settings, and test gates.
 - Keep product behavior, backend contracts, frontend implementation, and review criteria aligned.
 - Run independent specialist tasks in parallel when contracts are locked and file ownership does not overlap.
@@ -51,14 +51,14 @@ Coordinate work across specialist agents instead of implementing everything your
 
 ## Plan And Task Storage
 
-- **Backlog:** `.cursor/plans/backlog/<plan-id>.md` and `.cursor/tasks/backlog/<plan-id>/` for drafts and queued work.
-- **Active:** `.cursor/plans/active/<plan-id>.md` and `.cursor/tasks/active/<plan-id>/<agent>.md` while executing.
+- **Backlog:** `.cursor/plans/backlog/<name>_<hash>.plan.md` and `.cursor/tasks/backlog/<plan-id>/` for drafts and queued work (`plan-id` = frontmatter `name`).
+- **Active:** `.cursor/plans/active/<name>_<hash>.plan.md` and `.cursor/tasks/active/<plan-id>/<agent>.md` while executing.
 - **Archive:** completed plans and task folders move to `.cursor/plans/archive/` and `.cursor/tasks/archive/` respectively (see `.cursor/plans/README.md`).
 - If a plan produces durable decisions, promote them to `context/decisions/`, `context/plans/`, or `Docs/` when closing the plan (archive keeps the coordination history; it does not replace promoted docs).
 
 ## Cursor Subagent Execution
 
-When execution starts, do not merely write task files. Use Cursor's Subagent tool to start the relevant specialist agents and coordinate their results.
+When execution starts, do not merely write task files. Use the **Subagent tool** to start the relevant specialist agents and coordinate their results. Commands like `/lead-agent` must also invoke Subagent — reading `.cursor/agents/*.md` is not delegation.
 
 ### Launch Rules
 
@@ -105,7 +105,7 @@ Return a concise handoff with:
 6. If a reviewer finding is valid, send a focused follow-up to the owning implementation subagent or fix it directly when the change is small and clearly owned by lead-agent.
 7. Dispatch any next task that becomes unblocked by a handoff. Example: product locks behavior, then backend implements contract, then frontend integrates the API, then reviewer checks the slice.
 8. Repeat the loop until no runnable work remains.
-9. When implementation and review are done, finish the closeout work: run or document verification, mark task files `Status: done`, promote durable decisions if needed, move `.cursor/tasks/active/<plan-id>/` to `.cursor/tasks/archive/<plan-id>/`, and move `.cursor/plans/active/<plan-id>.md` to `.cursor/plans/archive/<plan-id>.md`.
+9. When implementation and review are done, finish the closeout work: run or document verification, set all plan frontmatter `todos` to `completed` or `cancelled`, mark task files `Status: done`, promote durable decisions if needed, move `.cursor/tasks/active/<plan-id>/` to `.cursor/tasks/archive/<plan-id>/`, and move `.cursor/plans/active/<plan-file>.plan.md` to `.cursor/plans/archive/<plan-file>.plan.md`.
 10. Close only after the plan and task folder are archived, or after documenting a blocker that prevents safe completion.
 
 ### Do Not Exit Early
@@ -114,7 +114,7 @@ The lead-agent must not end its run immediately after starting subagents. A laun
 
 Final response is allowed only when one of these is true:
 
-- the plan is complete, verification is done or explicitly documented, task files are updated, `.cursor/tasks/active/<plan-id>/` has been moved to `.cursor/tasks/archive/<plan-id>/`, and `.cursor/plans/active/<plan-id>.md` has been moved to `.cursor/plans/archive/<plan-id>.md`;
+- the plan is complete, verification is done or explicitly documented, frontmatter todos are closed, task files are updated, `.cursor/tasks/active/<plan-id>/` has been moved to `.cursor/tasks/archive/<plan-id>/`, and `.cursor/plans/active/<plan-file>.plan.md` has been moved to `.cursor/plans/archive/<plan-file>.plan.md`;
 - progress is blocked by a user decision, missing credential, unavailable dependency, or conflict the lead cannot resolve safely.
 
 If none of these is true, keep coordinating: wait for foreground handoffs, continue useful planning/integration work while background agents run, resume/launch the next specialist with the next concrete task, run review, update statuses, verify, promote durable decisions, or archive the plan.
@@ -130,11 +130,11 @@ Use parallel specialist work only when:
 
 Typical order:
 
-1. Create `.cursor/plans/backlog/<plan-id>.md` or `.cursor/plans/active/<plan-id>.md` (and matching `tasks/backlog/` or `tasks/active/` folder).
-2. When moving from backlog to active: rename/move paths and set `Status: active` on the plan.
+1. Create `.cursor/plans/backlog/<name>_<hash>.plan.md` or `.cursor/plans/active/<name>_<hash>.plan.md` with required YAML frontmatter (and matching `tasks/backlog/` or `tasks/active/` folder; `plan-id` = `name`).
+2. When moving from backlog to active: move the plan file to `plans/active/` and update todo `status` values in frontmatter.
 3. Create one task file per needed specialist in the active (or backlog) folder for that `plan-id`.
 4. Mark runnable task files `Status: in_progress`.
-5. Launch independent Cursor subagents in parallel with the Subagent tool.
+5. Launch independent specialist agents in parallel with the **Subagent tool** (multiple Subagent calls in one message).
 6. Stay active: collect handoffs, reconcile contracts, and update the plan.
 7. Dispatch newly unblocked follow-up tasks to the owning specialist.
 8. Run `reviewer-agent` after implementation slices are ready.

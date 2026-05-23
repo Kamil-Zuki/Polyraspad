@@ -10,6 +10,12 @@
 2. **Active** — когда план перенесён в `plans/active/`, перенести эту папку в `.cursor/tasks/active/<plan-id>/` (тот же `plan-id`).
 3. **Archive** — после закрытия плана: `.cursor/tasks/archive/<plan-id>/` (см. Archive Rule).
 
+## Plan ID
+
+`plan-id` = поле `name` из YAML frontmatter связанного `.plan.md` (kebab-case, **без** суффикса `_<hash>` в имени файла плана).
+
+Пример: файл `study-good-repeat-fix_1aec425e.plan.md` → папка задач `study-good-repeat-fix/`.
+
 ## Where Tasks Live
 
 - Backlog task folders: `.cursor/tasks/backlog/<plan-id>/`
@@ -49,7 +55,7 @@ Can run in parallel: yes | no
 <What this agent must accomplish>
 
 ## Inputs
-- Plan: `.cursor/plans/backlog/<plan-id>.md` или `.cursor/plans/active/<plan-id>.md` (в зависимости от стадии)
+- Plan: `.cursor/plans/backlog/<plan-file>.plan.md` или `.cursor/plans/active/<plan-file>.plan.md` (в зависимости от стадии; формат frontmatter — `.cursor/plans/README.md`)
 - Files/contracts to read:
   - `<path>`
 

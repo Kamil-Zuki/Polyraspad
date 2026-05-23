@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
+using VocabularyService.Domain;
+using VocabularyService.Dtos.Cards;
 using VocabularyService.Services;
 using Xunit;
 
@@ -184,7 +186,7 @@ public class TermServiceTests
         var updated = await sut.BulkMarkKnownAsync(
             userId,
             projectId,
-            ["alpha", "beta"],
+            [new("alpha"), new("beta")],
             "en");
 
         updated.Should().Be(2);
@@ -193,6 +195,66 @@ public class TermServiceTests
         var (_, beta) = await sut.GetDetailsAsync(userId, projectId, "beta", "WORD");
         alpha!.Status.Should().Be("KNOWN");
         beta!.Status.Should().Be("KNOWN");
+    }
+
+    [Fact]
+    public async Task PurgeDemoImportDataAsync_RemovesDemoCardsAndStatuses_KeepsRealMemoryTerm()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var deckId = Guid.NewGuid();
+
+        await using (var arrange = CreateContext(dbName))
+        {
+            AddProject(arrange, userId, projectId);
+            AddDeck(arrange, userId, projectId, deckId);
+            await arrange.SaveChangesAsync();
+
+            var cardService = CreateCardService(arrange);
+            await cardService.CreateCardAsync(new CreateCardDto
+            {
+                UserId = userId,
+                DeckId = deckId,
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new()
+                    {
+                        String = "[Import demo #1] Practice the word \"memory\" in context today.",
+                    },
+                    [SentenceMiningNoteType.Word] = new() { String = "memory" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "демо-memory-1" },
+                },
+            });
+            await cardService.CreateCardAsync(new CreateCardDto
+            {
+                UserId = userId,
+                DeckId = deckId,
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "An apple a day keeps the doctor away." },
+                    [SentenceMiningNoteType.Word] = new() { String = "apple" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "яблоко" },
+                },
+            });
+        }
+
+        await using var ctx = CreateContext(dbName);
+        var sut = new TermService(ctx, NullLogger<TermService>.Instance);
+
+        var result = await sut.PurgeDemoImportDataAsync(userId, projectId);
+
+        result.CardsDeleted.Should().Be(1);
+        result.StatusesDeleted.Should().Be(1);
+        result.TermsDeleted.Should().Be(1);
+
+        (await ctx.Cards.CountAsync()).Should().Be(1);
+        (await ctx.UserTermStatuses.CountAsync()).Should().Be(1);
+        (await ctx.ProjectTerms.CountAsync()).Should().Be(1);
+
+        var remainingStatus = await ctx.UserTermStatuses.SingleAsync();
+        remainingStatus.Meaning.Should().Be("яблоко");
+        remainingStatus.FirstSentence.Should().Be("An apple a day keeps the doctor away.");
     }
 
     private static void AddProject(VocabularyServiceContext context, Guid userId, Guid projectId)
@@ -209,6 +271,47 @@ public class TermServiceTests
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
+    }
+
+    private static void AddDeck(
+        VocabularyServiceContext context,
+        Guid userId,
+        Guid projectId,
+        Guid deckId)
+    {
+        context.Decks.Add(new Deck
+        {
+            Id = deckId,
+            ProjectId = projectId,
+            OwnerId = userId,
+            Title = "Test Deck",
+            Description = null,
+            CoverImageUrl = null,
+            IsPublic = false,
+            ContributionPolicy = "OPEN",
+            LicenseType = "PRIVATE",
+            ForkedFromId = null,
+            CardCount = 0,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        });
+    }
+
+    private static CardService CreateCardService(VocabularyServiceContext context) =>
+        new(
+            context,
+            new TermService(context, NullLogger<TermService>.Instance),
+            new StubMediaService(),
+            new NoteTypeService(context),
+            NullLogger<CardService>.Instance);
+
+    private sealed class StubMediaService : IMediaService
+    {
+        public Task<Guid> UploadImageAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Guid.NewGuid());
+
+        public Task FillCardMediaUrlsAsync(CardMedia? media, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private static VocabularyServiceContext CreateContext(string dbName)

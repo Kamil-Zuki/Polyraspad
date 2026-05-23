@@ -43,6 +43,8 @@ cp .env.example .env
 2. Задайте одинаковый `AI_PROXY_API_KEY` для `aggregator-service` и `polyraspad-frontend` в `.env`.
 3. Опционально: `AI_COMPLETION_MODEL` (по умолчанию `gpt-4o-mini`).
 
+**Generate audio (TTS):** для бесплатной локальной озвучки в Docker задайте `AI_TTS_PROVIDER=espeak`; Aggregator использует `espeak-ng`, не требует `OPENAI_API_KEY`/`AI_TTS_VOICE_ID` и загружает WAV в MediaService. Для внешних API используйте `AI_TTS_PROVIDER=auto`/`openai`/`mistral`; Mistral требует реальный saved voice ID в `AI_TTS_VOICE_ID`, потому OpenAI-голоса вроде `alloy` и старый placeholder `neutral_female` невалидны.
+
 **Альтернатива:** режим Gemini на стороне Next — `GEMINI_API_KEY` и `EDITOR_AI_PROVIDER=gemini` (см. `polyraspad-frontend/.env.example`).
 
 Локальный Ollama в compose **не используется**.

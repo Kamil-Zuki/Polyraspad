@@ -155,16 +155,12 @@ public class StudyServiceLearningCardsInQueueTests
                     State: progress.State,
                     Step: progress.Step));
 
-        var sut = new StudyService(
+        var sut = StudyServiceTestFactory.Create(
             actContext,
-            Mock.Of<ILogger<StudyService>>(),
             cardService,
-            Mock.Of<IDeckService>(),
-            userSettingsMock.Object,
             fsrsMock.Object,
-            Mock.Of<IAnswerValidationService>(),
-            mediaServiceMock.Object,
-            RedisTestHelper.CreateConnectionMultiplexer());
+            userSettingsMock.Object,
+            mediaServiceMock.Object);
 
         // Запуск сессии по колоде с одной LEARNING-карточкой
         var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);

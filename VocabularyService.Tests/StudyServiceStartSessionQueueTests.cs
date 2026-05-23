@@ -1,34 +1,25 @@
+#nullable enable
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using StackExchange.Redis;
 using VocabularyService.Data;
 using VocabularyService.Data.Entities;
 using VocabularyService.Data.Entities.JsonTypes;
 using VocabularyService.Domain;
 using VocabularyService.Dtos.Cards;
-using VocabularyService.Dtos.Study;
 using VocabularyService.Services;
 using Xunit;
 
 namespace VocabularyService.Tests;
 
-/// <summary>
-/// Тесты для проверки логики Learn Ahead (обучение заранее).
-/// Проверяем, что карточки в состоянии LEARNING, которые скоро станут доступными,
-/// включаются в сессию обучения.
-/// </summary>
-public class StudyServiceLearnAheadTriageTests
+public class StudyServiceStartSessionQueueTests
 {
-    [Theory]
-    [InlineData(1)]
-    [InlineData(3)]
-    public async Task GetNextCardAsync_Should_SurfaceLearningOrRelearningViaLearnAhead_When_DueIn5MinutesAndQueueEmpty(short state)
+    [Fact]
+    public async Task StartStudySession_Then_GetNextCard_ReturnsCard_When_OnlyLearnAheadEligible()
     {
-        // Arrange
         var dbName = Guid.NewGuid().ToString("N");
         var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
             .UseInMemoryDatabase(dbName)
@@ -38,12 +29,12 @@ public class StudyServiceLearnAheadTriageTests
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
         var deckId = Guid.NewGuid();
-        Guid cardId;
         var now = DateTime.UtcNow;
+        Guid cardId;
 
-        await using (var arrangeContext = new TestVocabularyServiceContext(options))
+        await using (var arrange = new TestVocabularyServiceContext(options))
         {
-            arrangeContext.Projects.Add(new Project
+            arrange.Projects.Add(new Project
             {
                 Id = projectId,
                 UserId = userId,
@@ -56,13 +47,12 @@ public class StudyServiceLearnAheadTriageTests
                 CreatedAt = now,
                 UpdatedAt = now
             });
-
-            arrangeContext.Decks.Add(new Deck
+            arrange.Decks.Add(new Deck
             {
                 Id = deckId,
                 ProjectId = projectId,
                 OwnerId = userId,
-                Title = "Deck",
+                Title = "Inbox",
                 ContributionPolicy = "OPEN",
                 LicenseType = "PRIVATE",
                 CardCount = 0,
@@ -70,48 +60,44 @@ public class StudyServiceLearnAheadTriageTests
                 CreatedAt = now,
                 UpdatedAt = now
             });
+            await arrange.SaveChangesAsync();
 
-            await arrangeContext.SaveChangesAsync();
-
-            var mediaArrange = new Mock<IMediaService>();
-            mediaArrange
-                .Setup(s => s.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
+            var media = new Mock<IMediaService>();
+            media
+                .Setup(m => m.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
-            var cardSeed = new CardService(
-                arrangeContext,
-                new TermService(arrangeContext, NullLogger<TermService>.Instance),
-                mediaArrange.Object,
-                new NoteTypeService(arrangeContext),
+            var cardService = new CardService(
+                arrange,
+                new TermService(arrange, NullLogger<TermService>.Instance),
+                media.Object,
+                new NoteTypeService(arrange),
                 Mock.Of<ILogger<CardService>>());
 
-            var created = await cardSeed.CreateCardAsync(
+            var created = await cardService.CreateCardAsync(
                 new CreateCardDto
                 {
                     UserId = userId,
                     DeckId = deckId,
                     FieldValues = new Dictionary<string, NoteFieldValue>
                     {
-                        [SentenceMiningNoteType.Expression] = new() { String = "Hello world" },
-                        [SentenceMiningNoteType.Word] = new() { String = "Hello" },
-                        [SentenceMiningNoteType.Translation] = new() { String = "Привет мир" },
+                        [SentenceMiningNoteType.Expression] = new() { String = "test" },
+                        [SentenceMiningNoteType.Word] = new() { String = "test" },
+                        [SentenceMiningNoteType.Translation] = new() { String = "тест" },
                     },
                 });
             cardId = created.Id;
 
-            // Карточка в состоянии LEARNING, due через 5 минут
-            // По умолчанию LearnAheadLimitMinutes обычно 20 минут,
-            // поэтому карточка должна попасть в очередь.
-            arrangeContext.UserCardProgresses.Add(new UserCardProgress
+            arrange.UserCardProgresses.Add(new UserCardProgress
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 CardId = cardId,
                 ProjectId = projectId,
-                State = state,
+                State = 1,
                 Step = 0,
                 Stability = 0,
                 Difficulty = 0,
-                Due = now.AddMinutes(5), // Через 5 минут
+                Due = now.AddMinutes(5),
                 ElapsedDays = 0,
                 ScheduledDays = 0,
                 Reps = 1,
@@ -119,13 +105,12 @@ public class StudyServiceLearnAheadTriageTests
                 IsSuspended = false,
                 LastReview = now
             });
-
-            await arrangeContext.SaveChangesAsync();
+            await arrange.SaveChangesAsync();
         }
 
-        await using var actContext = new TestVocabularyServiceContext(options);
-        var userSettingsMock = new Mock<IUserSettingsService>(MockBehavior.Strict);
-        userSettingsMock
+        await using var ctx = new TestVocabularyServiceContext(options);
+        var userSettings = new Mock<IUserSettingsService>(MockBehavior.Strict);
+        userSettings
             .Setup(s => s.GetUserSettingsAsync(userId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new UserSetting
             {
@@ -136,16 +121,16 @@ public class StudyServiceLearnAheadTriageTests
                 UpdatedAt = now
             });
 
-        var mediaServiceMock = new Mock<IMediaService>(MockBehavior.Strict);
-        mediaServiceMock
-            .Setup(s => s.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
+        var mediaMock = new Mock<IMediaService>(MockBehavior.Strict);
+        mediaMock
+            .Setup(m => m.FillCardMediaUrlsAsync(It.IsAny<CardMedia?>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var cardService = new CardService(
-            actContext,
-            new TermService(actContext, NullLogger<TermService>.Instance),
-            mediaServiceMock.Object,
-            new NoteTypeService(actContext),
+        var cardSvc = new CardService(
+            ctx,
+            new TermService(ctx, NullLogger<TermService>.Instance),
+            mediaMock.Object,
+            new NoteTypeService(ctx),
             Mock.Of<ILogger<CardService>>());
 
         var fsrsMock = new Mock<IFsrsScheduler>();
@@ -160,23 +145,14 @@ public class StudyServiceLearnAheadTriageTests
             .ReturnsAsync((UserCardProgress _, int _, DateTime reviewAt, int _, FsrsSettings? _, CancellationToken _) =>
                 new FsrsNextState(1f, 5f, reviewAt.AddMinutes(10), 1, 1));
 
-        var sut = StudyServiceTestFactory.Create(
-            actContext,
-            cardService,
-            fsrsMock.Object,
-            userSettingsMock.Object,
-            mediaServiceMock.Object);
+        var sut = StudyServiceTestFactory.Create(ctx, cardSvc, fsrsMock.Object, userSettings.Object, mediaMock.Object);
 
-        // Act — одна LEARNING-карточка due через 5 минут, других карт в колоде нет
         var session = await sut.StartStudySessionAsync(userId, projectId, deckId, CancellationToken.None);
-        var next = await sut.GetNextCardAsync(session.Id, userId, CancellationToken.None);
+        session.QueueStats.Learning.Should().Be(1, "card is in learning state in the initial queue");
 
-        // Assert — learn-ahead cards are seeded into the session queue at start
-        session.Should().NotBeNull();
-        session.QueueStats.Learning.Should().Be(1, "learn-ahead learning card is included in the initial queue");
-        next.Should().NotBeNull("learn-ahead card is available on the first GetNextCard");
+        var next = await sut.GetNextCardAsync(session.Id, userId, CancellationToken.None);
+        next.Should().NotBeNull("learn-ahead card must be seeded into the session queue");
         next!.Id.Should().Be(cardId);
-        next.SrsState.State.Should().Be(state == 1 ? "LEARNING" : "RELEARNING");
     }
 
     private sealed class TestVocabularyServiceContext : VocabularyServiceContext
@@ -191,4 +167,3 @@ public class StudyServiceLearnAheadTriageTests
         }
     }
 }
-

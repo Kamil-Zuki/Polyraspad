@@ -220,6 +220,9 @@ services:
       # Общий секрет BFF (Next) ↔ Aggregator; без него пустой ключ в `docker compose config` и /api/ai/* в UI не работает.
       Ai__ProxyApiKey: "${AI_PROXY_API_KEY:-}"
       Ai__AllowClientModelOverride: "false"
+      Ai__TtsProvider: "${AI_TTS_PROVIDER:-espeak}"
+      Ai__TtsModel: "${AI_TTS_MODEL:-tts-1}"
+      Ai__TtsVoiceId: "${AI_TTS_VOICE_ID:-}"
       DOTNET_RUNNING_IN_CONTAINER: "true"
 
   polyraspad-frontend:

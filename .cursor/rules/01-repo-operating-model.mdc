@@ -22,6 +22,14 @@ alwaysApply: true
 4. Проверить тестами или сборкой
 5. Обновить план при изменении scope, рисков или порядка реализации
 
+### Формат Cursor-планов
+
+- Все планы в `.cursor/plans/{backlog,active,archive}/` — только `*.plan.md` (не `.md`)
+- Имя файла: `<name>_<hash>.plan.md` (hash опционален при ручном создании); `plan-id` для tasks = поле `name` без hash
+- Обязательный YAML frontmatter: `name`, `overview`, `todos` (массив `{ id, content, status }`), `isProject: false`
+- `todos[].status`: `pending` | `in_progress` | `completed` | `cancelled` — источник истины для прогресса
+- Подробный шаблон: `.cursor/plans/README.md`
+
 ### Обязательные привычки
 
 - Поиск через `rg` (ripgrep)

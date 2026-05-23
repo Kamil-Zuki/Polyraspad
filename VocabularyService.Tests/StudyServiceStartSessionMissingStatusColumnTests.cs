@@ -143,16 +143,12 @@ public class StudyServiceStartSessionMissingStatusColumnTests
                 InterfaceLanguage = "en",
                 UpdatedAt = DateTime.UtcNow
             });
-        var sut = new StudyService(
+        var sut = StudyServiceTestFactory.Create(
             context,
-            Mock.Of<ILogger<StudyService>>(),
             Mock.Of<ICardService>(),
-            Mock.Of<IDeckService>(),
-            userSettingsServiceMock.Object,
             Mock.Of<IFsrsScheduler>(),
-            Mock.Of<IAnswerValidationService>(),
-            Mock.Of<IMediaService>(),
-            RedisTestHelper.CreateConnectionMultiplexer());
+            userSettingsServiceMock.Object,
+            Mock.Of<IMediaService>());
 
         var result = await sut.StartStudySessionAsync(userId, projectId, null, CancellationToken.None);
 
