@@ -38,7 +38,7 @@ public class AnalyticsServiceVocabularyStatsTests
 
     [Fact]
 
-    public async Task GetVocabularyStatsAsync_MergesStatusesAndFsrsProgress()
+    public async Task GetVocabularyStatsAsync_CountsKnownStatusesAndMatureFsrsCardsAsKnownTerms()
 
     {
 
@@ -425,6 +425,270 @@ public class AnalyticsServiceVocabularyStatsTests
             result.CefrLevel.Should().NotBeNull();
 
             result.EstimatedFluency.Should().BeGreaterThanOrEqualTo(0);
+
+        }
+
+    }
+
+
+
+    [Fact]
+
+    public async Task GetVocabularyStatsAsync_OverdueMatureReviewCard_StillCountsAsKnownTerm()
+
+    {
+
+        var dbName = Guid.NewGuid().ToString("N");
+
+        var options = new DbContextOptionsBuilder<VocabularyServiceContext>()
+
+            .UseInMemoryDatabase(dbName)
+
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+
+            .Options;
+
+
+
+        var userId = Guid.NewGuid();
+
+        var projectId = Guid.NewGuid();
+
+        var deckId = Guid.NewGuid();
+
+        var cardId = Guid.NewGuid();
+
+        var noteId = Guid.NewGuid();
+
+        var termId = Guid.NewGuid();
+
+        var now = DateTime.UtcNow;
+
+
+
+        await using (var arrangeContext = new TestVocabularyServiceContext(options))
+
+        {
+
+            arrangeContext.Projects.Add(new Project
+
+            {
+
+                Id = projectId,
+
+                UserId = userId,
+
+                Title = "English",
+
+                SourceLang = "en",
+
+                TargetLang = "ru",
+
+                FsrsSettings = new FsrsSettings(),
+
+                Stats = new ProjectStats(),
+
+                IsArchived = false,
+
+                CreatedAt = now,
+
+                UpdatedAt = now
+
+            });
+
+
+
+            arrangeContext.ProjectTerms.Add(new ProjectTerm
+
+            {
+
+                Id = termId,
+
+                ProjectId = projectId,
+
+                Text = "overdue-mature",
+
+                NormalizedText = "overdue-mature",
+
+                Type = "WORD",
+
+                Language = "en",
+
+                CreatedAt = now,
+
+                UpdatedAt = now
+
+            });
+
+
+
+            arrangeContext.UserTermStatuses.Add(new UserTermStatus
+
+            {
+
+                Id = Guid.NewGuid(),
+
+                UserId = userId,
+
+                ProjectId = projectId,
+
+                ProjectTermId = termId,
+
+                Status = "NEW",
+
+                CreatedAt = now,
+
+                UpdatedAt = now
+
+            });
+
+
+
+            arrangeContext.Decks.Add(new Deck
+
+            {
+
+                Id = deckId,
+
+                ProjectId = projectId,
+
+                OwnerId = userId,
+
+                Title = "Deck",
+
+                Description = null,
+
+                CoverImageUrl = null,
+
+                IsPublic = false,
+
+                ContributionPolicy = "OPEN",
+
+                LicenseType = "PRIVATE",
+
+                ForkedFromId = null,
+
+                CardCount = 1,
+
+                CreatedAt = now,
+
+                UpdatedAt = now
+
+            });
+
+
+
+            arrangeContext.Notes.Add(new Note
+
+            {
+
+                Id = noteId,
+
+                DeckId = deckId,
+
+                CreatorId = userId,
+
+                NoteTypeId = Guid.NewGuid(),
+
+                FieldValues = new Dictionary<string, NoteFieldValue>(),
+
+                CreatedAt = now,
+
+                UpdatedAt = now
+
+            });
+
+
+
+            arrangeContext.Cards.Add(new Card
+
+            {
+
+                Id = cardId,
+
+                DeckId = deckId,
+
+                CreatorId = userId,
+
+                NoteId = noteId,
+
+                SearchDocument = "overdue-mature",
+
+                ProjectTermId = termId,
+
+                CreatedAt = now,
+
+                UpdatedAt = now
+
+            });
+
+
+
+            arrangeContext.UserCardProgresses.Add(new UserCardProgress
+
+            {
+
+                Id = Guid.NewGuid(),
+
+                UserId = userId,
+
+                CardId = cardId,
+
+                ProjectId = projectId,
+
+                State = 2,
+
+                Step = 0,
+
+                Stability = 30,
+
+                Difficulty = 5,
+
+                Due = now.AddDays(-1),
+
+                ElapsedDays = 22,
+
+                ScheduledDays = 21,
+
+                Reps = 6,
+
+                Lapses = 0,
+
+                IsSuspended = false,
+
+                LastReview = now.AddDays(-22)
+
+            });
+
+
+
+            await arrangeContext.SaveChangesAsync();
+
+        }
+
+
+
+        await using (var actContext = new TestVocabularyServiceContext(options))
+
+        {
+
+            var logger = new Mock<ILogger<AnalyticsService>>();
+
+            var userSettings = new UserSettingsService(actContext, new Mock<ILogger<UserSettingsService>>().Object);
+
+            var sut = new AnalyticsService(actContext, logger.Object, userSettings);
+
+
+
+            var result = await sut.GetVocabularyStatsAsync(userId, projectId, CancellationToken.None);
+
+
+
+            result.MatureCount.Should().Be(1, "mature review card with ScheduledDays >= 21 counts as known even when due");
+
+            result.ReviewingCount.Should().Be(0);
+
+            result.NewCount.Should().Be(0);
 
         }
 
