@@ -9,28 +9,29 @@ using Moq;
 
 namespace AggregatorService.Tests;
 
-/// <summary>
-/// WebApplicationFactory that allows replacing IVocabularyServiceClient with a mock per test.
-/// </summary>
 public class AggregatorWebApplicationFactory : WebApplicationFactory<Program>
 {
-    /// <summary>
-    /// Holder for the current mock; replace before each request to control client behavior.
-    /// </summary>
     public MockHolder VocabularyClientMockHolder { get; } = new MockHolder();
+    public AgentClientMockHolder AgentClientMockHolder { get; } = new AgentClientMockHolder();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureTestServices(services =>
         {
-            var descriptors = services.Where(d => d.ServiceType == typeof(IVocabularyServiceClient)).ToList();
-            foreach (var d in descriptors)
+            var vocabularyDescriptors = services.Where(d => d.ServiceType == typeof(IVocabularyServiceClient)).ToList();
+            foreach (var d in vocabularyDescriptors)
                 services.Remove(d);
             services.AddSingleton(VocabularyClientMockHolder);
             services.AddTransient<IVocabularyServiceClient>(sp =>
                 sp.GetRequiredService<MockHolder>().Current.Object);
 
-            // Use test auth that reads X-User-Id so authenticated tests hit the controller (which returns 501)
+            var agentDescriptors = services.Where(d => d.ServiceType == typeof(IAgentServiceClient)).ToList();
+            foreach (var d in agentDescriptors)
+                services.Remove(d);
+            services.AddSingleton(AgentClientMockHolder);
+            services.AddTransient<IAgentServiceClient>(sp =>
+                sp.GetRequiredService<AgentClientMockHolder>().Current.Object);
+
             services.AddAuthentication(TestAuthHandler.TestScheme)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.TestScheme, _ => { });
             services.Configure<AuthenticationOptions>(o =>
@@ -43,9 +44,6 @@ public class AggregatorWebApplicationFactory : WebApplicationFactory<Program>
     }
 }
 
-/// <summary>
-/// Holds the current Mock of IVocabularyServiceClient so tests can replace it per test.
-/// </summary>
 public class MockHolder
 {
     private Mock<IVocabularyServiceClient> _current = new Mock<IVocabularyServiceClient>();
@@ -54,5 +52,16 @@ public class MockHolder
     {
         get => _current;
         set => _current = value ?? new Mock<IVocabularyServiceClient>();
+    }
+}
+
+public class AgentClientMockHolder
+{
+    private Mock<IAgentServiceClient> _current = new Mock<IAgentServiceClient>();
+
+    public Mock<IAgentServiceClient> Current
+    {
+        get => _current;
+        set => _current = value ?? new Mock<IAgentServiceClient>();
     }
 }

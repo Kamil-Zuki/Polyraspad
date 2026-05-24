@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+
+option csharp_namespace = "Pvs.Content.Grpc";
+
+package pvs.content.v1;
+
+message SrsSettings {
+  double request_retention = 1;
+  int32 maximum_interval = 2;
+  repeated double w = 3;
+  bool enable_short_term = 4;
+}
+
+message ProjectStats {
+  int32 total_lemmas = 1;
+  int32 mature_lemmas = 2;
+}
+
+message ProjectResponse {
+  string id = 1;
+  string user_id = 2;
+  string title = 3;
+  string source_lang = 4;
+  string target_lang = 5;
+  SrsSettings settings = 6;
+  ProjectStats stats = 7;
+  bool is_archived = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message GetProjectDetailsRequest {
+  string user_id = 1;
+  string project_id = 2;
+}
+
+service ContentService {
+  rpc GetProjectDetails (GetProjectDetailsRequest) returns (ProjectResponse);
+}
+
+message GetVocabularyStatsRequest {
+  string user_id = 1;
+  string project_id = 2;
+}
+
+message CefrLevel {
+  string code = 1;
+  string title = 2;
+  int32 progress_percent = 3;
+  int32 words_to_next_level = 4;
+}
+
+message GetVocabularyStatsResponse {
+  string project_id = 1;
+  int32 total_lemmas = 2;
+  int32 mature_count = 3;
+  int32 learning_count = 4;
+  int32 new_count = 5;
+  CefrLevel cefr_level = 6;
+  int32 estimated_fluency = 7;
+}
+
+message GetDailySummaryRequest {
+  string user_id = 1;
+  google.protobuf.Int32Value timezone_offset = 2;
+}
+
+message GoalProgress {
+  int32 current = 1;
+  int32 target = 2;
+  bool is_completed = 3;
+}
+
+message GetDailySummaryResponse {
+  string date = 1;
+  int32 current_streak = 2;
+  bool is_streak_extended_today = 3;
+  int32 time_spent_seconds = 4;
+  GoalProgress new_cards = 5;
+  GoalProgress reviews = 6;
+}
+
+service AnalyticsService {
+  rpc GetVocabularyStats (GetVocabularyStatsRequest) returns (GetVocabularyStatsResponse);
+  rpc GetDailySummary (GetDailySummaryRequest) returns (GetDailySummaryResponse);
+}
+
+message TargetIndex {
+  int32 start = 1;
+  int32 len = 2;
+}
+
+message GenerateContextRequest {
+  string user_id = 1;
+  string target_word = 2;
+  string language = 3;
+  string user_level = 4;
+  int32 count = 5;
+}
+
+message ContextSuggestion {
+  string sentence = 1;
+  string translation = 2;
+  string target_word = 3;
+  TargetIndex target_index = 4;
+}
+
+message GenerateContextResponse {
+  repeated ContextSuggestion suggestions = 1;
+}
+
+message ExplainGrammarRequest {
+  string user_id = 1;
+  string sentence = 2;
+  string target_word = 3;
+  string user_native_language = 4;
+  google.protobuf.StringValue context_prompt = 5;
+}
+
+message ExplainGrammarResponse {
+  string explanation = 1;
+  google.protobuf.StringValue related_topic = 2;
+}
+
+service AIService {
+  rpc GenerateContext (GenerateContextRequest) returns (GenerateContextResponse);
+  rpc ExplainGrammar (ExplainGrammarRequest) returns (ExplainGrammarResponse);
+}

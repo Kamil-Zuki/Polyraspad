@@ -129,6 +129,134 @@ public class CardServiceTermPersistenceTests
     }
 
     [Fact]
+    public async Task CreateCardAsync_PreservesKnownStatus_WhenTermAlreadyKnown()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var deckId = Guid.NewGuid();
+        var termId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        await using (var arrangeContext = CreateContext(dbName))
+        {
+            ArrangeProjectAndDeck(arrangeContext, userId, projectId, deckId);
+            arrangeContext.ProjectTerms.Add(new ProjectTerm
+            {
+                Id = termId,
+                ProjectId = projectId,
+                Text = "apple",
+                NormalizedText = "apple",
+                Type = "WORD",
+                Language = "en",
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            arrangeContext.UserTermStatuses.Add(new UserTermStatus
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                ProjectId = projectId,
+                ProjectTermId = termId,
+                Status = "KNOWN",
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            await arrangeContext.SaveChangesAsync();
+        }
+
+        await using (var actContext = CreateContext(dbName))
+        {
+            var sut = new CardService(
+                actContext,
+                new TermService(actContext, NullLogger<TermService>.Instance),
+                new StubMediaService(),
+                new NoteTypeService(actContext),
+                NullLogger<CardService>.Instance);
+
+            await sut.CreateCardAsync(new CreateCardDto
+            {
+                UserId = userId,
+                DeckId = deckId,
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "I eat an apple" },
+                    [SentenceMiningNoteType.Word] = new() { String = "apple" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "яблоко" },
+                },
+            });
+        }
+
+        await using var assertContext = CreateContext(dbName);
+        var status = await assertContext.UserTermStatuses.AsNoTracking().SingleAsync();
+        status.Status.Should().Be("KNOWN");
+    }
+
+    [Fact]
+    public async Task CreateCardAsync_PreservesIgnoredStatus_WhenTermAlreadyIgnored()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var userId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var deckId = Guid.NewGuid();
+        var termId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+
+        await using (var arrangeContext = CreateContext(dbName))
+        {
+            ArrangeProjectAndDeck(arrangeContext, userId, projectId, deckId);
+            arrangeContext.ProjectTerms.Add(new ProjectTerm
+            {
+                Id = termId,
+                ProjectId = projectId,
+                Text = "apple",
+                NormalizedText = "apple",
+                Type = "WORD",
+                Language = "en",
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            arrangeContext.UserTermStatuses.Add(new UserTermStatus
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                ProjectId = projectId,
+                ProjectTermId = termId,
+                Status = "IGNORED",
+                CreatedAt = now,
+                UpdatedAt = now,
+            });
+            await arrangeContext.SaveChangesAsync();
+        }
+
+        await using (var actContext = CreateContext(dbName))
+        {
+            var sut = new CardService(
+                actContext,
+                new TermService(actContext, NullLogger<TermService>.Instance),
+                new StubMediaService(),
+                new NoteTypeService(actContext),
+                NullLogger<CardService>.Instance);
+
+            await sut.CreateCardAsync(new CreateCardDto
+            {
+                UserId = userId,
+                DeckId = deckId,
+                FieldValues = new Dictionary<string, NoteFieldValue>
+                {
+                    [SentenceMiningNoteType.Expression] = new() { String = "I eat an apple" },
+                    [SentenceMiningNoteType.Word] = new() { String = "apple" },
+                    [SentenceMiningNoteType.Translation] = new() { String = "яблоко" },
+                },
+            });
+        }
+
+        await using var assertContext = CreateContext(dbName);
+        var status = await assertContext.UserTermStatuses.AsNoTracking().SingleAsync();
+        status.Status.Should().Be("IGNORED");
+    }
+
+    [Fact]
     public async Task CheckDuplicatesAsync_UsesExactRealTermInsteadOfLemma()
     {
         var dbName = Guid.NewGuid().ToString();

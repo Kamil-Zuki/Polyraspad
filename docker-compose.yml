@@ -153,6 +153,35 @@ services:
       Media__GrpcAddress: "http://media-service:5121"
       DOTNET_RUNNING_IN_CONTAINER: "true"
 
+  agent-service:
+    container_name: agent-service
+    build:
+      context: ./AgentService
+      dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_10_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_10_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "5131"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vocabulary-service:
+        condition: service_started
+    environment:
+      APP_UID: "0"
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=agent_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-change-me-postgres-password}"
+      Vocabulary__GrpcAddress: "http://vocabulary-service:5117"
+      Ai__BaseUrl: "${AI_COMPLETION_BASE_URL:-https://api.openai.com/v1}"
+      Ai__ApiKey: "${OPENAI_API_KEY:-}"
+      Ai__Model: "${AI_COMPLETION_MODEL:-gpt-4o-mini}"
+      Ai__TimeoutSeconds: "120"
+      Ai__Enabled: "${AI_COMPLETION_ENABLED:-true}"
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+
   media-service:
     container_name: media-service
     build:
@@ -198,6 +227,8 @@ services:
     depends_on:
       vocabulary-service:
         condition: service_started
+      agent-service:
+        condition: service_started
       media-service:
         condition: service_started
       authorization-module:
@@ -206,6 +237,7 @@ services:
       APP_UID: "0"
       ASPNETCORE_URLS: "http://0.0.0.0:5206"
       AggregatorService__VocabularyServiceBaseUrl: "http://vocabulary-service:5117"
+      AggregatorService__AgentServiceBaseUrl: "http://agent-service:5131"
       AggregatorService__MediaServiceBaseUrl: "http://media-service:5121"
       AggregatorService__AuthorizationModuleBaseUrl: "http://authorization-module:5027"
       Cors__AllowedOrigins: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000}"

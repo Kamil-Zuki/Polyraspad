@@ -17,3 +17,4 @@ Use this format:
 | [ADR-0001](ADR-0001-context-and-docs-boundary.md) | Граница `Docs/` vs `context/` |
 | [frontend-component-library](frontend-component-library.md) | shadcn/ui + reader-статусы |
 | [product-mechanics](product-mechanics.md) | Ключевые механики: reader, термины, mining, vocabulary, карточки, study |
+| [reader-vocabulary-stats](reader-vocabulary-stats.md) | Статистика словаря из UserTermStatus (Reader), не из SRS карточек |

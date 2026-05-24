@@ -29,4 +29,26 @@ public class AutoMappingProfileTests
         dto.TotalTerms.Should().Be(42);
         dto.KnownTerms.Should().Be(17);
     }
+
+    [Fact]
+    public void CefrLevel_MapsWordsToNextLevel()
+    {
+        var config = new MapperConfiguration(
+            cfg => cfg.AddProfile<AutoMappingProfile>(),
+            NullLoggerFactory.Instance);
+        var mapper = config.CreateMapper();
+
+        var grpc = new CefrLevel
+        {
+            Code = "A1",
+            Title = "Beginner",
+            ProgressPercent = 0,
+            WordsToNextLevel = 497,
+        };
+
+        var dto = mapper.Map<CefrLevelDto>(grpc);
+
+        dto.Code.Should().Be("A1");
+        dto.WordsToNextLevel.Should().Be(497);
+    }
 }
