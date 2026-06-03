@@ -50,6 +50,7 @@ export type CaptureData = {
     cues: SubtitleCue[];
     sourceLabel?: string;
     sourceUrl?: string;
+    shiftSeconds?: number;
   };
   screenshot?: {
     dataUrl?: string;
@@ -59,7 +60,7 @@ export type CaptureData = {
     dataUrl?: string;
     filename?: string;
     durationMs?: number;
-    stopReason?: "subtitle-change" | "manual" | "max-duration" | "range" | "cue-end";
+    stopReason?: "subtitle-change" | "subtitle-ended" | "manual" | "max-duration" | "range" | "cue-end" | "next-cue-start";
     videoStartTime?: number;
     videoEndTime?: number;
     recordingStartedAt?: number;

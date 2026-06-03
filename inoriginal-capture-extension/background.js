@@ -370,6 +370,13 @@ async function captureSubtitleClip(options = {}) {
   });
   await saveSentenceDraft(draft);
 
+  const previousCapture = takeScreenshot ? null : await getLatestCapture();
+  const keptScreenshot = !takeScreenshot && previousCapture?.screenshot?.dataUrl
+    ? previousCapture.screenshot
+    : undefined;
+
+  await chrome.storage.local.remove(CAPTURE_KEY);
+
   await mergeLatestCapture({
     capturedAt: startedAt,
     pageTitle: tab.title || "inoriginal",
@@ -383,6 +390,9 @@ async function captureSubtitleClip(options = {}) {
     cardState: "capturing",
     captureStep: takeScreenshot ? "screenshot" : "rewinding",
     error: "",
+    audio: {},
+    subtitles: {},
+    ...(keptScreenshot ? { screenshot: keptScreenshot } : {}),
     captureEvents: [
       buildCaptureEvent(
         takeScreenshot ? "screenshot" : "rewinding",
@@ -1382,13 +1392,16 @@ async function buildPopupContext() {
   ]);
 
   const choices = await handleAnkiAction("popupChoices", {});
-  const shouldUseLiveSubtitle = !capture?.audio?.dataUrl && capture?.cardState !== "created";
-  const mergedCapture = shouldUseLiveSubtitle
-    ? {
-        ...(capture || {}),
-        ...(activeTabContext || {})
-      }
-    : capture || activeTabContext || {};
+  // Живые субтитры вкладки — только во время активного захвата, не после clear / в review.
+  const isActiveCapture = Boolean(session) || capture?.cardState === "capturing";
+  const shouldUseLiveSubtitle = isActiveCapture && capture?.cardState !== "created";
+  let mergedCapture = capture || undefined;
+  if (shouldUseLiveSubtitle && activeTabContext) {
+    mergedCapture = {
+      ...(capture || {}),
+      ...activeTabContext
+    };
+  }
 
   return {
     capture: mergedCapture,
@@ -1466,6 +1479,14 @@ async function clearSubtitleTimelineCacheOnActiveTab() {
   } catch (_) {
     /* Страница без нашего content script — тихо игнорируем. */
   }
+
+  const capture = await getLatestCapture();
+  if (capture?.subtitleTimeline || capture?.subtitleCue) {
+    await mergeLatestCapture({
+      subtitleCue: undefined,
+      subtitleTimeline: undefined
+    });
+  }
 }
 
 async function getSession() {
@@ -1532,7 +1553,16 @@ async function saveSentenceDraft(draft) {
 }
 
 async function clearDraft() {
-  await chrome.storage.local.remove([CAPTURE_KEY, DRAFT_KEY, LAST_UNDOABLE_CARD_KEY]);
+  const session = await getSession();
+  if (session?.tabId) {
+    await stopClipAudioRecording(session, { discard: true }).catch(() => null);
+    await sendMessageToTab(session.tabId, {
+      type: "stop-subtitle-capture",
+      stoppedAt: Date.now()
+    }).catch(() => null);
+  }
+
+  await chrome.storage.local.remove([SESSION_KEY, CAPTURE_KEY, DRAFT_KEY, LAST_UNDOABLE_CARD_KEY]);
 }
 
 async function addCardHistory(entry) {

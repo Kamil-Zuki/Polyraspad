@@ -38,6 +38,7 @@
     state.subtitleTimelineEpoch += 1;
     state.timeline = null;
     state.timelinePageSignature = null;
+    state.timelinePromise = null;
   }
 
   if (typeof window !== "undefined") {
@@ -1174,11 +1175,66 @@ function maybeCompleteClip(text, previousText) {
       throw new Error("Subtitle file has no cues.");
     }
 
+    const shiftSeconds = parsePlayerJsShiftSeconds(source.url);
+    const shiftedCues = applyShiftToCues(cues, shiftSeconds);
+
     return {
-      cues,
+      cues: shiftedCues,
+      shiftSeconds,
       sourceLabel: source.label,
       sourceUrl: source.url
     };
+  }
+
+  /**
+   * PlayerJS: ?shift=+35 в URL субтитров — сдвиг в десятых долях секунды (+3.5 с).
+   * Сервер отдаёт тот же VTT; сдвиг применяет плеер на клиенте.
+   */
+  function parsePlayerJsShiftSeconds(vttUrl) {
+    try {
+      const url = new URL(vttUrl, window.location.href);
+      const raw = url.searchParams.get("shift");
+      if (raw != null && raw !== "") {
+        const parsed = Number(String(raw).replace(/^\+/, ""));
+        if (Number.isFinite(parsed)) {
+          return parsed / 10;
+        }
+      }
+    } catch (_) {
+      /* ignore */
+    }
+
+    return findSubshiftFromPlayerjsConfig();
+  }
+
+  /** Запасной источник сдвига из inline-конфига Playerjs (subshift). */
+  function findSubshiftFromPlayerjsConfig() {
+    for (const script of document.scripts) {
+      const text = script.textContent || "";
+      if (!/subshift/i.test(text)) {
+        continue;
+      }
+      const match = /["']subshift["']\s*:\s*(-?\d+)/i.exec(text);
+      if (match) {
+        const parsed = Number(match[1]);
+        if (Number.isFinite(parsed)) {
+          return parsed / 10;
+        }
+      }
+    }
+    return 0;
+  }
+
+  function applyShiftToCues(cues, shiftSeconds) {
+    if (!shiftSeconds || !cues?.length) {
+      return cues;
+    }
+
+    return cues.map((cue) => ({
+      ...cue,
+      end: cue.end + shiftSeconds,
+      start: cue.start + shiftSeconds
+    }));
   }
 
   /** Нормализация строки с .vtt в абсолютный URL. */
@@ -1790,10 +1846,48 @@ function maybeCompleteClip(text, previousText) {
     return hours * 3600 + minutes * 60 + seconds;
   }
 
+  function findCueByDisplayedText(cues, displayedText, videoTime) {
+    const normalized = normalizeText(displayedText);
+    if (!normalized || !cues?.length) {
+      return null;
+    }
+
+    const matches = cues.filter((cue) => normalizeText(cue.text) === normalized);
+    if (matches.length === 0) {
+      return null;
+    }
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    if (!Number.isFinite(videoTime)) {
+      return matches[0];
+    }
+
+    const inRange = matches.find((cue) => videoTime >= cue.start && videoTime <= cue.end + 0.03);
+    if (inRange) {
+      return inRange;
+    }
+
+    return findNearestCue(matches, videoTime) || matches[0];
+  }
+
+  function resolveCueFromTimeline(timeline, selectedCue, videoTime) {
+    if (selectedCue) {
+      return selectedCue;
+    }
+
+    const fromDom = findCueByDisplayedText(timeline.cues, getDisplayedSubtitle(), videoTime);
+    if (fromDom) {
+      return fromDom;
+    }
+
+    return timeline.cues.find((item) => videoTime !== undefined && videoTime >= item.start && videoTime <= item.end + 0.03)
+      || findNearestCue(timeline.cues, videoTime);
+  }
+
   function getCueContext(timeline, selectedCue) {
     const videoTime = getVideoTime();
-    const cue = selectedCue || timeline.cues.find((item) => videoTime !== undefined && videoTime >= item.start && videoTime <= item.end)
-      || findNearestCue(timeline.cues, videoTime);
+    const cue = resolveCueFromTimeline(timeline, selectedCue, videoTime);
     if (!cue) {
       return null;
     }
@@ -1805,6 +1899,7 @@ function maybeCompleteClip(text, previousText) {
       cue,
       timeline: {
         cues: timeline.cues.slice(Math.max(0, cue.index - 4), Math.min(timeline.cues.length, cue.index + 5)),
+        shiftSeconds: timeline.shiftSeconds,
         sourceLabel: timeline.sourceLabel,
         sourceUrl: timeline.sourceUrl
       },

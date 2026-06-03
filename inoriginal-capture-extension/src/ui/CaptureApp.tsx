@@ -644,19 +644,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     return false;
   }
 
-  async function clearSubtitleCache() {
-    setMessage("Clearing subtitle cache…");
-    const response = await sendRuntimeMessage({ type: "clear-subtitle-cache" });
-    setMessage(
-      response.ok
-        ? "Subtitle cache cleared. The timeline will reload on the next capture or cue request."
-        : response.error || "Could not clear cache. Focus the InOriginal tab and try again."
-    );
-    await refresh(false);
-  }
-
-  async function makeAnother() {
-    await sendRuntimeMessage({ type: "clear-draft" });
+  function resetEditorFields() {
     setExpression("");
     setWord("");
     setTranscription("");
@@ -682,7 +670,36 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     lastAudioRangeFile.current = "";
     lastAutoTrimFile.current = "";
     hasHydratedEditor.current = false;
-    await refresh();
+  }
+
+  async function clearSubtitleCache() {
+    setMessage("Clearing subtitle cache…");
+    const response = await sendRuntimeMessage({ type: "clear-subtitle-cache" });
+    setMessage(
+      response.ok
+        ? "Subtitle cache cleared. The timeline will reload on the next capture or cue request."
+        : response.error || "Could not clear cache. Focus the InOriginal tab and try again."
+    );
+    await refresh(false);
+  }
+
+  async function clearCapture() {
+    setMessage("Clearing capture…");
+    const response = await sendRuntimeMessage({ type: "clear-draft" });
+    if (!response.ok) {
+      setMessage(response.error || "Could not clear capture.");
+      return;
+    }
+
+    resetEditorFields();
+    setContext(null);
+    setFlowStatus("Idle");
+    setMessage("Capture cleared. Screenshot, audio, subtitles, and draft fields were reset.");
+    await refresh(false);
+  }
+
+  async function makeAnother() {
+    await clearCapture();
   }
 
   async function openInAnki() {
@@ -893,6 +910,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture current subtitle</button>
           {canStopRecording && <button className="secondary" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary" onClick={cancelCapture}>Cancel capture</button>}
+          <button type="button" className="secondary" disabled={isRecording} onClick={() => void clearCapture()}>Clear capture</button>
           <button type="button" className="secondary" onClick={() => void clearSubtitleCache()}>Clear subtitle cache</button>
           <button className="secondary" onClick={openSidePanel}>Open review panel</button>
           <button className="secondary" disabled={cardQuality.disabled} onClick={() => runSmartAction(cardQuality.nextAction)}>{cardQuality.cta}</button>
@@ -916,6 +934,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture</button>
           {canStopRecording && <button className="secondary ghost-button" onClick={stopRecording}>Stop recording</button>}
           {isRecording && <button className="secondary ghost-button" onClick={cancelCapture}>Cancel</button>}
+          <button type="button" className="secondary ghost-button" disabled={isRecording} onClick={() => void clearCapture()}>Clear capture</button>
           <button type="button" className="secondary ghost-button" onClick={() => void clearSubtitleCache()}>Clear subtitle cache</button>
           <button className="secondary ghost-button" onClick={() => chrome.runtime.openOptionsPage()}>Settings</button>
         </div>
@@ -2099,13 +2118,29 @@ function buildCaptureHealthIssues(capture: CaptureData, effectiveAudioDuration: 
     });
   }
 
-  if (audio?.stopReason && cue && audio.stopReason !== "cue-end" && audio.stopReason !== "range") {
+  if (audio?.stopReason && cue && !["cue-end", "range", "next-cue-start"].includes(audio.stopReason)) {
     issues.push({
       detail: `Stop reason was "${audio.stopReason}" even though a VTT cue was selected.`,
       fix: "DOM fallback or manual stop may have interrupted capture. Recapture and inspect events.",
       title: "Unexpected stop reason",
       tone: "warning"
     });
+  }
+
+  if (
+    cue
+    && audio?.videoStartTime !== undefined
+    && Number.isFinite(cue.start)
+  ) {
+    const leadInSeconds = cue.start - audio.videoStartTime;
+    if (leadInSeconds > 3 || leadInSeconds < -0.5) {
+      issues.push({
+        detail: `Cue starts at ${cue.start.toFixed(2)}s but recording began near ${audio.videoStartTime.toFixed(2)}s (lead-in ${leadInSeconds.toFixed(2)}s).`,
+        fix: "VTT shift may be wrong or cue selection mismatched the video. Recapture and check diagnostics VTT shift.",
+        title: "Recording start far from cue",
+        tone: "warning"
+      });
+    }
   }
 
   return issues;
@@ -2136,6 +2171,9 @@ function buildDiagnosticsReport(capture: CaptureData | undefined, effectiveAudio
     `Timeline mode: ${cue ? "VTT cue-aware" : capture.subtitleTimeline?.cues?.length ? "VTT loaded" : "DOM fallback"}`,
     `VTT label: ${capture.subtitleTimeline?.sourceLabel || ""}`,
     `VTT URL: ${capture.subtitleTimeline?.sourceUrl || ""}`,
+    `VTT shift: ${capture.subtitleTimeline?.shiftSeconds != null && capture.subtitleTimeline.shiftSeconds !== 0
+      ? `${capture.subtitleTimeline.shiftSeconds >= 0 ? "+" : ""}${capture.subtitleTimeline.shiftSeconds.toFixed(1)}s`
+      : "none"}`,
     `Cue index: ${cue?.index ?? ""}`,
     `Cue start: ${cue?.start ?? ""}`,
     `Cue end: ${cue?.end ?? ""}`,
