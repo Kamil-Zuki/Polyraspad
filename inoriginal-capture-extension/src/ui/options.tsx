@@ -374,12 +374,36 @@ function OptionsApp() {
         </div>
       </form>
 
+      <section className="troubleshooting-panel">
+        <h2>Troubleshooting</h2>
+        <p className="muted">
+          Use when the VTT subtitle timeline is stale after changing episode, or cues no longer match the video.
+        </p>
+        <button
+          className="secondary"
+          onClick={() => void clearSubtitleCache()}
+          type="button"
+        >
+          Clear subtitle cache
+        </button>
+      </section>
+
       <section>
         <h2>Status</h2>
         <p className="status">{status}</p>
       </section>
     </main>
   );
+
+  async function clearSubtitleCache() {
+    setStatus("Clearing subtitle cache…");
+    const response = await sendRuntimeMessage({ type: "clear-subtitle-cache" });
+    setStatus(
+      response.ok
+        ? "Subtitle cache cleared. Reload the InOriginal tab or capture again."
+        : response.error || "Could not clear cache. Focus the InOriginal tab and try again."
+    );
+  }
 
   function fieldSelector(label: string, key: keyof FieldMapping, allowEmpty: boolean) {
     return (
