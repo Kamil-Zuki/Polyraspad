@@ -77,6 +77,8 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const expressionRef = useRef<HTMLTextAreaElement | null>(null);
   const confirmedDuplicateExpression = useRef("");
   const lastReviewReadyStep = useRef("");
+  const cardPreviewRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollToPreview = useRef(false);
   const [activeStep, setActiveStep] = useState<StudioStep>(() => {
     const stored = sessionStorage.getItem(STUDIO_STEP_KEY);
     return stored === "edit" || stored === "send" ? stored : "capture";
@@ -100,9 +102,35 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     const captureStep = context?.capture?.captureStep;
     if (captureStep === "review-ready" && lastReviewReadyStep.current !== "review-ready") {
       setActiveStep("edit");
+      pendingScrollToPreview.current = true;
     }
     lastReviewReadyStep.current = captureStep || "";
   }, [context?.capture?.captureStep]);
+
+  useEffect(() => {
+    if (!pendingScrollToPreview.current || activeStep !== "edit") {
+      return;
+    }
+
+    const capture = context?.capture;
+    const hasPreviewContent = Boolean(
+      capture?.subtitle ||
+      capture?.audio?.dataUrl ||
+      capture?.screenshot?.dataUrl ||
+      expression.trim() ||
+      word.trim() ||
+      translation.trim()
+    );
+
+    if (!hasPreviewContent) {
+      return;
+    }
+
+    pendingScrollToPreview.current = false;
+    window.requestAnimationFrame(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [activeStep, context?.capture, expression, word, translation]);
 
   useEffect(() => {
     if (!hasHydratedEditor.current) {
@@ -969,9 +997,6 @@ export function CaptureApp({ mode }: CaptureAppProps) {
       </header>
 
       <div className="studio-body">
-        {showCardPreview && (
-          <StudioCardPreview context={context} draft={draft} />
-        )}
         {activeStep === "capture" && (
           <section className="studio-step studio-step--capture">
             <div className="section-head">
@@ -1095,6 +1120,12 @@ export function CaptureApp({ mode }: CaptureAppProps) {
           </section>
         )}
 
+        {showCardPreview && activeStep === "edit" && (
+          <div ref={cardPreviewRef} className="studio-card-preview-anchor">
+            <StudioCardPreview context={context} draft={draft} />
+          </div>
+        )}
+
         {activeStep === "edit" && (
           <section className="studio-step studio-step--edit">
             <div className="section-head">
@@ -1174,6 +1205,10 @@ export function CaptureApp({ mode }: CaptureAppProps) {
               </button>
             </section>
           </section>
+        )}
+
+        {showCardPreview && activeStep === "send" && (
+          <StudioCardPreview context={context} draft={draft} />
         )}
 
         {activeStep === "send" && (
@@ -1593,13 +1628,34 @@ function CardQualityPanel({ onAction, quality }: { onAction: (action: SmartActio
   );
 }
 
-function StudioCardPreview({ context, draft }: { context: PopupContext | null; draft: SentenceDraft }) {
-  return (
-    <div className="studio-card-preview">
+function StudioCardPreview({
+  context,
+  draft,
+  collapsible = false,
+  defaultOpen = true
+}: {
+  context: PopupContext | null;
+  draft: SentenceDraft;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+}) {
+  const preview = (
+    <>
       <CardPreview context={context} draft={draft} />
       <AnkiFieldPreview context={context} draft={draft} />
-    </div>
+    </>
   );
+
+  if (collapsible) {
+    return (
+      <details className="studio-card-preview studio-card-preview--collapsible" open={defaultOpen}>
+        <summary>Card preview</summary>
+        {preview}
+      </details>
+    );
+  }
+
+  return <div className="studio-card-preview">{preview}</div>;
 }
 
 function CardPreview({ context, draft }: { context: PopupContext | null; draft: SentenceDraft }) {
