@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { getPopupContext, saveAnkiSettings, sendRuntimeMessage } from "../shared/chromeApi";
-import type { AnkiSettings, CaptureData, FieldMapping, PopupContext, SentenceDraft } from "../shared/types";
+import type { AnkiSettings, CaptureData, PopupContext, SentenceDraft } from "../shared/types";
+import { PopupLauncher } from "./studio/PopupLauncher";
+import type { StudioStep } from "./studio/types";
 import "./styles.css";
+
+const STUDIO_STEP_KEY = "inoriginal-capture-active-step";
 
 type CaptureAppProps = {
   mode: "popup" | "sidepanel";
@@ -72,6 +76,14 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const hasHydratedEditor = useRef(false);
   const expressionRef = useRef<HTMLTextAreaElement | null>(null);
   const confirmedDuplicateExpression = useRef("");
+  const lastReviewReadyStep = useRef("");
+  const cardPreviewRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollToPreview = useRef(false);
+  const [activeStep, setActiveStep] = useState<StudioStep>(() => {
+    const stored = sessionStorage.getItem(STUDIO_STEP_KEY);
+    return stored === "edit" || stored === "send" ? stored : "capture";
+  });
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
   useEffect(() => {
     void refresh();
@@ -81,6 +93,44 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem(STUDIO_STEP_KEY, activeStep);
+  }, [activeStep]);
+
+  useEffect(() => {
+    const captureStep = context?.capture?.captureStep;
+    if (captureStep === "review-ready" && lastReviewReadyStep.current !== "review-ready") {
+      setActiveStep("edit");
+      pendingScrollToPreview.current = true;
+    }
+    lastReviewReadyStep.current = captureStep || "";
+  }, [context?.capture?.captureStep]);
+
+  useEffect(() => {
+    if (!pendingScrollToPreview.current || activeStep !== "edit") {
+      return;
+    }
+
+    const capture = context?.capture;
+    const hasPreviewContent = Boolean(
+      capture?.subtitle ||
+      capture?.audio?.dataUrl ||
+      capture?.screenshot?.dataUrl ||
+      expression.trim() ||
+      word.trim() ||
+      translation.trim()
+    );
+
+    if (!hasPreviewContent) {
+      return;
+    }
+
+    pendingScrollToPreview.current = false;
+    window.requestAnimationFrame(() => {
+      cardPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [activeStep, context?.capture, expression, word, translation]);
 
   useEffect(() => {
     if (!hasHydratedEditor.current) {
@@ -644,19 +694,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     return false;
   }
 
-  async function clearSubtitleCache() {
-    setMessage("Clearing subtitle cache…");
-    const response = await sendRuntimeMessage({ type: "clear-subtitle-cache" });
-    setMessage(
-      response.ok
-        ? "Subtitle cache cleared. The timeline will reload on the next capture or cue request."
-        : response.error || "Could not clear cache. Focus the InOriginal tab and try again."
-    );
-    await refresh(false);
-  }
-
-  async function makeAnother() {
-    await sendRuntimeMessage({ type: "clear-draft" });
+  function resetEditorFields() {
     setExpression("");
     setWord("");
     setTranscription("");
@@ -682,7 +720,27 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     lastAudioRangeFile.current = "";
     lastAutoTrimFile.current = "";
     hasHydratedEditor.current = false;
-    await refresh();
+  }
+
+  async function clearCapture() {
+    setMessage("Clearing capture…");
+    const response = await sendRuntimeMessage({ type: "clear-draft" });
+    if (!response.ok) {
+      setMessage(response.error || "Could not clear capture.");
+      return;
+    }
+
+    resetEditorFields();
+    setContext(null);
+    setFlowStatus("Idle");
+    setActiveStep("capture");
+    setOverflowOpen(false);
+    setMessage("Capture cleared. Screenshot, audio, subtitles, and draft fields were reset.");
+    await refresh(false);
+  }
+
+  async function makeAnother() {
+    await clearCapture();
   }
 
   async function openInAnki() {
@@ -765,6 +823,7 @@ export function CaptureApp({ mode }: CaptureAppProps) {
 
   async function runSmartAction(action: SmartAction) {
     if (action === "capture") {
+      setActiveStep("capture");
       await captureSubtitleClip();
       return;
     }
@@ -775,32 +834,38 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     }
 
     if (action === "pick-word") {
+      setActiveStep("edit");
       expressionRef.current?.focus();
       setMessage("Click a word under Expression to fill dictionary fields.");
       return;
     }
 
     if (action === "define-word") {
+      setActiveStep("edit");
       await lookupDefinition();
       return;
     }
 
     if (action === "translate") {
+      setActiveStep("edit");
       await translateSubtitle();
       return;
     }
 
     if (action === "fix-audio") {
+      setActiveStep("capture");
       setShowAudioAdvanced(true);
       setMessage("Adjust the audio range or re-record the clean range before sending.");
       return;
     }
 
     if (action === "open-settings") {
+      setActiveStep("send");
       chrome.runtime.openOptionsPage();
       return;
     }
 
+    setActiveStep("send");
     await createCard();
   }
 
@@ -832,20 +897,6 @@ export function CaptureApp({ mode }: CaptureAppProps) {
     setContext({ ...context, settings });
   }
 
-  async function updateFieldMapping(key: keyof FieldMapping, value: string) {
-    if (!context) {
-      return;
-    }
-
-    const settings = await saveAnkiSettings({
-      fieldMapping: {
-        ...context.settings.fieldMapping,
-        [key]: value
-      }
-    });
-    setContext({ ...context, settings });
-  }
-
   const capture = context?.capture;
   const draft = { expression, word, transcription, wordTypes, translation, definition, example, synonyms, antonyms, source, url };
   const ready = canSendToAnki(context, expression);
@@ -866,332 +917,361 @@ export function CaptureApp({ mode }: CaptureAppProps) {
   const plannedAudioDuration = getPlannedAudioDuration(capture);
   const audioHealthIssues = capture ? buildCaptureHealthIssues(capture, effectiveAudioDuration, plannedAudioDuration) : [];
   const blockingAudioIssue = audioHealthIssues.find((issue) => issue.tone === "error" && /Audio|Recorder|range/i.test(issue.title));
+  const hasDraft = Boolean(capture?.subtitle || capture?.audio?.dataUrl || capture?.screenshot?.dataUrl);
+  const showCardPreview =
+    (activeStep === "edit" || activeStep === "send") &&
+    (hasDraft || Boolean(expression.trim()) || Boolean(word.trim()) || Boolean(translation.trim()));
 
   if (mode === "popup") {
     return (
-      <main className="quick-panel">
-        <header className="quick-header">
-          <div>
-            <p className="eyebrow">InOriginal</p>
-            <h1>Capture</h1>
-          </div>
-          <StatusPill status={flowStatus} />
-        </header>
-
-        <p className="subtitle subtitle--current quick-subtitle">{capture?.subtitle || "No current subtitle yet."}</p>
-        <CardQualityMini quality={cardQuality} />
-        <CaptureModeSelect mode={context?.settings.captureMode || "auto-vtt"} onChange={updateCaptureMode} compact />
-
-        {capture?.audio?.dataUrl && (
-          <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
-            const duration = event.currentTarget.duration;
-            setAudioDuration(Number.isFinite(duration) ? duration : null);
-          }} />
-        )}
-
-        <div className="quick-actions">
-          <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture current subtitle</button>
-          {canStopRecording && <button className="secondary" onClick={stopRecording}>Stop recording</button>}
-          {isRecording && <button className="secondary" onClick={cancelCapture}>Cancel capture</button>}
-          <button type="button" className="secondary" onClick={() => void clearSubtitleCache()}>Clear subtitle cache</button>
-          <button className="secondary" onClick={openSidePanel}>Open review panel</button>
-          <button className="secondary" disabled={cardQuality.disabled} onClick={() => runSmartAction(cardQuality.nextAction)}>{cardQuality.cta}</button>
-        </div>
-
-        <p className="status">{effectiveAudioDuration ? `Audio: ${effectiveAudioDuration.toFixed(1)}s | ${message}` : message}</p>
-      </main>
+      <PopupLauncher
+        capture={capture}
+        flowStatus={flowStatus}
+        isRecording={isRecording}
+        message={message}
+        onCancelCapture={() => void cancelCapture()}
+        onCapture={() => void captureSubtitleClip()}
+        onOpenWorkspace={() => void openSidePanel()}
+        onStopRecording={() => void stopRecording()}
+      />
     );
   }
 
   return (
-    <main className="studio-shell">
-      <header className="studio-topbar">
-        <div>
+    <main className="studio-shell studio-shell--workspace">
+      <header className="studio-topbar studio-topbar--sticky">
+        <div className="studio-topbar__brand">
           <p className="eyebrow">Subtitle Studio</p>
           <h1>InOriginal Capture</h1>
         </div>
-        <div className="hero-actions">
+        <WorkflowTabs activeStep={activeStep} onChange={setActiveStep} />
+        <div className="studio-topbar__actions">
           <StatusPill status={flowStatus} />
-          <CaptureModeSelect mode={context?.settings.captureMode || "auto-vtt"} onChange={updateCaptureMode} />
-          <button className="primary-action" disabled={isRecording} onClick={captureSubtitleClip}>Capture</button>
-          {canStopRecording && <button className="secondary ghost-button" onClick={stopRecording}>Stop recording</button>}
-          {isRecording && <button className="secondary ghost-button" onClick={cancelCapture}>Cancel</button>}
-          <button type="button" className="secondary ghost-button" onClick={() => void clearSubtitleCache()}>Clear subtitle cache</button>
-          <button className="secondary ghost-button" onClick={() => chrome.runtime.openOptionsPage()}>Settings</button>
+          <div className="overflow-menu">
+            <button
+              aria-expanded={overflowOpen}
+              aria-label="More actions"
+              className="secondary ghost-button overflow-menu__trigger"
+              onClick={() => setOverflowOpen((open) => !open)}
+              type="button"
+            >
+              ⋯
+            </button>
+            {overflowOpen && (
+              <div className="overflow-menu__panel">
+                <button
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    chrome.runtime.openOptionsPage();
+                  }}
+                  type="button"
+                >
+                  Settings
+                </button>
+                {hasDraft && !isRecording && (
+                  <button
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      void clearCapture();
+                    }}
+                    type="button"
+                  >
+                    Discard draft
+                  </button>
+                )}
+                {isRecording && (
+                  <button
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      void cancelCapture();
+                    }}
+                    type="button"
+                  >
+                    Cancel capture
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
-      <section className="studio-grid">
-        <section className="review-pane">
-          <div className="section-head">
-            <h2>Review</h2>
-            <p className="status">{message}</p>
-          </div>
-          <p className="subtitle subtitle--muted subtitle--context">{capture?.previousSubtitle || "No previous subtitle."}</p>
-          <p className="subtitle subtitle--current subtitle--hero">{capture?.subtitle || "No current subtitle yet."}</p>
-          <p className="subtitle subtitle--muted subtitle--context">{capture?.nextSubtitle || "No next subtitle."}</p>
-          <TimelineReview capture={capture} onSelect={selectSubtitleCue} />
-          <CaptureDiagnostics capture={capture} effectiveAudioDuration={effectiveAudioDuration} onCopy={copyDiagnostics} />
-          <CaptureTimeline capture={capture} />
-        </section>
-
-        <section className="media-pane">
-          <article className="media-tile">
+      <div className="studio-body">
+        {activeStep === "capture" && (
+          <section className="studio-step studio-step--capture">
             <div className="section-head">
-              <h2>Screenshot</h2>
-              <button className="secondary inline-action" disabled={isRecording} onClick={retakeScreenshot}>Retake screenshot</button>
+              <h2>Capture</h2>
+              <p className="status">{message}</p>
             </div>
-            {capture?.screenshot?.dataUrl ? (
-              <img className="media-preview media-preview--image" alt="Screenshot preview" src={capture.screenshot.dataUrl} />
-            ) : (
-              <p className="muted media-empty">No screenshot yet.</p>
-            )}
-          </article>
-
-          <article className="media-tile">
-            <div className="section-head">
-              <h2>Audio clip</h2>
-              <button className="secondary inline-action" disabled={isRecording} onClick={recaptureAudio}>Re-record from subtitle</button>
-            </div>
-            {capture?.audio?.dataUrl ? (
-              <>
-                <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
-                  const duration = event.currentTarget.duration;
-                  const nextDuration = Number.isFinite(duration) ? duration : null;
-                  setAudioDuration(nextDuration);
-                }} />
-                <p className="status">{formatAudioStatus(capture, effectiveAudioDuration)}</p>
-                {blockingAudioIssue && (
-                  <AudioQualityGuard
-                    issue={blockingAudioIssue}
-                    disabled={isRecording || capture.audio.videoStartTime === undefined}
-                    onRepair={recaptureSelectedAudioRange}
-                    onSwitchMode={() => updateCaptureMode("manual-range")}
-                  />
+            <p className="subtitle subtitle--muted subtitle--context">{capture?.previousSubtitle || "No previous subtitle."}</p>
+            <p className="subtitle subtitle--current subtitle--hero">{capture?.subtitle || "No current subtitle yet."}</p>
+            <p className="subtitle subtitle--muted subtitle--context">{capture?.nextSubtitle || "No next subtitle."}</p>
+            <TimelineReview capture={capture} onSelect={selectSubtitleCue} />
+            <section className="studio-grid">
+              <article className="media-tile">
+                <div className="section-head">
+                  <h3>Screenshot</h3>
+                  <button className="secondary inline-action" disabled={isRecording} onClick={retakeScreenshot} type="button">Retake</button>
+                </div>
+                {capture?.screenshot?.dataUrl ? (
+                  <img className="media-preview media-preview--image" alt="Screenshot preview" src={capture.screenshot.dataUrl} />
+                ) : (
+                  <p className="muted media-empty">No screenshot yet.</p>
                 )}
-                {effectiveAudioDuration && (
-                  <div className="range-editor">
-                    <div>
-                      <h3>{trimSuggestion ? "Clean range ready" : isAnalyzingAudio ? "Finding clean range..." : "Clean range"}</h3>
-                      <p className="muted">{buildAudioGuidance(trimSuggestion, isAnalyzingAudio)}</p>
-                    </div>
-                    <WaveformPreview
-                      duration={effectiveAudioDuration}
-                      peaks={waveformPeaks}
-                      rangeEnd={normalizedAudioRangeEnd}
-                      rangeStart={audioRangeStart}
-                      trimSuggestion={trimSuggestion}
-                    />
-                    <div className="range-editor__actions">
-                      <button
-                        className="primary-action inline-action"
+              </article>
+              <article className="media-tile">
+                <div className="section-head">
+                  <h3>Audio clip</h3>
+                  <button className="secondary inline-action" disabled={isRecording} onClick={recaptureAudio} type="button">Re-record</button>
+                </div>
+                {capture?.audio?.dataUrl ? (
+                  <>
+                    <audio className="media-preview media-preview--audio" controls src={capture.audio.dataUrl} onLoadedMetadata={(event) => {
+                      const duration = event.currentTarget.duration;
+                      setAudioDuration(Number.isFinite(duration) ? duration : null);
+                    }} />
+                    <p className="status">{formatAudioStatus(capture, effectiveAudioDuration)}</p>
+                    {blockingAudioIssue && (
+                      <AudioQualityGuard
                         disabled={isRecording || capture.audio.videoStartTime === undefined}
-                        onClick={recaptureSelectedAudioRange}
-                      >
-                        Re-record selected range
-                      </button>
-                      <button className="secondary inline-action" onClick={() => setShowAudioAdvanced(!showAudioAdvanced)}>
-                        {showAudioAdvanced ? "Hide manual controls" : "Adjust manually"}
-                      </button>
-                    </div>
-                    {waveformError && <p className="muted media-empty">{waveformError}</p>}
-                    {showAudioAdvanced && (
-                      <div className="range-editor__advanced">
-                        <div className="range-editor__labels">
-                          <span>Start: {audioRangeStart.toFixed(1)}s</span>
-                          <span>End: {normalizedAudioRangeEnd.toFixed(1)}s</span>
+                        issue={blockingAudioIssue}
+                        onRepair={recaptureSelectedAudioRange}
+                        onSwitchMode={() => updateCaptureMode("manual-range")}
+                      />
+                    )}
+                    {effectiveAudioDuration && (
+                      <div className="range-editor">
+                        <div>
+                          <h4>{trimSuggestion ? "Clean range ready" : isAnalyzingAudio ? "Finding clean range..." : "Clean range"}</h4>
+                          <p className="muted">{buildAudioGuidance(trimSuggestion, isAnalyzingAudio)}</p>
                         </div>
-                        <input
-                          aria-label="Audio range start"
-                          max={Math.max(0, normalizedAudioRangeEnd - 0.1)}
-                          min={audioRangeStartMin}
-                          step={0.1}
-                          type="range"
-                          value={audioRangeStart}
-                          onChange={(event) => {
-                            const nextStart = Math.min(Number(event.target.value), normalizedAudioRangeEnd - 0.1);
-                            setAudioRangeStart(Math.max(audioRangeStartMin, nextStart));
-                          }}
-                        />
-                        <input
-                          aria-label="Audio range end"
-                          max={effectiveAudioDuration}
-                          min={Math.min(effectiveAudioDuration, audioRangeStart + 0.1)}
-                          step={0.1}
-                          type="range"
-                          value={normalizedAudioRangeEnd}
-                          onChange={(event) => setAudioRangeEnd(Math.max(Number(event.target.value), audioRangeStart + 0.1))}
+                        <WaveformPreview
+                          duration={effectiveAudioDuration}
+                          peaks={waveformPeaks}
+                          rangeEnd={normalizedAudioRangeEnd}
+                          rangeStart={audioRangeStart}
+                          trimSuggestion={trimSuggestion}
                         />
                         <div className="range-editor__actions">
-                          <button className="secondary inline-action" disabled={!trimSuggestion || isAnalyzingAudio} onClick={applyTrimSuggestion}>
-                            Apply auto-trim
+                          <button
+                            className="primary-action inline-action"
+                            disabled={isRecording || capture.audio.videoStartTime === undefined}
+                            onClick={recaptureSelectedAudioRange}
+                            type="button"
+                          >
+                            Re-record selected range
                           </button>
-                          <button className="secondary inline-action" disabled={isRecording} onClick={resetAudioRange}>Reset full clip</button>
+                          <button className="secondary inline-action" onClick={() => setShowAudioAdvanced(!showAudioAdvanced)} type="button">
+                            {showAudioAdvanced ? "Hide manual controls" : "Adjust manually"}
+                          </button>
                         </div>
+                        {waveformError && <p className="muted media-empty">{waveformError}</p>}
+                        {showAudioAdvanced && (
+                          <div className="range-editor__advanced">
+                            <div className="range-editor__labels">
+                              <span>Start: {audioRangeStart.toFixed(1)}s</span>
+                              <span>End: {normalizedAudioRangeEnd.toFixed(1)}s</span>
+                            </div>
+                            <input
+                              aria-label="Audio range start"
+                              max={Math.max(0, normalizedAudioRangeEnd - 0.1)}
+                              min={audioRangeStartMin}
+                              step={0.1}
+                              type="range"
+                              value={audioRangeStart}
+                              onChange={(event) => {
+                                const nextStart = Math.min(Number(event.target.value), normalizedAudioRangeEnd - 0.1);
+                                setAudioRangeStart(Math.max(audioRangeStartMin, nextStart));
+                              }}
+                            />
+                            <input
+                              aria-label="Audio range end"
+                              max={effectiveAudioDuration}
+                              min={Math.min(effectiveAudioDuration, audioRangeStart + 0.1)}
+                              step={0.1}
+                              type="range"
+                              value={normalizedAudioRangeEnd}
+                              onChange={(event) => setAudioRangeEnd(Math.max(Number(event.target.value), audioRangeStart + 0.1))}
+                            />
+                            <div className="range-editor__actions">
+                              <button className="secondary inline-action" disabled={!trimSuggestion || isAnalyzingAudio} onClick={applyTrimSuggestion} type="button">
+                                Apply auto-trim
+                              </button>
+                              <button className="secondary inline-action" disabled={isRecording} onClick={resetAudioRange} type="button">Reset full clip</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                    {capture.audio.videoStartTime === undefined && (
-                      <p className="muted media-empty">This old clip has no video timestamp. Press Capture again once, then this button will seek the video automatically.</p>
-                    )}
-                  </div>
+                  </>
+                ) : (
+                  <p className="muted media-empty">No audio yet.</p>
                 )}
-              </>
-            ) : (
-              <p className="muted media-empty">No audio yet.</p>
-            )}
-          </article>
-        </section>
-      </section>
-
-      <section className="anki-pane">
-        <div className="section-head">
-          <h2>Anki</h2>
-          <Checklist context={context} expression={expression} translation={translation} />
-        </div>
-        <div className="compact-toolbar">
-          <label>
-            <span>Deck</span>
-            <select value={context?.settings.deckName || ""} onChange={(event) => updateDeck(event.target.value)}>
-              {renderOptions(context?.choices.deckNames, context?.settings.deckName)}
-            </select>
-          </label>
-          <label>
-            <span>Note type</span>
-            <select value={context?.settings.modelName || ""} onChange={(event) => updateModel(event.target.value)}>
-              {renderOptions(context?.choices.modelNames, context?.settings.modelName)}
-            </select>
-          </label>
-        </div>
-
-        <details className="mapping-panel">
-          <summary>Bind Anki template fields</summary>
-          <div className="mapping-grid">
-            <FieldMappingSelect label="Expression" fieldKey="expression" context={context} allowEmpty={false} onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Word" fieldKey="word" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Translation" fieldKey="translation" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Definition" fieldKey="definition" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Transcription" fieldKey="transcription" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Word Types" fieldKey="wordTypes" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Mnemonic" fieldKey="mnemonic" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Example" fieldKey="example" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Synonyms" fieldKey="synonyms" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Antonyms" fieldKey="antonyms" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Source" fieldKey="source" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Url" fieldKey="url" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Image" fieldKey="image" context={context} allowEmpty onChange={updateFieldMapping} />
-            <FieldMappingSelect label="Audio" fieldKey="audio" context={context} allowEmpty onChange={updateFieldMapping} />
-          </div>
-          <p className="muted">Fields are loaded from the selected note type.</p>
-        </details>
-
-        <section className="editor-grid">
-          <div className="editor-card">
-            <span>Expression</span>
-            <textarea ref={expressionRef} rows={3} value={expression} onChange={(event) => {
-              setExpression(event.target.value);
-              setDuplicateWarning("");
-            }} />
-            <WordPicker expression={expression} isLoading={isLookingUpWord} selectedWord={word} onPick={chooseWordFromExpression} />
-          </div>
-          <label className="editor-card">
-            <span>Word</span>
-            <input value={word} onChange={(event) => setWord(event.target.value)} placeholder="Optional target word" />
-            <div className="field-actions">
-              <button type="button" className="secondary inline-action" onClick={useSelectedWord}>Use selected word</button>
-              <button type="button" className="secondary inline-action" disabled={isLookingUpWord || !word.trim()} onClick={lookupDefinition}>
-                {isLookingUpWord ? "Looking up..." : "Define word"}
+              </article>
+            </section>
+            <div className="capture-step__settings">
+              <CaptureModeSelect mode={context?.settings.captureMode || "auto-vtt"} onChange={updateCaptureMode} compact />
+              <button className="secondary inline-action" onClick={() => chrome.runtime.openOptionsPage()} type="button">
+                Capture settings…
               </button>
             </div>
-          </label>
-          <label className="editor-card">
-            <span>Transcription</span>
-            <input value={transcription} onChange={(event) => setTranscription(event.target.value)} placeholder="Auto-filled pronunciation" />
-          </label>
-          <label className="editor-card">
-            <span>Word Types</span>
-            <input value={wordTypes} onChange={(event) => setWordTypes(event.target.value)} placeholder="noun, verb, adjective..." />
-          </label>
-          <label className="editor-card">
-            <span>Translation</span>
-            <textarea rows={3} value={translation} onChange={(event) => setTranslation(event.target.value)} />
-          </label>
-          <label className="editor-card">
-            <span>Definition</span>
-            <textarea rows={3} value={definition} onChange={(event) => setDefinition(event.target.value)} />
-          </label>
-          <label className="editor-card editor-card--wide">
-            <span>Example / Context</span>
-            <textarea rows={5} value={example} onChange={(event) => setExample(event.target.value)} />
-          </label>
-          <label className="editor-card">
-            <span>Synonyms</span>
-            <input value={synonyms} onChange={(event) => setSynonyms(event.target.value)} />
-          </label>
-          <label className="editor-card">
-            <span>Antonyms</span>
-            <input value={antonyms} onChange={(event) => setAntonyms(event.target.value)} />
-          </label>
-          <label className="editor-card">
-            <span>Source</span>
-            <input value={source} onChange={(event) => setSource(event.target.value)} />
-          </label>
-          <label className="editor-card">
-            <span>Url</span>
-            <input value={url} onChange={(event) => setUrl(event.target.value)} />
-          </label>
-        </section>
+            <CaptureDiagnostics capture={capture} effectiveAudioDuration={effectiveAudioDuration} onCopy={copyDiagnostics} />
+            <CaptureTimeline capture={capture} />
+          </section>
+        )}
 
-        <section className="translator-panel">
-          <div>
-            <h2>Translator</h2>
-            <p className="muted">
-              {formatTranslationMode(context?.settings.translationMode)} | {context?.settings.translationSourceLang || "en"} to {context?.settings.translationTargetLang || "ru"}
-            </p>
-          </div>
-          <button className="secondary inline-action" disabled={isTranslating || !expression.trim()} onClick={() => translateSubtitle()}>
-            {isTranslating ? "Translating..." : "Translate subtitle"}
-          </button>
-          <button className="secondary inline-action" disabled={!translation} onClick={() => setTranslation("")}>Clear translation</button>
-          {translation && <p className="translation-preview">{translation}</p>}
-        </section>
-
-        <CardPreview context={context} draft={draft} />
-        <CardQualityPanel quality={cardQuality} onAction={runSmartAction} />
-        <AnkiFieldPreview context={context} draft={draft} />
-        {duplicateWarning && <p className="warning-banner">{duplicateWarning}</p>}
-
-        <footer className="footer-bar">
-          {flowStatus === "Created" ? (
-            <div className="created-actions">
-              <span className="created-label">Card created</span>
-              <button className="secondary" onClick={makeAnother}>Make another</button>
-              <button className="secondary danger-action" onClick={undoLastCard}>Undo last card</button>
-              <button className="secondary" onClick={openInAnki}>Open in Anki</button>
-            </div>
-          ) : (
-            <>
-              <p className="muted footer-copy">{cardQuality.footerCopy}</p>
-              <button className="primary-action" disabled={cardQuality.disabled} onClick={() => runSmartAction(cardQuality.nextAction)}>{cardQuality.cta}</button>
-            </>
-          )}
-        </footer>
-      </section>
-
-      <section className="history-pane">
-        <h2>Recent cards</h2>
-        {(context?.cardHistory || []).length === 0 ? (
-          <p className="muted">No cards created yet.</p>
-        ) : (
-          <div className="history-list">
-            {(context?.cardHistory || []).map((item) => (
-              <button key={`${item.noteId}-${item.createdAt}`} className="history-item" onClick={() => sendRuntimeMessage({ type: "open-anki-note", noteId: item.noteId })}>
-                <span>{item.subtitle}</span>
-                <small>{new Date(item.createdAt).toLocaleTimeString()}</small>
-              </button>
-            ))}
+        {showCardPreview && activeStep === "edit" && (
+          <div ref={cardPreviewRef} className="studio-card-preview-anchor">
+            <StudioCardPreview context={context} draft={draft} />
           </div>
         )}
-      </section>
+
+        {activeStep === "edit" && (
+          <section className="studio-step studio-step--edit">
+            <div className="section-head">
+              <h2>Edit card</h2>
+              <p className="status">{message}</p>
+            </div>
+            <section className="editor-grid editor-grid--focused">
+              <div className="editor-card">
+                <span>Expression</span>
+                <textarea ref={expressionRef} rows={3} value={expression} onChange={(event) => {
+                  setExpression(event.target.value);
+                  setDuplicateWarning("");
+                }} />
+                <WordPicker expression={expression} isLoading={isLookingUpWord} selectedWord={word} onPick={chooseWordFromExpression} />
+              </div>
+              <label className="editor-card">
+                <span>Word</span>
+                <input value={word} onChange={(event) => setWord(event.target.value)} placeholder="Target word" />
+                <div className="field-actions">
+                  <button type="button" className="secondary inline-action" onClick={useSelectedWord}>Use selected word</button>
+                  <button type="button" className="secondary inline-action" disabled={isLookingUpWord || !word.trim()} onClick={lookupDefinition}>
+                    {isLookingUpWord ? "Looking up..." : "Define word"}
+                  </button>
+                </div>
+              </label>
+              <label className="editor-card">
+                <span>Translation</span>
+                <textarea rows={3} value={translation} onChange={(event) => setTranslation(event.target.value)} />
+              </label>
+              <label className="editor-card">
+                <span>Definition</span>
+                <textarea rows={3} value={definition} onChange={(event) => setDefinition(event.target.value)} />
+              </label>
+              <label className="editor-card editor-card--wide">
+                <span>Example / Context</span>
+                <textarea rows={4} value={example} onChange={(event) => setExample(event.target.value)} />
+              </label>
+            </section>
+            <details className="editor-advanced">
+              <summary>Advanced fields</summary>
+              <section className="editor-grid">
+                <label className="editor-card">
+                  <span>Transcription</span>
+                  <input value={transcription} onChange={(event) => setTranscription(event.target.value)} />
+                </label>
+                <label className="editor-card">
+                  <span>Word Types</span>
+                  <input value={wordTypes} onChange={(event) => setWordTypes(event.target.value)} />
+                </label>
+                <label className="editor-card">
+                  <span>Synonyms</span>
+                  <input value={synonyms} onChange={(event) => setSynonyms(event.target.value)} />
+                </label>
+                <label className="editor-card">
+                  <span>Antonyms</span>
+                  <input value={antonyms} onChange={(event) => setAntonyms(event.target.value)} />
+                </label>
+                <label className="editor-card">
+                  <span>Source</span>
+                  <input value={source} onChange={(event) => setSource(event.target.value)} />
+                </label>
+                <label className="editor-card">
+                  <span>Url</span>
+                  <input value={url} onChange={(event) => setUrl(event.target.value)} />
+                </label>
+              </section>
+            </details>
+            <section className="translator-panel">
+              <div>
+                <h3>Translator</h3>
+                <p className="muted">
+                  {formatTranslationMode(context?.settings.translationMode)} | {context?.settings.translationSourceLang || "en"} to {context?.settings.translationTargetLang || "ru"}
+                </p>
+              </div>
+              <button className="secondary inline-action" disabled={isTranslating || !expression.trim()} onClick={() => translateSubtitle()} type="button">
+                {isTranslating ? "Translating..." : "Translate subtitle"}
+              </button>
+            </section>
+          </section>
+        )}
+
+        {showCardPreview && activeStep === "send" && (
+          <StudioCardPreview context={context} draft={draft} />
+        )}
+
+        {activeStep === "send" && (
+          <section className="studio-step studio-step--send">
+            <div className="section-head">
+              <h2>Send to Anki</h2>
+              <p className="status">{message}</p>
+            </div>
+            <Checklist context={context} expression={expression} translation={translation} />
+            <div className="compact-toolbar">
+              <label>
+                <span>Deck</span>
+                <select value={context?.settings.deckName || ""} onChange={(event) => updateDeck(event.target.value)}>
+                  {renderOptions(context?.choices.deckNames, context?.settings.deckName)}
+                </select>
+              </label>
+              <label>
+                <span>Note type</span>
+                <select value={context?.settings.modelName || ""} onChange={(event) => updateModel(event.target.value)}>
+                  {renderOptions(context?.choices.modelNames, context?.settings.modelName)}
+                </select>
+              </label>
+            </div>
+            <p className="muted">Field mapping is configured in extension Settings.</p>
+            <CardQualityPanel quality={cardQuality} onAction={runSmartAction} />
+            <details className="history-pane history-pane--inline">
+              <summary>Recent cards</summary>
+              {(context?.cardHistory || []).length === 0 ? (
+                <p className="muted">No cards created yet.</p>
+              ) : (
+                <div className="history-list">
+                  {(context?.cardHistory || []).map((item) => (
+                    <button key={`${item.noteId}-${item.createdAt}`} className="history-item" onClick={() => sendRuntimeMessage({ type: "open-anki-note", noteId: item.noteId })} type="button">
+                      <span>{item.subtitle}</span>
+                      <small>{new Date(item.createdAt).toLocaleTimeString()}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </details>
+            {duplicateWarning && <p className="warning-banner">{duplicateWarning}</p>}
+          </section>
+        )}
+      </div>
+
+      <footer className="footer-bar footer-bar--sticky">
+        {flowStatus === "Created" ? (
+          <div className="created-actions">
+            <span className="created-label">Card created</span>
+            <button className="secondary" onClick={makeAnother} type="button">Make another</button>
+            <button className="secondary danger-action" onClick={undoLastCard} type="button">Undo last card</button>
+            <button className="secondary" onClick={openInAnki} type="button">Open in Anki</button>
+          </div>
+        ) : (
+          <>
+            <p className="muted footer-copy">{cardQuality.footerCopy}</p>
+            {canStopRecording && (
+              <button className="secondary" onClick={stopRecording} type="button">Stop recording</button>
+            )}
+            <button className="primary-action" disabled={cardQuality.disabled} onClick={() => runSmartAction(cardQuality.nextAction)} type="button">{cardQuality.cta}</button>
+          </>
+        )}
+      </footer>
     </main>
   );
 }
@@ -1285,7 +1365,7 @@ function CaptureDiagnostics({
   ];
 
   return (
-    <details className="diagnostics-panel" open={healthIssues.length > 0}>
+    <details className="diagnostics-panel">
       <summary>
         <span>Capture diagnostics</span>
         <button className="secondary inline-action" onClick={(event) => {
@@ -1372,6 +1452,37 @@ function AudioQualityGuard({
         </button>
       </div>
     </div>
+  );
+}
+
+function WorkflowTabs({
+  activeStep,
+  onChange
+}: {
+  activeStep: StudioStep;
+  onChange: (step: StudioStep) => void;
+}) {
+  const steps: Array<{ id: StudioStep; label: string; hint: string }> = [
+    { id: "capture", label: "1 Capture", hint: "Subtitle, screenshot, audio" },
+    { id: "edit", label: "2 Edit", hint: "Expression and dictionary fields" },
+    { id: "send", label: "3 Send", hint: "Deck and Anki export" }
+  ];
+
+  return (
+    <nav aria-label="Workflow steps" className="workflow-tabs">
+      {steps.map((step) => (
+        <button
+          aria-current={activeStep === step.id ? "step" : undefined}
+          className={activeStep === step.id ? "workflow-tab workflow-tab--active" : "workflow-tab"}
+          key={step.id}
+          onClick={() => onChange(step.id)}
+          title={step.hint}
+          type="button"
+        >
+          {step.label}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -1517,20 +1628,34 @@ function CardQualityPanel({ onAction, quality }: { onAction: (action: SmartActio
   );
 }
 
-function CardQualityMini({ quality }: { quality: CardQuality }) {
-  return (
-    <section className={`quality-mini quality-mini--${quality.status.toLowerCase().replace(" ", "-")}`}>
-      <div>
-        <span>Smart Send</span>
-        <strong>{quality.status}</strong>
-      </div>
-      <div>
-        <span>Score</span>
-        <strong>{quality.score}</strong>
-      </div>
-      <p>{quality.footerCopy}</p>
-    </section>
+function StudioCardPreview({
+  context,
+  draft,
+  collapsible = false,
+  defaultOpen = true
+}: {
+  context: PopupContext | null;
+  draft: SentenceDraft;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+}) {
+  const preview = (
+    <>
+      <CardPreview context={context} draft={draft} />
+      <AnkiFieldPreview context={context} draft={draft} />
+    </>
   );
+
+  if (collapsible) {
+    return (
+      <details className="studio-card-preview studio-card-preview--collapsible" open={defaultOpen}>
+        <summary>Card preview</summary>
+        {preview}
+      </details>
+    );
+  }
+
+  return <div className="studio-card-preview">{preview}</div>;
 }
 
 function CardPreview({ context, draft }: { context: PopupContext | null; draft: SentenceDraft }) {
@@ -1650,31 +1775,6 @@ function AnkiFieldPreview({ context, draft }: { context: PopupContext | null; dr
         ))}
       </div>
     </details>
-  );
-}
-
-function FieldMappingSelect({
-  allowEmpty,
-  context,
-  fieldKey,
-  label,
-  onChange
-}: {
-  allowEmpty?: boolean;
-  context: PopupContext | null;
-  fieldKey: keyof FieldMapping;
-  label: string;
-  onChange: (key: keyof FieldMapping, value: string) => void;
-}) {
-  const value = context?.settings.fieldMapping[fieldKey] || "";
-  return (
-    <label>
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(fieldKey, event.target.value)}>
-        {allowEmpty && <option value="">Not used</option>}
-        {renderOptions(context?.choices.modelFieldNames, value)}
-      </select>
-    </label>
   );
 }
 
@@ -2099,13 +2199,29 @@ function buildCaptureHealthIssues(capture: CaptureData, effectiveAudioDuration: 
     });
   }
 
-  if (audio?.stopReason && cue && audio.stopReason !== "cue-end" && audio.stopReason !== "range") {
+  if (audio?.stopReason && cue && !["cue-end", "range", "next-cue-start"].includes(audio.stopReason)) {
     issues.push({
       detail: `Stop reason was "${audio.stopReason}" even though a VTT cue was selected.`,
       fix: "DOM fallback or manual stop may have interrupted capture. Recapture and inspect events.",
       title: "Unexpected stop reason",
       tone: "warning"
     });
+  }
+
+  if (
+    cue
+    && audio?.videoStartTime !== undefined
+    && Number.isFinite(cue.start)
+  ) {
+    const leadInSeconds = cue.start - audio.videoStartTime;
+    if (leadInSeconds > 3 || leadInSeconds < -0.5) {
+      issues.push({
+        detail: `Cue starts at ${cue.start.toFixed(2)}s but recording began near ${audio.videoStartTime.toFixed(2)}s (lead-in ${leadInSeconds.toFixed(2)}s).`,
+        fix: "VTT shift may be wrong or cue selection mismatched the video. Recapture and check diagnostics VTT shift.",
+        title: "Recording start far from cue",
+        tone: "warning"
+      });
+    }
   }
 
   return issues;
@@ -2136,6 +2252,9 @@ function buildDiagnosticsReport(capture: CaptureData | undefined, effectiveAudio
     `Timeline mode: ${cue ? "VTT cue-aware" : capture.subtitleTimeline?.cues?.length ? "VTT loaded" : "DOM fallback"}`,
     `VTT label: ${capture.subtitleTimeline?.sourceLabel || ""}`,
     `VTT URL: ${capture.subtitleTimeline?.sourceUrl || ""}`,
+    `VTT shift: ${capture.subtitleTimeline?.shiftSeconds != null && capture.subtitleTimeline.shiftSeconds !== 0
+      ? `${capture.subtitleTimeline.shiftSeconds >= 0 ? "+" : ""}${capture.subtitleTimeline.shiftSeconds.toFixed(1)}s`
+      : "none"}`,
     `Cue index: ${cue?.index ?? ""}`,
     `Cue start: ${cue?.start ?? ""}`,
     `Cue end: ${cue?.end ?? ""}`,
