@@ -228,7 +228,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        working-directory: polyraspad-frontend
+        working-directory: polyraspad-landing
         run: npm run build
         env:
           NEXT_PUBLIC_APP_URL: https://app.polyraspad.online
