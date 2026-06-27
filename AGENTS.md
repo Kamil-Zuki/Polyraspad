@@ -461,15 +461,19 @@ Any change touching vocabulary status, duplicates, or the reader must preserve:
 
 ### GitHub Actions
 
-- **`.github/workflows/ci.yml`**
-  - `.NET` job: restore/build/test `VocabularyService`, `AggregatorService`, `BillingService`, and `authorization-module` (sets up .NET 8.0.x and 10.0.x).
-  - `frontend` job: `npm ci` + `npm run build` in `polyraspad-frontend`.
-  - `docker` job: `docker compose build` (depends on the two previous jobs).
-  - Checkouts use `submodules: recursive`.
+- **`.github/workflows/ci.yml`** (monorepo, branch `master`)
+  - Parallel jobs per deployable: `VocabularyService`, `AggregatorService`, `BillingService`, `AgentService`, `MediaService`, `authorization-module`, `inclusive`, `polyraspad-frontend`, `polyraspad-landing`
+  - Integration tests run from root test projects (`*Service.Tests/`) where applicable
+  - Final `docker` job: `docker compose build` (depends on all jobs above)
+  - Checkouts use `submodules: recursive`
+
+- **Submodule repos** (own `.github/workflows/ci.yml`, triggered on push to submodule remote):
+  - `BillingService`, `AggregatorService`, `VocabularyService`, `authorization-module`, `polyraspad-frontend`, `inclusive`
+  - Each runs standalone build (+ Docker build for .NET/Node services; pytest for `inclusive`)
 
 - **`.github/workflows/deploy.yml`**
-  - Triggered manually (`workflow_dispatch`).
-  - SSHs into the VPS, resets to `origin/master`, updates submodules, pulls/builds compose, and restarts containers.
+  - Triggered manually (`workflow_dispatch`)
+  - SSHs into the VPS, resets to `origin/master`, updates submodules, `docker compose build`, `docker compose up -d`, checks `GET /healthz` on aggregator
 
 ### Production nginx
 
