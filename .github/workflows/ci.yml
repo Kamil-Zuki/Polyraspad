@@ -46,6 +46,17 @@ jobs:
         working-directory: AggregatorService
         run: dotnet test ../AggregatorService.Tests/AggregatorService.Tests.csproj -c Release --verbosity normal
 
+      - name: Restore BillingService
+        working-directory: BillingService
+        run: dotnet restore
+
+      - name: Build BillingService
+        working-directory: BillingService
+        run: dotnet build -c Release --no-restore
+
+      - name: Test BillingService
+        run: dotnet test BillingService.Tests/BillingService.Tests.csproj -c Release --verbosity normal
+
       - name: Restore authorization-module
         working-directory: authorization-module
         run: dotnet restore
