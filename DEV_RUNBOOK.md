@@ -103,6 +103,8 @@ docker compose logs billing-service --tail 100
 
 Billing env (see `.env.example`): `BILLING_DEFAULT_PROVIDER=mock` for local dev; set `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` for real checkout. Webhook URL: `POST /api/Billing/webhooks/yookassa` on Aggregator; optional header `X-Billing-Webhook-Key` when `BILLING_WEBHOOK_API_KEY` is set.
 
+CI (GitHub Actions): add repository secret `SUBMODULES_PAT` — classic PAT with `repo` scope — so workflows can clone private submodule repos (`AggregatorService`, `VocabularyService`, etc.).
+
 Frontend:
 
 ```powershell

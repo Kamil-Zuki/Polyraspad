@@ -465,7 +465,7 @@ Any change touching vocabulary status, duplicates, or the reader must preserve:
   - Parallel jobs per deployable: `VocabularyService`, `AggregatorService`, `BillingService`, `AgentService`, `MediaService`, `authorization-module`, `inclusive`, `polyraspad-frontend`, `polyraspad-landing`
   - Integration tests run from root test projects (`*Service.Tests/`) where applicable
   - Final `docker` job: `docker compose build` (depends on all jobs above)
-  - Checkouts use `submodules: recursive`
+  - Private submodules require GitHub secret **`SUBMODULES_PAT`** (classic PAT with `repo` scope for `Kamil-Zuki/*`); jobs init only the submodule they need, except `docker` which uses `submodules: recursive`
 
 - **Submodule repos** (own `.github/workflows/ci.yml`, triggered on push to submodule remote):
   - `BillingService`, `AggregatorService`, `VocabularyService`, `authorization-module`, `polyraspad-frontend`, `inclusive`
