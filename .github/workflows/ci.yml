@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [master]
 
-# Private submodule repos require SUBMODULES_PAT (classic PAT with repo scope).
 permissions:
   contents: read
 
@@ -14,22 +13,17 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CHECKOUT_TOKEN: ${{ secrets.SUBMODULES_PAT || secrets.GITHUB_TOKEN }}
-
 jobs:
   vocabulary-service:
     name: VocabularyService
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ env.CHECKOUT_TOKEN }}
 
-      - name: Initialize submodule
-        run: |
-          git submodule sync -- VocabularyService
-          git submodule update --init --depth 1 VocabularyService
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: VocabularyService
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -51,13 +45,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ env.CHECKOUT_TOKEN }}
 
-      - name: Initialize submodule
-        run: |
-          git submodule sync -- AggregatorService
-          git submodule update --init --depth 1 AggregatorService
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: AggregatorService
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -79,13 +71,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ env.CHECKOUT_TOKEN }}
 
-      - name: Initialize submodule
-        run: |
-          git submodule sync -- BillingService
-          git submodule update --init --depth 1 BillingService
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: BillingService
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -146,13 +136,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ env.CHECKOUT_TOKEN }}
 
-      - name: Initialize submodule
-        run: |
-          git submodule sync -- authorization-module
-          git submodule update --init --depth 1 authorization-module
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: authorization-module
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -171,13 +159,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ env.CHECKOUT_TOKEN }}
 
-      - name: Initialize submodule
-        run: |
-          git submodule sync -- inclusive
-          git submodule update --init --depth 1 inclusive
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: inclusive
 
       - uses: actions/setup-python@v5
         with:
@@ -198,13 +184,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ env.CHECKOUT_TOKEN }}
 
-      - name: Initialize submodule
-        run: |
-          git submodule sync -- polyraspad-frontend
-          git submodule update --init --depth 1 polyraspad-frontend
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: polyraspad-frontend
 
       - uses: actions/setup-node@v4
         with:
@@ -244,7 +228,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        working-directory: polyraspad-landing
+        working-directory: polyraspad-frontend
         run: npm run build
         env:
           NEXT_PUBLIC_APP_URL: https://app.polyraspad.online
@@ -265,9 +249,11 @@ jobs:
       - landing
     steps:
       - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/init-submodules
         with:
-          submodules: recursive
-          token: ${{ env.CHECKOUT_TOKEN }}
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: recursive
 
       - uses: docker/setup-buildx-action@v3
 
