@@ -8,3 +8,4 @@
 .artifacts/
 .dotnet-home/
 .env
+!.env.example

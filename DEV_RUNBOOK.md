@@ -94,6 +94,17 @@ docker compose up --build -d vocabulary-service
 docker compose logs vocabulary-service --tail 100
 ```
 
+Billing:
+
+```powershell
+docker compose up --build -d billing-service
+docker compose logs billing-service --tail 100
+```
+
+Billing env (see `.env.example`): `BILLING_DEFAULT_PROVIDER=mock` for local dev; set `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` for real checkout. Webhook URL: `POST /api/Billing/webhooks/yookassa` on Aggregator; optional header `X-Billing-Webhook-Key` when `BILLING_WEBHOOK_API_KEY` is set.
+
+CI (GitHub Actions): add repository secret `SUBMODULES_PAT` — classic PAT with `repo` scope — so workflows can clone private submodule repos (`AggregatorService`, `VocabularyService`, etc.).
+
 Frontend:
 
 ```powershell
@@ -104,7 +115,7 @@ docker compose logs polyraspad-frontend --tail 100
 If contracts or shared integration behavior changed, rebuild the full backend slice:
 
 ```powershell
-docker compose up --build -d authorization-module vocabulary-service aggregator-service polyraspad-frontend
+docker compose up --build -d authorization-module vocabulary-service billing-service aggregator-service polyraspad-frontend
 ```
 
 ## Restart Without Rebuild
@@ -172,6 +183,8 @@ This is especially important for:
 
 - gRPC between `AggregatorService` and `authorization-module`
 - gRPC between `AggregatorService` and `VocabularyService`
+- gRPC between `AggregatorService` and `BillingService`
+- gRPC between `VocabularyService` and `BillingService` (entitlements)
 - MinIO media URLs
 - CORS behavior
 
@@ -207,6 +220,7 @@ docker compose logs vocabulary-service --since 10m
 
 ## Notes
 
-- `authorization-module`, `vocabulary-service`, `postgres`, `redis`, and `inclusive` are internal by default in compose.
+- `authorization-module`, `vocabulary-service`, `billing-service`, `postgres`, `redis`, and `inclusive` are internal by default in compose.
 - browser traffic should go through `polyraspad-frontend` and `aggregator-service`.
 - media URLs are expected to resolve through public MinIO access on `localhost:9000`.
+- Billing env vars (see `.env.example`): `BILLING_DEFAULT_PROVIDER=mock` for local dev; set `YOOKASSA_*` for real payments.

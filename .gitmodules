@@ -17,3 +17,7 @@
 	path = inclusive
 	url = https://github.com/Kamil-Zuki/inclusive.git
 	branch = master
+[submodule "BillingService"]
+	path = BillingService
+	url = https://github.com/Kamil-Zuki/BillingService.git
+	branch = master

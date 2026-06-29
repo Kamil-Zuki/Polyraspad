@@ -6,72 +6,203 @@ on:
   pull_request:
     branches: [master]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  dotnet:
-    name: .NET Build & Test
+  vocabulary-service:
+    name: VocabularyService
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/init-submodules
         with:
-          submodules: recursive
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: VocabularyService
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 8.0.x
 
-      - name: Restore VocabularyService
+      - name: Restore
         working-directory: VocabularyService
         run: dotnet restore
 
-      - name: Build VocabularyService
+      - name: Build
         working-directory: VocabularyService
         run: dotnet build -c Release --no-restore
 
-      - name: Test VocabularyService
-        working-directory: VocabularyService
-        run: dotnet test ../VocabularyService.Tests/VocabularyService.Tests.csproj -c Release --verbosity normal
+      - name: Test
+        run: dotnet test VocabularyService.Tests/VocabularyService.Tests.csproj -c Release --verbosity normal
 
-      - name: Restore AggregatorService
-        working-directory: AggregatorService
-        run: dotnet restore
-
-      - name: Build AggregatorService
-        working-directory: AggregatorService
-        run: dotnet build -c Release --no-restore
-
-      - name: Test AggregatorService
-        working-directory: AggregatorService
-        run: dotnet test ../AggregatorService.Tests/AggregatorService.Tests.csproj -c Release --verbosity normal
-
-      - name: Restore authorization-module
-        working-directory: authorization-module
-        run: dotnet restore
-
-      - name: Build authorization-module
-        working-directory: authorization-module
-        run: dotnet build -c Release --no-restore
-
-  frontend:
-    name: Frontend Build
+  aggregator-service:
+    name: AggregatorService
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: ./.github/actions/init-submodules
         with:
-          node-version: "22"
-          cache: "npm"
-          cache-dependency-path: polyraspad-frontend/package-lock.json
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: AggregatorService
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        working-directory: AggregatorService
+        run: dotnet restore
+
+      - name: Build
+        working-directory: AggregatorService
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test AggregatorService.Tests/AggregatorService.Tests.csproj -c Release --verbosity normal
+
+  billing-service:
+    name: BillingService
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: BillingService
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        working-directory: BillingService
+        run: dotnet restore
+
+      - name: Build
+        working-directory: BillingService
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test BillingService.Tests/BillingService.Tests.csproj -c Release --verbosity normal
+
+  agent-service:
+    name: AgentService
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        working-directory: AgentService
+        run: dotnet restore
+
+      - name: Build
+        working-directory: AgentService
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test AgentService.Tests/AgentService.Tests.csproj -c Release --verbosity normal
+
+  media-service:
+    name: MediaService
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        working-directory: MediaService
+        run: dotnet restore
+
+      - name: Build
+        working-directory: MediaService
+        run: dotnet build -c Release --no-restore
+
+  authorization-module:
+    name: authorization-module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: authorization-module
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        working-directory: authorization-module
+        run: dotnet restore authorization-module.sln
+
+      - name: Build
+        working-directory: authorization-module
+        run: dotnet build authorization-module.sln -c Release --no-restore
+
+  inclusive:
+    name: inclusive (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: inclusive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: inclusive/requirements.txt
 
       - name: Install dependencies
+        working-directory: inclusive
+        run: pip install -r requirements.txt
+
+      - name: Test
+        working-directory: inclusive
+        run: pytest test_fsrs_review_card.py -v
+
+  frontend:
+    name: polyraspad-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: polyraspad-frontend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: polyraspad-frontend/package-lock.json
+
+      - name: Install
         working-directory: polyraspad-frontend
         run: npm ci
+
+      - name: Lint
+        working-directory: polyraspad-frontend
+        run: npm run lint
 
       - name: Build
         working-directory: polyraspad-frontend
@@ -80,19 +211,53 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:5000
           NEXT_PUBLIC_APP_URL: http://localhost:3000
 
-  docker:
-    name: Docker Build
+  landing:
+    name: polyraspad-landing
     runs-on: ubuntu-latest
-    needs: [dotnet, frontend]
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          submodules: recursive
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: polyraspad-landing/package-lock.json
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Install
+        working-directory: polyraspad-landing
+        run: npm ci
 
-      - name: Build Docker images
+      - name: Build
+        working-directory: polyraspad-landing
+        run: npm run build
+        env:
+          NEXT_PUBLIC_APP_URL: https://app.polyraspad.online
+          NEXT_PUBLIC_SITE_URL: https://polyraspad.online
+
+  docker:
+    name: Docker Compose Build
+    runs-on: ubuntu-latest
+    needs:
+      - vocabulary-service
+      - aggregator-service
+      - billing-service
+      - agent-service
+      - media-service
+      - authorization-module
+      - inclusive
+      - frontend
+      - landing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/init-submodules
+        with:
+          token: ${{ secrets.SUBMODULES_PAT }}
+          paths: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build images
         run: docker compose build
         env:
           POSTGRES_USER: postgres
@@ -101,3 +266,5 @@ jobs:
           MINIO_ROOT_PASSWORD: minioadmin
           NEXT_PUBLIC_API_URL: http://localhost:5000
           NEXT_PUBLIC_APP_URL: http://localhost:3000
+          LANDING_NEXT_PUBLIC_APP_URL: https://app.polyraspad.online
+          LANDING_NEXT_PUBLIC_SITE_URL: https://polyraspad.online

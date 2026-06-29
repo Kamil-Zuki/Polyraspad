@@ -13,6 +13,7 @@ public class AggregatorWebApplicationFactory : WebApplicationFactory<Program>
 {
     public MockHolder VocabularyClientMockHolder { get; } = new MockHolder();
     public AgentClientMockHolder AgentClientMockHolder { get; } = new AgentClientMockHolder();
+    public BillingClientMockHolder BillingClientMockHolder { get; } = new BillingClientMockHolder();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -31,6 +32,13 @@ public class AggregatorWebApplicationFactory : WebApplicationFactory<Program>
             services.AddSingleton(AgentClientMockHolder);
             services.AddTransient<IAgentServiceClient>(sp =>
                 sp.GetRequiredService<AgentClientMockHolder>().Current.Object);
+
+            var billingDescriptors = services.Where(d => d.ServiceType == typeof(IBillingServiceClient)).ToList();
+            foreach (var d in billingDescriptors)
+                services.Remove(d);
+            services.AddSingleton(BillingClientMockHolder);
+            services.AddTransient<IBillingServiceClient>(sp =>
+                sp.GetRequiredService<BillingClientMockHolder>().Current.Object);
 
             services.AddAuthentication(TestAuthHandler.TestScheme)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.TestScheme, _ => { });
@@ -63,5 +71,16 @@ public class AgentClientMockHolder
     {
         get => _current;
         set => _current = value ?? new Mock<IAgentServiceClient>();
+    }
+}
+
+public class BillingClientMockHolder
+{
+    private Mock<IBillingServiceClient> _current = new Mock<IBillingServiceClient>();
+
+    public Mock<IBillingServiceClient> Current
+    {
+        get => _current;
+        set => _current = value ?? new Mock<IBillingServiceClient>();
     }
 }
