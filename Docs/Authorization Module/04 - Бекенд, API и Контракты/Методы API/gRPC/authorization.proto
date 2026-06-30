@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package pvs.auth.v1;
+
+option csharp_namespace = "Pvs.Auth.Grpc";
+
+// Копия source of truth: authorization-module/authorization-module.API/Protos/authorization.proto
+
+service AuthService {
+  rpc RegisterUser (RegisterUserRequest) returns (RegisterUserResponse);
+  rpc LoginUser (LoginUserRequest) returns (TokenResponse);
+  rpc RefreshToken (RefreshTokenRequest) returns (TokenResponse);
+  rpc ConfirmEmail (ConfirmEmailRequest) returns (MessageResponse);
+  rpc GetUserInfo (GetUserInfoRequest) returns (UserInfoResponse);
+  rpc FindUserByEmail (FindUserByEmailRequest) returns (UserInfoResponse);
+  rpc LogoutUser (LogoutUserRequest) returns (MessageResponse);
+  rpc UpdateUsername (UpdateUsernameRequest) returns (MessageResponse);
+  rpc UpdatePassword (UpdatePasswordRequest) returns (MessageResponse);
+  rpc UpdateAvatarUrl (UpdateAvatarUrlRequest) returns (MessageResponse);
+}
+
+message RegisterUserRequest {
+  string email = 1;
+  string password = 2;
+  string confirm_password = 3;
+}
+
+message RegisterUserResponse {
+  string message = 1;
+}
+
+message LoginUserRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message TokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message ConfirmEmailRequest {
+  string user_id = 1;
+  string token = 2;
+}
+
+message GetUserInfoRequest {
+  string user_id = 1;
+}
+
+message FindUserByEmailRequest {
+  string email = 1;
+}
+
+message UserInfoResponse {
+  string id = 1;
+  string user_name = 2;
+  string email = 3;
+  bool email_confirmed = 4;
+  string avatar_url = 5;
+}
+
+message LogoutUserRequest {
+  string user_id = 1;
+  string refresh_token = 2;
+}
+
+message UpdateUsernameRequest {
+  string user_id = 1;
+  string user_name = 2;
+}
+
+message UpdatePasswordRequest {
+  string user_id = 1;
+  string current_password = 2;
+  string new_password = 3;
+}
+
+message UpdateAvatarUrlRequest {
+  string user_id = 1;
+  string avatar_url = 2;
+}
+
+message MessageResponse {
+  string message = 1;
+}

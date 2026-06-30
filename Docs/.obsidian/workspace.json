@@ -1,20 +1,24 @@
 {
   "main": {
-    "id": "fd3f951addd4a5ad",
+    "id": "c180a3d210edc54c",
     "type": "split",
     "children": [
       {
-        "id": "429a8b4ec68645bc",
+        "id": "56c0a55cbdd55cc2",
         "type": "tabs",
         "children": [
           {
-            "id": "361b7092d137411a",
+            "id": "b6a1f7b6a73b7599",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "01 - Аутентификация и профиль (Auth)"
             }
           }
         ]
@@ -23,15 +27,15 @@
     "direction": "vertical"
   },
   "left": {
-    "id": "7bd05cf9b25ba4d8",
+    "id": "4ba93ac76bbc9f63",
     "type": "split",
     "children": [
       {
-        "id": "254e55a7bf5aa540",
+        "id": "91bb5b9033067398",
         "type": "tabs",
         "children": [
           {
-            "id": "c9ad4e172cee89be",
+            "id": "e52d8ff49010c6e0",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -44,7 +48,7 @@
             }
           },
           {
-            "id": "da700e350f2a23fb",
+            "id": "67f7488a69c5b26e",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -61,7 +65,7 @@
             }
           },
           {
-            "id": "ffd63c217e625328",
+            "id": "acf36d123669c2d2",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -77,19 +81,20 @@
     "width": 300
   },
   "right": {
-    "id": "d3a00d94dfdb9b2b",
+    "id": "fe970e62e48b48e7",
     "type": "split",
     "children": [
       {
-        "id": "87ce0173b00d9f39",
+        "id": "1cd0e5eb11135e95",
         "type": "tabs",
         "children": [
           {
-            "id": "64a0258c556e91cc",
+            "id": "80bd099edd6b79c1",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
+                "file": "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -99,24 +104,25 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks"
+              "title": "Backlinks for 01 - Аутентификация и профиль (Auth)"
             }
           },
           {
-            "id": "161fe4e7a1160543",
+            "id": "2c5da3323014e3d9",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
+                "file": "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links"
+              "title": "Outgoing links from 01 - Аутентификация и профиль (Auth)"
             }
           },
           {
-            "id": "eed3ec1fe01f15cb",
+            "id": "b48a418d091e5a73",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -131,7 +137,7 @@
             }
           },
           {
-            "id": "54d25fc4d9545047",
+            "id": "aeb796881c067d35",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -145,17 +151,18 @@
             }
           },
           {
-            "id": "681820bd8e17bae5",
+            "id": "f77292e56d786b60",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
+                "file": "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline"
+              "title": "Outline of 01 - Аутентификация и профиль (Auth)"
             }
           }
         ]
@@ -176,6 +183,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "361b7092d137411a",
-  "lastOpenFiles": []
+  "active": "b6a1f7b6a73b7599",
+  "lastOpenFiles": [
+    "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/REST API/00 - REST API - Общая информация.md",
+    "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/REST API/06 - Reader и термины (Reader).md",
+    "Agent Service/04 - Бекенд, API и Контракты/Методы API/gRPC/00 - gRPC - Общая информация.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Методы API/DTO/03 - Артефакты.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Методы API/DTO/02 - Запуски и оркестрация.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Треды и сообщения.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Методы API/DTO/00 - DTO - Общая информация.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Интеграции со сторонними сервисами/02 - LLM Provider (OpenAI-compatible HTTP).md",
+    "Agent Service/04 - Бекенд, API и Контракты/Интеграции со сторонними сервисами/01 - Vocabulary Service (gRPC).md",
+    "Agent Service/04 - Бекенд, API и Контракты/Интеграции со сторонними сервисами/00 - Интеграции - Общая информация.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда/03 - Domain policy и Intent routing.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда/02 - Оркестрация ExecuteRun.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда/01 - Управление тредами и сообщениями.md",
+    "Agent Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда/00 - Алгоритмы - Общая информация.md",
+    "Agent Service/01 - Функциональная спецификация/Возможности сервиса/05 - Маршрутизация намерений (Intent Routing).md",
+    "Authorization Module/04 - Бекенд, API и Контракты/Методы API/gRPC/01 - Аутентификация и профиль (Auth).md",
+    "Agent Service/01 - Функциональная спецификация/Возможности сервиса/04 - Доменная политика (Domain Policy).md",
+    "Agent Service/01 - Функциональная спецификация/Возможности сервиса/03 - Запуски агента (Agent Runs).md",
+    "Billing Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - gRPC сообщения (billing.proto).md",
+    "Agent Service/01 - Функциональная спецификация/Возможности сервиса/02 - История сообщений (Message History).md",
+    "Agent Service/01 - Функциональная спецификация/Возможности сервиса/01 - Управление тредами (Thread Management).md",
+    "Media Service/03 - Модель Данных/01 - Основные сущности/Entities - Список сущностей микросервиса Media Service.md",
+    "Billing Service/04 - Бекенд, API и Контракты/Методы API/DTO/00 - DTO - Общая информация.md",
+    "Billing Service/04 - Бекенд, API и Контракты/Методы API/DTO",
+    "Agent Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда/04 - Платформенные контракты (Operations).md",
+    "Media Service/01 - Функциональная спецификация/Возможности сервиса/00 - Общая информация.md",
+    "Aggregator Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда/03 - Инъекция identity в gRPC metadata (SR-AGG-CONTENT-03).md",
+    "Authorization Module/04 - Бекенд, API и Контракты/Методы API/gRPC/authorization.proto",
+    "Agent Service/04 - Бекенд, API и Контракты/Методы API/gRPC/agent.proto",
+    "Billing Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекenda",
+    "Billing Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда",
+    "Billing Service/04 - Бекенд, API и Контракты/Интеграции со сторонними сервисами",
+    "Media Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда",
+    "Media Service/04 - Бекенд, API и Контракты/Интеграции со сторонними сервисами",
+    "Billing Service/04 - Бекенд, API и Контракты/Методы API/gRPC/billing.proto",
+    "Billing Service/04 - Бекенд, API и Контракты/Методы API/gRPC"
+  ]
 }

@@ -1,0 +1,194 @@
+syntax = "proto3";
+
+option csharp_namespace = "Pvs.Media.Grpc";
+
+package media;
+
+service MediaService {
+  rpc UploadImage (UploadImageRequest) returns (UploadImageResponse);
+  rpc UploadAudio (UploadAudioRequest) returns (UploadAudioResponse);
+  rpc UploadDocument (UploadDocumentRequest) returns (UploadDocumentResponse);
+  rpc GetImageUrl (GetImageUrlRequest) returns (GetImageUrlResponse);
+  rpc GetAudioUrl (GetAudioUrlRequest) returns (GetAudioUrlResponse);
+  rpc GetDocumentUrl (GetDocumentUrlRequest) returns (GetDocumentUrlResponse);
+  rpc ListReaderLibraryBooks (ListReaderLibraryBooksRequest) returns (ListReaderLibraryBooksResponse);
+  rpc SaveReaderLibraryBook (SaveReaderLibraryBookRequest) returns (SaveReaderLibraryBookResponse);
+  rpc DeleteReaderLibraryBook (DeleteReaderLibraryBookRequest) returns (DeleteReaderLibraryBookResponse);
+  rpc ListReaderCollections (ListReaderCollectionsRequest) returns (ListReaderCollectionsResponse);
+  rpc SaveReaderCollection (SaveReaderCollectionRequest) returns (SaveReaderCollectionResponse);
+  rpc DeleteReaderCollection (DeleteReaderCollectionRequest) returns (DeleteReaderCollectionResponse);
+  rpc ShareReaderCollection (ShareReaderCollectionRequest) returns (ShareReaderCollectionResponse);
+  rpc UnshareReaderCollection (UnshareReaderCollectionRequest) returns (UnshareReaderCollectionResponse);
+  rpc ListSharedReaderCollections (ListSharedReaderCollectionsRequest) returns (ListSharedReaderCollectionsResponse);
+}
+
+message UploadImageRequest {
+  bytes image_data = 1;
+  string content_type = 2;
+}
+
+message UploadImageResponse {
+  string url = 1;
+  string image_id = 2;
+}
+
+message UploadAudioRequest {
+  bytes audio_data = 1;
+  string content_type = 2;
+}
+
+message UploadAudioResponse {
+  string url = 1;
+  string audio_id = 2;
+}
+
+message UploadDocumentRequest {
+  bytes document_data = 1;
+  string content_type = 2;
+  string file_name = 3;
+}
+
+message UploadDocumentResponse {
+  string url = 1;
+  string document_id = 2;
+}
+
+message GetImageUrlRequest {
+  string image_id = 1;
+}
+
+message GetImageUrlResponse {
+  string url = 1;
+}
+
+message GetAudioUrlRequest {
+  string audio_id = 1;
+}
+
+message GetAudioUrlResponse {
+  string url = 1;
+}
+
+message GetDocumentUrlRequest {
+  string document_id = 1;
+}
+
+message GetDocumentUrlResponse {
+  string url = 1;
+}
+
+message ReaderLibraryBook {
+  string id = 1;
+  string title = 2;
+  string file_name = 3;
+  string url = 4;
+  string document_id = 5;
+  int32 page_count = 6;
+  string uploaded_at = 7;
+  string last_opened_at = 8;
+  string collection_id = 9;
+  string collection_name = 10;
+  bool is_shared = 11;
+  string owner_user_id = 12;
+  string owner_user_name = 13;
+  string owner_email = 14;
+  int32 last_page_number = 15;
+}
+
+message ReaderCollectionCollaborator {
+  string user_id = 1;
+  string user_name = 2;
+  string email = 3;
+  bool can_edit = 4;
+  string shared_at = 5;
+}
+
+message ReaderCollection {
+  string id = 1;
+  string project_id = 2;
+  string name = 3;
+  string description = 4;
+  string created_at = 5;
+  string updated_at = 6;
+  string owner_user_id = 7;
+  string owner_user_name = 8;
+  string owner_email = 9;
+  repeated ReaderCollectionCollaborator collaborators = 10;
+  int32 book_count = 11;
+  bool is_shared_with_me = 12;
+  bool can_edit = 13;
+  repeated ReaderLibraryBook books = 14;
+}
+
+message ListReaderLibraryBooksRequest {
+  string project_id = 1;
+}
+
+message ListReaderLibraryBooksResponse {
+  repeated ReaderLibraryBook books = 1;
+}
+
+message SaveReaderLibraryBookRequest {
+  string project_id = 1;
+  ReaderLibraryBook book = 2;
+}
+
+message SaveReaderLibraryBookResponse {
+  ReaderLibraryBook book = 1;
+}
+
+message DeleteReaderLibraryBookRequest {
+  string project_id = 1;
+  string book_id = 2;
+}
+
+message DeleteReaderLibraryBookResponse {}
+
+message ListReaderCollectionsRequest {
+  string project_id = 1;
+}
+
+message ListReaderCollectionsResponse {
+  repeated ReaderCollection collections = 1;
+}
+
+message SaveReaderCollectionRequest {
+  ReaderCollection collection = 1;
+}
+
+message SaveReaderCollectionResponse {
+  ReaderCollection collection = 1;
+}
+
+message DeleteReaderCollectionRequest {
+  string project_id = 1;
+  string collection_id = 2;
+}
+
+message DeleteReaderCollectionResponse {}
+
+message ShareReaderCollectionRequest {
+  string project_id = 1;
+  string collection_id = 2;
+  ReaderCollectionCollaborator collaborator = 3;
+}
+
+message ShareReaderCollectionResponse {
+  ReaderCollection collection = 1;
+}
+
+message UnshareReaderCollectionRequest {
+  string project_id = 1;
+  string collection_id = 2;
+  string collaborator_user_id = 3;
+}
+
+message UnshareReaderCollectionResponse {
+  ReaderCollection collection = 1;
+}
+
+message ListSharedReaderCollectionsRequest {}
+
+message ListSharedReaderCollectionsResponse {
+  repeated ReaderCollection collections = 1;
+}

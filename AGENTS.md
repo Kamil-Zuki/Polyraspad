@@ -4,7 +4,7 @@ Repository-level operating guide for AI coding agents working on **Polyraspad**.
 
 Polyraspad is a language-learning platform built around a LingQ-style reader model. The system is a multi-service application: a Next.js frontend, several ASP.NET Core backend services communicating over gRPC, a Python microservice for FSRS scheduling and NLP, PostgreSQL/Redis/MinIO infrastructure, and a browser extension for content capture.
 
-This file stays at the repository root on purpose (tooling and hierarchical agent docs expect a root entry point). Deeper guidance lives in `context/`; Cursor-specific wiring lives in `.cursor/`.
+This file stays at the repository root on purpose (tooling and hierarchical agent docs expect a root entry point). Deeper guidance lives in `context/`; Cursor-specific wiring for **code and coordination** lives in `.cursor/`; Cursor-specific wiring for **STEOS microservice docs** lives in `Docs/.cursor/`.
 
 > **Agent readers:** assume the reader of this file knows nothing about the project. Be precise, cite file paths, and do not generalize beyond what is actually in the repository.
 
@@ -14,7 +14,8 @@ This file stays at the repository root on purpose (tooling and hierarchical agen
 
 | Path | Purpose |
 |------|---------|
-| `Docs/` | Authoritative, stable documentation for humans and the team. |
+| `Docs/` | Authoritative, stable documentation for humans and the team. STEOS microservice docs follow rules in `Docs/.cursor/` (`steos-docs-*`). |
+| `Docs/(Done) Authorization Service/` | **Formatting etalon only** — folder tree, heading depth, tables, block order for future service docs. Not a content source; do not copy Auth domain text into other services. |
 | `context/` | Operational memory: agent instructions, rules, active implementation plans, skills, research, ADRs-in-progress. |
 | `.cursor/` | Cursor-native executable material: agents, commands, always-applied rules (`.cursor/rules/`), skills, and lead-coordination plans/tasks. |
 | `polyraspad-frontend/` | Next.js 16 application (App Router) — the main learning UI. |
@@ -489,13 +490,59 @@ Any change touching vocabulary status, duplicates, or the reader must preserve:
 
 ## 11. Documentation Boundaries
 
-- **`Docs/`** — official, stable docs for humans.
+- **`Docs/`** — official, stable docs for humans. **STEOS microservice documentation** (folders `01`–`05`, `99 - Staging`) is governed by **`Docs/.cursor/`**, not by root `.cursor/`.
 - **`context/`** — operational memory: active plans, agent instructions, rules, skills, prompts, research, ADRs-in-progress.
-- **`.cursor/`** — Cursor-executable instructions: agents, commands, auto rules, lead coordination.
+- **`.cursor/`** (repo root) — Cursor-executable instructions for **code, tests, and lead coordination**: agents, commands, auto rules, plans/tasks.
+- **`Docs/.cursor/`** — Cursor-executable instructions for **generating and auditing STEOS docs**: rules (`steos-docs-*`), skills, subagents.
 
 Promotion rule: when a `context/` document becomes stable and user-facing, keep the implementation trace in `context/` and add/update the official version in `Docs/`. Link them rather than duplicating large sections.
 
+### `Docs/.cursor/` — STEOS documentation rules
+
+When creating or editing files under `Docs/` (especially per-service folders and `Шаблон документации микросервиса STEOS/`), follow **`Docs/.cursor/rules/`**. Naming and groups — [`Docs/.cursor/rules/README.md`](Docs/.cursor/rules/README.md).
+
+| Group | Rule(s) | Scope |
+|-------|---------|-------|
+| **G0 — Core** | `steos-docs-core.mdc` (`alwaysApply`) | Order `03→01→02→04`, BFF topology, anti-hallucination, staging |
+| **G1 — Folders 01/02/03/05** | `steos-docs-folders-010305.mdc`, `steos-docs-staging-0103.mdc`, `steos-docs-staging-issues.mdc` | SR blocks, КАР, TOC; mandatory `01↔03` cross-check → ISSUE in `99` |
+| **G2 — Folder 04 coordinator** | `steos-docs-folder-04-coordinator.mdc` | Tree, contract layers, alignment, consistency |
+| **G3 — Folder 04 subfolders** | `steos-docs-folder-04-{dto,grpc,rest-api,socket,integrations,rabbitmq,redis,algorithms}.mdc` | Block templates per subfolder |
+
+**Skills** (batch workflows for folder `04`): [`Docs/.cursor/skills/README.md`](Docs/.cursor/skills/README.md)
+
+| Skill | Use when |
+|-------|----------|
+| `steos-docs-04-coordinator` | Plan or fill entire `04` for a service (manifest, batches) |
+| `steos-docs-04-write` | Write/update `04` files from manifest (templates stay in rules) |
+| `steos-docs-04-verify` | Readonly audit `04` vs `01`/`03`/`02`; ISSUE in `99 - Staging` |
+
+**Subagents** (`Docs/.cursor/agents/`): `docs-04-coordinator`, `docs-04-writer`, `docs-04-verifier`.
+
+Key constraints (details in G0/G1 rules):
+
+- **`03` is read-only** unless the user explicitly asks to edit the data model.
+- On **`01↔03` mismatch** → write ISSUE + update `00 - Реестр проблем.md` in `99 - Staging — Разрывы согласованности (DO NOT DELETE)/`; do not silently patch the other folder.
+- Do not write **`04`** before **`01`/`03`** are stable.
+
+### Formatting etalon — `(Done) Authorization Service/`
+
+`Docs/(Done) Authorization Service/` exists **only as a completed example of how to format** subsequent microservice documentation. Use it to see:
+
+- folder and file naming (`01`–`05`, group files, `00 - Общая информация`, etc.);
+- heading hierarchy, table layouts, and block order per document type;
+- expected depth and granularity for each section.
+
+**Do not treat Auth as a content template:**
+
+- do **not** copy, paraphrase, or reuse Auth **text** (SR descriptions, scenarios, DTO fields, endpoints, Redis keys, Rabbit flows, domain terms);
+- do **not** paste Auth fragments as «examples» inside another service's docs;
+- fill every new service from **that service's** `03` → `01` → `02` → `04`, plus `Docs/Шаблон документации микросервиса STEOS/` for short layout copies.
+
+Do not rewrite `(Done) Authorization Service/` without an explicit user request. Pair with `Docs/.cursor/rules/steos-docs-core.mdc` → *Reference Artifacts*.
+
 ### Required first reads for non-trivial work
+
+**Code / product implementation:**
 
 1. `context/README.md`
 2. `context/agents/AGENTS.md`
@@ -503,6 +550,12 @@ Promotion rule: when a `context/` document becomes stable and user-facing, keep 
 4. Relevant **active** plan under `.cursor/plans/active/` when the work follows that roadmap.
 5. `.cursor/rules/01-repo-operating-model.mdc`
 6. If coordinating via `lead-agent`: `.cursor/plans/README.md` and `.cursor/tasks/README.md`.
+
+**STEOS docs under `Docs/`:**
+
+1. `Docs/.cursor/rules/steos-docs-core.mdc` (always applies when editing docs)
+2. `Docs/.cursor/rules/README.md` — pick G1–G3 rules for the folder you edit
+3. For batch `04` work: `Docs/.cursor/skills/README.md` and the matching `steos-docs-04-*` skill
 
 ---
 
@@ -515,17 +568,25 @@ Promotion rule: when a `context/` document becomes stable and user-facing, keep 
 - Update the plan when scope, risk, or implementation order changes.
 - Prefer existing project patterns; avoid introducing new abstractions.
 - Keep edits focused and reviewable; never revert unrelated user changes.
-- Document new recurring rules in `context/rules/` or `.cursor/rules/`.
-- Document reusable workflows in `context/skills/` or `.cursor/skills/`.
+- Document new recurring rules in `context/rules/`, `.cursor/rules/`, or `Docs/.cursor/rules/` (STEOS docs).
+- Document reusable workflows in `context/skills/`, `.cursor/skills/`, or `Docs/.cursor/skills/` (STEOS docs).
 - If you change files/styles/structures/workflows described in this `AGENTS.md`, update this file.
 
 ### Specialist agent roles (Cursor subagents)
+
+**Repo root** (`.cursor/agents/`):
 
 - `lead-agent` — multi-area coordination.
 - `product-agent` — behavior, acceptance criteria, LingQ rules (read-only).
 - `backend-agent` — .NET services, controllers, gRPC, EF Core, migrations.
 - `frontend-agent` — Next.js UI, Reader UX, React Query, API clients.
 - `reviewer-agent` — regressions, unsafe migrations, contract mismatches (read-only).
+
+**STEOS docs** (`Docs/.cursor/agents/`):
+
+- `docs-04-coordinator` — manifest and batch orchestration for folder `04`.
+- `docs-04-writer` — write/update `04` files using block templates from `Docs/.cursor/rules/`.
+- `docs-04-verifier` — readonly consistency audit; ISSUE output to `99 - Staging`.
 
 ---
 
