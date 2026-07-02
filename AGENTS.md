@@ -15,6 +15,7 @@ This file stays at the repository root on purpose (tooling and hierarchical agen
 | Path | Purpose |
 |------|---------|
 | `Docs/` | Authoritative, stable documentation for humans and the team. STEOS microservice docs follow rules in `Docs/.cursor/` (`steos-docs-*`). |
+| `Docs/Product/` | Product-level docs: user flows, MVP scope, page priorities, feature specs. Not STEOS microservice docs. |
 | `Docs/(Done) Authorization Service/` | **Formatting etalon only** — folder tree, heading depth, tables, block order for future service docs. Not a content source; do not copy Auth domain text into other services. |
 | `context/` | Operational memory: agent instructions, rules, active implementation plans, skills, research, ADRs-in-progress. |
 | `.cursor/` | Cursor-native executable material: agents, commands, always-applied rules (`.cursor/rules/`), skills, and lead-coordination plans/tasks. |
