@@ -9,3 +9,4 @@
 .dotnet-home/
 .env
 !.env.example
+**.bin/

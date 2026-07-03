@@ -10,10 +10,10 @@ todos:
     status: completed
   - id: reader-redesign
     content: Redesign /reader layout with scalable original page view, readable extracted text, and synced word highlight.
-    status: pending
+    status: completed
   - id: ocr-pdf-fix
     content: Fix PDF original-page scaling and text-layer positioning so the page is readable and clickable.
-    status: pending
+    status: completed
   - id: epub-support
     content: Ensure EPUB books render cleanly in the new reader layout.
     status: pending
