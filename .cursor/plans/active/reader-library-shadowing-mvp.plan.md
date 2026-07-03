@@ -19,13 +19,13 @@ todos:
     status: completed
   - id: shadowing-page
     content: Create /shadowing page with TTS playback, user recording via Web Audio API, and self-rating loop.
-    status: pending
+    status: completed
   - id: shadowing-integration
     content: Link /shadowing to study cards and reader sentences via query params / shared state.
-    status: pending
+    status: completed
   - id: tests-regression
     content: Add/update tests for reader, library, and shadowing; ensure LingQ regressions still pass.
-    status: pending
+    status: completed
 isProject: false
 ---
 
