@@ -16,7 +16,7 @@ todos:
     status: completed
   - id: epub-support
     content: Ensure EPUB books render cleanly in the new reader layout.
-    status: pending
+    status: completed
   - id: shadowing-page
     content: Create /shadowing page with TTS playback, user recording via Web Audio API, and self-rating loop.
     status: pending
