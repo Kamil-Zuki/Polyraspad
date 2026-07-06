@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package ocr;
+
+service OcrService {
+  rpc RecognizeDocument (RecognizeDocumentRequest) returns (RecognizeDocumentResponse);
+}
+
+message RecognizeDocumentRequest {
+  bytes content = 1;
+  string file_name = 2;
+  string mime_type = 3;
+  string language = 4;
+}
+
+message PageResult {
+  int32 page_number = 1;
+  string text = 2;
+}
+
+message RecognizeDocumentResponse {
+  // Concatenated text from all pages separated by newlines.
+  string text = 1;
+  // Number of pages that were processed.
+  int32 page_count = 2;
+  // Per-page results.
+  repeated PageResult pages = 3;
+}

@@ -91,6 +91,17 @@ services:
     expose:
       - "40051"
 
+  ocr-service:
+    container_name: ocr-service
+    build:
+      context: ./ocr-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "50052"
+
   authorization-module:
     container_name: authorization-module
     build:
@@ -266,6 +277,8 @@ services:
         condition: service_started
       billing-service:
         condition: service_started
+      ocr-service:
+        condition: service_started
     environment:
       APP_UID: "0"
       ASPNETCORE_URLS: "http://0.0.0.0:5206"
@@ -274,6 +287,8 @@ services:
       AggregatorService__MediaServiceBaseUrl: "http://media-service:5121"
       AggregatorService__AuthorizationModuleBaseUrl: "http://authorization-module:5027"
       AggregatorService__BillingServiceBaseUrl: "http://billing-service:5127"
+      AggregatorService__OcrServiceBaseUrl: "http://ocr-service:50052"
+      Ocr__GrpcAddress: "http://ocr-service:50052"
       Billing__WebhookApiKey: "${BILLING_WEBHOOK_API_KEY:-}"
       Cors__AllowedOrigins: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000}"
       Jwt__Secret: "${JWT_SECRET:-change-me-use-at-least-32-characters-long-secret}"

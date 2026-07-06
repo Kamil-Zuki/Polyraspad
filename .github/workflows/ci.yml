@@ -179,6 +179,26 @@ jobs:
         working-directory: inclusive
         run: pytest test_fsrs_review_card.py -v
 
+  ocr-service:
+    name: ocr-service (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ocr-service/requirements.txt
+
+      - name: Install dependencies
+        working-directory: ocr-service
+        run: pip install -r requirements.txt
+
+      - name: Syntax check
+        working-directory: ocr-service
+        run: python -m compileall .
+
   frontend:
     name: polyraspad-frontend
     runs-on: ubuntu-latest
@@ -245,6 +265,7 @@ jobs:
       - media-service
       - authorization-module
       - inclusive
+      - ocr-service
       - frontend
       - landing
     steps:
