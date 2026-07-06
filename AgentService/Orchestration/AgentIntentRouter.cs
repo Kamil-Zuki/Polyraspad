@@ -21,7 +21,9 @@ public enum AgentNavigateDestination
     Study,
     Vocabulary,
     Import,
-    Library
+    Library,
+    Shadowing,
+    Decks
 }
 
 public record RoutedAgentIntent(
@@ -146,12 +148,16 @@ public static class AgentIntentRouter
             return AgentNavigateDestination.Reader;
         if (Regex.IsMatch(lower, @"\b(open|go to|launch)\b.*\beditor\b|\bcreate card\b|\bmake a card\b"))
             return AgentNavigateDestination.Editor;
-        if (Regex.IsMatch(lower, @"\b(open|go to)\b.*\blibrary\b|\bmy decks\b"))
+        if (Regex.IsMatch(lower, @"\b(open|go to)\b.*\b(decks|my decks)\b"))
+            return AgentNavigateDestination.Decks;
+        if (Regex.IsMatch(lower, @"\b(open|go to)\b.*\blibrary\b|\bbooks\b"))
             return AgentNavigateDestination.Library;
         if (Regex.IsMatch(lower, @"\b(open|go to|show)\b.*\bvocab|\bmy words\b|\bsaved words\b"))
             return AgentNavigateDestination.Vocabulary;
-        if (Regex.IsMatch(lower, @"\bimport\b"))
+        if (Regex.IsMatch(lower, @"\b(open|go to)\b.*\bimport\b|\bimport\b"))
             return AgentNavigateDestination.Import;
+        if (Regex.IsMatch(lower, @"\b(open|go to|show|launch)\b.*\bshadow|\bpractice pronunciation\b"))
+            return AgentNavigateDestination.Shadowing;
         if (Regex.IsMatch(lower, @"\bstart review\b|\bstudy now\b|\breview session\b|\bstart studying\b|\bstart a review\b"))
             return AgentNavigateDestination.Study;
         return null;
@@ -166,6 +172,18 @@ public static class AgentIntentRouter
         var sentenceLabel = Regex.Match(text, @"\bsentence[:\s]+(.+)", RegexOptions.IgnoreCase);
         if (sentenceLabel.Success && !string.IsNullOrWhiteSpace(sentenceLabel.Groups[1].Value))
             return sentenceLabel.Groups[1].Value.Trim();
+
+        var quoted = Quoted.Matches(text);
+        if (quoted.Count > 0)
+        {
+            var longest = quoted.Cast<Match>()
+                .Select(m => m.Groups[1].Value.Trim())
+                .Where(s => !string.IsNullOrWhiteSpace(s) && s.Split(' ').Length > 1)
+                .OrderByDescending(s => s.Length)
+                .FirstOrDefault();
+            if (!string.IsNullOrEmpty(longest))
+                return longest;
+        }
 
         return null;
     }

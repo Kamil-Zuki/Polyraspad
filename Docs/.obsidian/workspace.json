@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Product/reader-library-shadowing-mvp.md",
+                "file": "Product/polyraspad-frontend-guide.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "reader-library-shadowing-mvp"
+              "title": "polyraspad-frontend-guide"
             }
           }
         ]
@@ -185,6 +185,8 @@
   },
   "active": "b6a1f7b6a73b7599",
   "lastOpenFiles": [
+    "Product/reader-library-shadowing-mvp.md",
+    "Product/polyraspad-frontend-guide.md",
     "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
     "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/REST API/00 - REST API - Общая информация.md",
     "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/REST API/06 - Reader и термины (Reader).md",
@@ -210,8 +212,6 @@
     "Media Service/03 - Модель Данных/01 - Основные сущности/Entities - Список сущностей микросервиса Media Service.md",
     "Billing Service/04 - Бекенд, API и Контракты/Методы API/DTO/00 - DTO - Общая информация.md",
     "Billing Service/04 - Бекенд, API и Контракты/Методы API/DTO",
-    "Agent Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекенда/04 - Платформенные контракты (Operations).md",
-    "Media Service/01 - Функциональная спецификация/Возможности сервиса/00 - Общая информация.md",
     "Authorization Module/04 - Бекенд, API и Контракты/Методы API/gRPC/authorization.proto",
     "Agent Service/04 - Бекенд, API и Контракты/Методы API/gRPC/agent.proto",
     "Billing Service/04 - Бекенд, API и Контракты/Алгоритмы и методы бекenda",

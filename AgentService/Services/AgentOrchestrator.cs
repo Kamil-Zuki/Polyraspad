@@ -3,6 +3,7 @@ using AgentService.Orchestration;
 using AgentService.Options;
 using Microsoft.Extensions.Options;
 using Pvs.Content.Grpc;
+using System.Text.Json;
 
 namespace AgentService.Services;
 
@@ -67,6 +68,7 @@ public class AgentOrchestrator : IAgentOrchestrator
 
         var sourceLang = request.SourceLang ?? project.SourceLang;
         var targetLang = request.TargetLang ?? project.TargetLang;
+        var history = await LoadHistoryAsync(userId, threadId, cancellationToken);
         var intent = AgentIntentRouter.Route(request.UserText);
         var domainDecision = AgentDomainPolicy.Classify(request.UserText);
 
@@ -86,6 +88,7 @@ public class AgentOrchestrator : IAgentOrchestrator
                 targetLang,
                 request.FirstDeckId,
                 roles,
+                history,
                 cancellationToken);
         }
         catch (Exception ex)
@@ -140,18 +143,19 @@ public class AgentOrchestrator : IAgentOrchestrator
         string targetLang,
         string? firstDeckId,
         IEnumerable<string> roles,
+        IReadOnlyList<AgentChatMessageDto> history,
         CancellationToken cancellationToken)
     {
         return intent.ToolId switch
         {
             AgentToolId.Navigate => HandleNavigate(intent, firstDeckId),
             AgentToolId.GetProgress => await HandleProgressAsync(userId, projectId, project.Title, firstDeckId, roles, cancellationToken),
-            AgentToolId.ExplainWord => await HandleExplainWordAsync(intent, userId, sourceLang, targetLang, firstDeckId, roles, cancellationToken),
+            AgentToolId.ExplainWord => await HandleExplainWordAsync(intent, userId, sourceLang, targetLang, firstDeckId, roles, history, cancellationToken),
             AgentToolId.GrammarHelp => await HandleGrammarHelpAsync(intent, userId, targetLang, roles, cancellationToken),
             AgentToolId.GenerateExample => await HandleGenerateExampleAsync(intent, userId, sourceLang, targetLang, roles, cancellationToken),
             AgentToolId.BuildCardDraft => await HandleBuildCardDraftAsync(intent, userId, sourceLang, targetLang, roles, cancellationToken),
-            AgentToolId.OutOfScope => HandleOutOfScope(userText, sourceLang, intent),
-            AgentToolId.GeneralAnswer => await HandleGeneralAnswerAsync(userText, project.Title, sourceLang, targetLang, cancellationToken),
+            AgentToolId.OutOfScope => HandleOutOfScope(userText, sourceLang, intent, history),
+            AgentToolId.GeneralAnswer => await HandleGeneralAnswerAsync(userText, project.Title, sourceLang, targetLang, history, cancellationToken),
             _ => new AgentExecutionResult(
                 "I couldn't understand that request yet.",
                 intent.Domain ?? AgentDomainPolicy.Classify(userText),
@@ -160,10 +164,30 @@ public class AgentOrchestrator : IAgentOrchestrator
         };
     }
 
+    private async Task<IReadOnlyList<AgentChatMessageDto>> LoadHistoryAsync(
+        Guid userId,
+        Guid threadId,
+        CancellationToken cancellationToken)
+    {
+        const int historyLimit = 10;
+        var list = await _threadService.ListMessagesAsync(userId, threadId, historyLimit, null, cancellationToken);
+        if (list is null) return Array.Empty<AgentChatMessageDto>();
+
+        return list.Items
+            .Where(m => ValidHistoryRoles.Contains(m.Role.ToLowerInvariant()))
+            .Select(m => new AgentChatMessageDto(m.Role.ToLowerInvariant(), m.Content))
+            .ToList();
+    }
+
+    private static readonly HashSet<string> ValidHistoryRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "user", "assistant"
+    };
+
     private static AgentExecutionResult HandleNavigate(RoutedAgentIntent intent, string? firstDeckId)
     {
         var destination = intent.Destination ?? AgentNavigateDestination.Library;
-        var action = BuildNavigateAction(destination, firstDeckId);
+        var action = BuildNavigateAction(destination, firstDeckId, intent.Sentence);
         return new AgentExecutionResult(
             $"Opening {action.Title}. You can continue there or ask me something else here.",
             intent.Domain!,
@@ -211,6 +235,7 @@ public class AgentOrchestrator : IAgentOrchestrator
         string targetLang,
         string? firstDeckId,
         IEnumerable<string> roles,
+        IReadOnlyList<AgentChatMessageDto> history,
         CancellationToken cancellationToken)
     {
         var word = intent.Word?.Trim();
@@ -223,15 +248,20 @@ public class AgentOrchestrator : IAgentOrchestrator
                 IsError: true);
         }
 
-        var prompt = $"""
+        var systemPrompt = AgentSystemPromptBuilder.Build("this project", sourceLang, targetLang);
+        var userPrompt = $"""
             Explain the exact word or phrase "{word}" for a language learner.
             Source language: {sourceLang}. Explain in {targetLang}.
             Context sentence: {intent.Sentence ?? "(none)"}
             Use the exact surface form only. Do not use lemma labels.
-            Answer briefly in {targetLang}.
             """;
 
-        var explanation = AgentIntentRouter.SanitizeLemmaLabels(await _llmProvider.CompleteAsync(prompt, cancellationToken));
+        var messages = new List<AgentChatMessageDto>(history)
+        {
+            new AgentChatMessageDto("user", userPrompt)
+        };
+
+        var explanation = AgentIntentRouter.SanitizeLemmaLabels(await _llmProvider.CompleteChatAsync(systemPrompt, messages, cancellationToken));
         var draft = new Dictionary<string, string> { ["Word"] = word };
         if (!string.IsNullOrEmpty(intent.Sentence))
             draft["Expression"] = intent.Sentence;
@@ -372,7 +402,11 @@ public class AgentOrchestrator : IAgentOrchestrator
             Actions: [BuildEditorDraftAction(draft, "Open draft in Editor", "Review and save the card when ready.")]);
     }
 
-    private static AgentExecutionResult HandleOutOfScope(string userText, string sourceLang, RoutedAgentIntent intent)
+    private static AgentExecutionResult HandleOutOfScope(
+        string userText,
+        string sourceLang,
+        RoutedAgentIntent intent,
+        IReadOnlyList<AgentChatMessageDto> history)
     {
         var domain = intent.Domain ?? AgentDomainPolicy.Classify(userText);
         return new AgentExecutionResult(
@@ -389,23 +423,16 @@ public class AgentOrchestrator : IAgentOrchestrator
         string projectTitle,
         string sourceLang,
         string targetLang,
+        IReadOnlyList<AgentChatMessageDto> history,
         CancellationToken cancellationToken)
     {
-        var prompt = $"""
-            You are PolyGuide, a language-learning copilot ONLY for project "{projectTitle}" ({sourceLang} → {targetLang}).
+        var systemPrompt = AgentSystemPromptBuilder.Build(projectTitle, sourceLang, targetLang);
+        var messages = new List<AgentChatMessageDto>(history)
+        {
+            new AgentChatMessageDto("user", userText)
+        };
 
-            The learner asked: {userText}
-
-            STRICT RULES:
-            - You ONLY help with language learning: vocabulary, grammar, translation, pronunciation, reading, cards, study, and progress in Polyraspad.
-            - If the request is NOT about language learning (code, programming, homework, business, general trivia), refuse briefly and redirect to language-learning help.
-            - Do NOT write code, algorithms, or general-purpose answers.
-            - Use exact surface forms for words/phrases; never label vocabulary with "Lemma:" or treat base forms as learning status.
-            - Answer briefly in {targetLang}. Suggest Reader, Editor, Study, or Vocabulary when helpful.
-            - No markdown.
-            """;
-
-        var trimmed = AgentIntentRouter.SanitizeLemmaLabels(await _llmProvider.CompleteAsync(prompt, cancellationToken));
+        var trimmed = AgentIntentRouter.SanitizeLemmaLabels(await _llmProvider.CompleteChatAsync(systemPrompt, messages, cancellationToken));
         var looksLikeRefusal = System.Text.RegularExpressions.Regex.IsMatch(
             trimmed,
             @"\b(can't|cannot|can't help|i can only|i'm only|refuse|not able to write code|language learning)\b",
@@ -419,7 +446,7 @@ public class AgentOrchestrator : IAgentOrchestrator
             Refusal: looksLikeRefusal);
     }
 
-    private static AgentActionCard BuildNavigateAction(AgentNavigateDestination destination, string? firstDeckId)
+    private static AgentActionCard BuildNavigateAction(AgentNavigateDestination destination, string? firstDeckId, string? sentence = null)
     {
         var (title, href, label, kind) = destination switch
         {
@@ -428,6 +455,8 @@ public class AgentOrchestrator : IAgentOrchestrator
             AgentNavigateDestination.Study => ("Study", firstDeckId is not null ? $"/study/{firstDeckId}" : "/study", "Start Review", "start_study"),
             AgentNavigateDestination.Vocabulary => ("Vocabulary", "/vocabulary", "View Vocabulary", "navigate"),
             AgentNavigateDestination.Import => ("Import", "/import", "Open Import", "navigate"),
+            AgentNavigateDestination.Decks => ("Decks", "/decks", "View Decks", "navigate"),
+            AgentNavigateDestination.Shadowing => ("Shadowing", BuildShadowingHref(sentence), "Open Shadowing", "navigate"),
             _ => ("Library", "/library", "Open Library", "navigate")
         };
 
@@ -438,6 +467,13 @@ public class AgentOrchestrator : IAgentOrchestrator
             href,
             label,
             $"Go to {title.ToLowerInvariant()}.");
+    }
+
+    private static string BuildShadowingHref(string? sentence)
+    {
+        if (string.IsNullOrWhiteSpace(sentence))
+            return "/shadowing";
+        return $"/shadowing?sentence={Uri.EscapeDataString(sentence.Trim())}";
     }
 
     private static AgentActionCard BuildEditorDraftAction(

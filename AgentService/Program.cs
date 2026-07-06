@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using static Pvs.Content.Grpc.AnalyticsService;
 using static Pvs.Content.Grpc.AIService;
 using static Pvs.Content.Grpc.ContentService;
+using static Vocab.VocabService;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
@@ -36,6 +37,7 @@ builder.Services.AddScoped<IAgentThreadService, AgentThreadService>();
 builder.Services.AddScoped<IAgentOrchestrator, AgentOrchestrator>();
 builder.Services.AddScoped<IVocabularyProjectAccessValidator, VocabularyProjectAccessValidator>();
 builder.Services.AddScoped<IVocabularyGrpcClient, VocabularyGrpcClient>();
+builder.Services.AddScoped<IInclusiveGrpcClient, InclusiveGrpcClient>();
 
 builder.Services.AddHttpClient<IAgentLlmProvider, OpenAiCompatibleAgentLlmProvider>((sp, client) =>
 {
@@ -51,6 +53,10 @@ builder.Services.AddGrpcClient<ContentServiceClient>(o => o.Address = new Uri(vo
 builder.Services.AddGrpcClient<AnalyticsServiceClient>(o => o.Address = new Uri(vocabularyAddress))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
 builder.Services.AddGrpcClient<AIServiceClient>(o => o.Address = new Uri(vocabularyAddress))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
+
+var inclusiveAddress = builder.Configuration.GetValue<string>("Inclusive:GrpcAddress") ?? "http://localhost:40051";
+builder.Services.AddGrpcClient<VocabServiceClient>(o => o.Address = new Uri(inclusiveAddress))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
 
 builder.WebHost.ConfigureKestrel(options =>

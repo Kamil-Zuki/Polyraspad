@@ -11,6 +11,7 @@
   <ItemGroup>
     <Protobuf Include="Protos\agent.proto" GrpcServices="Server" />
     <Protobuf Include="Protos\vocabulary-client.proto" GrpcServices="Client" />
+    <Protobuf Include="Protos\Inclusive\vocab.proto" GrpcServices="Client" />
     <PackageReference Include="AutoMapper" Version="16.1.1" />
     <PackageReference Include="FluentValidation" Version="11.11.0" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
