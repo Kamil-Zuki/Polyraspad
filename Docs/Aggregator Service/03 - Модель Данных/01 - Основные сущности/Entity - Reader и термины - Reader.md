@@ -33,4 +33,4 @@ Downstream: `VocabularyService` — `TermService`, `TextService`.
 
 REST: `/api/terms`, `/api/text/analyze`. DTO: `04/.../DTO/04 - Reader`.
 
-См. `.cursor/rules/06-lingq-domain-guardrails.mdc` — term-first invariants.
+См. `AGENTS.md` §13 — term-first invariants.

@@ -259,6 +259,4 @@ If adding an entity is too heavy for MVP, store attempts as a JSON note field on
 
 ## 10. Related Plans & Documents
 
-- `.cursor/plans/active/reader-library-shadowing-mvp.plan.md`
-- `.cursor/tasks/active/reader-library-shadowing-mvp/`
 - `AGENTS.md` — project conventions
