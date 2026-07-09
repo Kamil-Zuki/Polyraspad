@@ -202,6 +202,8 @@ Key patterns:
 - **Server Components by default.** Use `'use client'` only when interactivity or browser APIs are needed.
 - **Data fetching:** default `cache: 'no-store'`; use `force-cache` or `next.revalidate` explicitly.
 - **Path alias:** `@/*` maps to `./src/*`.
+- **Global command palette:** `<Omnibar />` is mounted in `src/app/layout.tsx` via `OmnibarProvider`. `Ctrl+K` (or `Cmd+K`) opens it from any page; it handles navigation, Quick Add (`Add "word"`), Smart Filter, and AI-suggested actions.
+- **Sidebar grouping:** Command Center (Dashboard, Agents), Vocabulary (Decks, Vocabulary, Cards), Tools / Import (Create Card, Import), plus Reading/Speaking groups.
 - **Types:** strict TypeScript; ESLint warns on `@typescript-eslint/no-explicit-any`.
 - **Styling:** Tailwind only; avoid CSS modules. Design tokens include `bg-app-bg`/`bg-app-surface`/`bg-app-hover`, `text-brand-primary`/`text-brand-secondary`, and status colors (NEW blue, SAVED/LINGQ yellow, KNOWN white, IGNORED muted).
 
