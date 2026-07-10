@@ -13,12 +13,14 @@ public class AutoMappingProfile : Profile
         CreateMap<AgentThreadListItemDto, AgentThreadListItem>()
             .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id.ToString()))
             .ForMember(dest => dest.ProjectId, opt => opt.MapFrom(src => src.ProjectId.ToString()))
+            .ForMember(dest => dest.AgentId, opt => opt.MapFrom(src => src.AgentId))
             .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => Timestamp.FromDateTime(DateTime.SpecifyKind(src.CreatedAt, DateTimeKind.Utc))))
             .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => Timestamp.FromDateTime(DateTime.SpecifyKind(src.UpdatedAt, DateTimeKind.Utc))));
 
         CreateMap<AgentThreadDto, AgentThreadResponse>()
             .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id.ToString()))
             .ForMember(dest => dest.ProjectId, opt => opt.MapFrom(src => src.ProjectId.ToString()))
+            .ForMember(dest => dest.AgentId, opt => opt.MapFrom(src => src.AgentId))
             .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => Timestamp.FromDateTime(DateTime.SpecifyKind(src.CreatedAt, DateTimeKind.Utc))))
             .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => Timestamp.FromDateTime(DateTime.SpecifyKind(src.UpdatedAt, DateTimeKind.Utc))))
             .ForMember(dest => dest.ArchivedAt, opt => opt.MapFrom(src =>

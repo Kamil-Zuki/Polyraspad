@@ -8,12 +8,14 @@ public interface IAgentThreadService
         Guid userId,
         Guid projectId,
         IEnumerable<string> roles,
+        string? agentId = null,
         CancellationToken cancellationToken = default);
 
     Task<AgentThreadDto> CreateThreadAsync(
         Guid userId,
         Guid projectId,
         IEnumerable<string> roles,
+        string? agentId = null,
         CancellationToken cancellationToken = default);
 
     Task<AgentThreadDto?> GetThreadAsync(

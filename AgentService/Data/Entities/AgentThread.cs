@@ -10,6 +10,8 @@ public class AgentThread
 
     public string? Title { get; set; }
 
+    public string? AgentId { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

@@ -8,6 +8,8 @@ public class AgentThreadListItemDto
 
     public required string Title { get; init; }
 
+    public string? AgentId { get; init; }
+
     public required DateTime CreatedAt { get; init; }
 
     public required DateTime UpdatedAt { get; init; }
@@ -20,6 +22,8 @@ public class AgentThreadDto
     public required Guid ProjectId { get; init; }
 
     public required string Title { get; init; }
+
+    public string? AgentId { get; init; }
 
     public required DateTime CreatedAt { get; init; }
 

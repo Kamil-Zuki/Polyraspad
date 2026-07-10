@@ -72,7 +72,7 @@ public class AgentGrpcService : AgentServiceBase
         try
         {
             var roles = GrpcContextHelper.GetRoles(context);
-            var threads = await _threadService.ListThreadsAsync(userId, projectId, roles, context.CancellationToken);
+            var threads = await _threadService.ListThreadsAsync(userId, projectId, roles, request.AgentId, context.CancellationToken);
             var response = new ListAgentThreadsResponse();
             response.Items.AddRange(_mapper.Map<IEnumerable<AgentThreadListItem>>(threads));
             return response;
@@ -101,7 +101,7 @@ public class AgentGrpcService : AgentServiceBase
         try
         {
             var roles = GrpcContextHelper.GetRoles(context);
-            var thread = await _threadService.CreateThreadAsync(userId, projectId, roles, context.CancellationToken);
+            var thread = await _threadService.CreateThreadAsync(userId, projectId, roles, request.AgentId, context.CancellationToken);
             return _mapper.Map<AgentThreadResponse>(thread);
         }
         catch (KeyNotFoundException ex)

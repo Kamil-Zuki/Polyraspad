@@ -45,19 +45,26 @@ public class AgentThreadService : IAgentThreadService
         Guid userId,
         Guid projectId,
         IEnumerable<string> roles,
+        string? agentId = null,
         CancellationToken cancellationToken = default)
     {
         await _projectAccessValidator.EnsureProjectAccessAsync(userId, projectId, roles, cancellationToken);
 
-        return await _context.AgentThreads
+        var query = _context.AgentThreads
             .AsNoTracking()
-            .Where(t => t.UserId == userId && t.ProjectId == projectId && t.ArchivedAt == null)
+            .Where(t => t.UserId == userId && t.ProjectId == projectId && t.ArchivedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(agentId))
+            query = query.Where(t => t.AgentId == agentId);
+
+        return await query
             .OrderByDescending(t => t.UpdatedAt)
             .Select(t => new AgentThreadListItemDto
             {
                 Id = t.Id,
                 ProjectId = t.ProjectId,
                 Title = t.Title ?? AgentThreadTitleHelper.DefaultTitle,
+                AgentId = t.AgentId,
                 CreatedAt = t.CreatedAt,
                 UpdatedAt = t.UpdatedAt
             })
@@ -68,6 +75,7 @@ public class AgentThreadService : IAgentThreadService
         Guid userId,
         Guid projectId,
         IEnumerable<string> roles,
+        string? agentId = null,
         CancellationToken cancellationToken = default)
     {
         await _projectAccessValidator.EnsureProjectAccessAsync(userId, projectId, roles, cancellationToken);
@@ -78,6 +86,7 @@ public class AgentThreadService : IAgentThreadService
             Id = Guid.NewGuid(),
             UserId = userId,
             ProjectId = projectId,
+            AgentId = string.IsNullOrWhiteSpace(agentId) ? null : agentId.Trim(),
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -370,6 +379,7 @@ public class AgentThreadService : IAgentThreadService
         Id = thread.Id,
         ProjectId = thread.ProjectId,
         Title = thread.Title ?? AgentThreadTitleHelper.DefaultTitle,
+        AgentId = thread.AgentId,
         CreatedAt = thread.CreatedAt,
         UpdatedAt = thread.UpdatedAt,
         ArchivedAt = thread.ArchivedAt

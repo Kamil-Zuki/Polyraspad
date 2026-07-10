@@ -23,6 +23,7 @@ service AgentService {
 message ListAgentThreadsRequest {
   string user_id = 1;
   string project_id = 2;
+  string agent_id = 3;
 }
 
 message AgentThreadListItem {
@@ -31,6 +32,7 @@ message AgentThreadListItem {
   string title = 3;
   google.protobuf.Timestamp created_at = 4;
   google.protobuf.Timestamp updated_at = 5;
+  google.protobuf.StringValue agent_id = 6;
 }
 
 message ListAgentThreadsResponse {
@@ -40,6 +42,7 @@ message ListAgentThreadsResponse {
 message CreateAgentThreadRequest {
   string user_id = 1;
   string project_id = 2;
+  string agent_id = 3;
 }
 
 message GetAgentThreadRequest {
@@ -54,6 +57,7 @@ message AgentThreadResponse {
   google.protobuf.Timestamp created_at = 4;
   google.protobuf.Timestamp updated_at = 5;
   google.protobuf.Timestamp archived_at = 6;
+  google.protobuf.StringValue agent_id = 7;
 }
 
 message ListAgentMessagesRequest {
