@@ -10,3 +10,6 @@
 .env
 !.env.example
 **.bin/
+
+# Obsidian workspace state (UI layout, not content)
+.obsidian/workspace.json
