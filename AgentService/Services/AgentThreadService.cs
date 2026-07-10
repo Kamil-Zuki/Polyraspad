@@ -22,7 +22,8 @@ public class AgentThreadService : IAgentThreadService
         "language_learning",
         "product_navigation",
         "progress",
-        "out_of_scope"
+        "out_of_scope",
+        "automation"
     };
 
     private static readonly HashSet<string> ValidToolCallStatuses = new(StringComparer.OrdinalIgnoreCase)
