@@ -61,6 +61,7 @@ public static class AgentMessageMetadataBuilder
             {
                 name = tc.ToolName,
                 status = tc.Status,
+                input = tc.InputJson,
                 result = tc.OutputJson
             }).ToArray();
         }

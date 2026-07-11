@@ -71,6 +71,20 @@ public class AgentOrchestrator : IAgentOrchestrator
                     lesson_id = new { type = "string", description = "ID of the lesson to mark as completed" }
                 },
                 required = new[] { "lesson_id" }
+            }),
+        new AgentToolDefinition(
+            "submit_knowledge_check",
+            "Submit the results of an exam or knowledge check to update the user's skill levels. Use this tool ONLY at the end of a Knowledge Check lesson.",
+            new {
+                type = "object",
+                properties = new {
+                    term_ids = new { type = "array", items = new { type = "string" }, description = "List of term IDs that were evaluated" },
+                    reading_score = new { type = "integer", description = "Score for Reading (0-100), 0 if not evaluated" },
+                    listening_score = new { type = "integer", description = "Score for Listening (0-100), 0 if not evaluated" },
+                    writing_score = new { type = "integer", description = "Score for Writing (0-100), 0 if not evaluated" },
+                    speaking_score = new { type = "integer", description = "Score for Speaking (0-100), 0 if not evaluated" }
+                },
+                required = new[] { "term_ids" }
             })
     };
 
@@ -220,6 +234,11 @@ public class AgentOrchestrator : IAgentOrchestrator
         }
         assistantContent = string.Join("\n", cleanLines).Trim();
 
+        if (string.IsNullOrWhiteSpace(assistantContent) && executedTools.Count > 0)
+        {
+            assistantContent = "Я успешно выполнил запрошенные действия.";
+        }
+
         var execution = new AgentExecutionResult(
             assistantContent,
             new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning),
@@ -310,6 +329,17 @@ public class AgentOrchestrator : IAgentOrchestrator
                     return JsonSerializer.Serialize(new { error = "Invalid lesson_id format" });
                 await _vocabularyClient.CompleteLessonAsync(userId, compLessonId, roles, cancellationToken);
                 return JsonSerializer.Serialize(new { status = "success", message = "Lesson marked as completed successfully." });
+                
+            case "submit_knowledge_check":
+                var termIdsNode = args?["term_ids"] as JsonArray;
+                var termIds = termIdsNode?.Select(n => n?.GetValue<string>()).Where(s => !string.IsNullOrEmpty(s)).Select(s => s!).ToList() ?? new List<string>();
+                var rScore = args?["reading_score"]?.GetValue<int>() ?? 0;
+                var lScore = args?["listening_score"]?.GetValue<int>() ?? 0;
+                var wScore = args?["writing_score"]?.GetValue<int>() ?? 0;
+                var sScore = args?["speaking_score"]?.GetValue<int>() ?? 0;
+
+                await _vocabularyClient.SubmitKnowledgeCheckResultAsync(userId, projectId, termIds!, rScore, lScore, wScore, sScore, roles, cancellationToken);
+                return JsonSerializer.Serialize(new { status = "success", message = "Knowledge check results submitted successfully." });
                 
             default:
                 throw new InvalidOperationException($"Unknown tool {name}");

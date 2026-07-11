@@ -78,6 +78,17 @@ public interface IVocabularyGrpcClient
         int count,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
+
+    Task SubmitKnowledgeCheckResultAsync(
+        Guid userId,
+        Guid projectId,
+        List<string> termIds,
+        int readingScore,
+        int listeningScore,
+        int writingScore,
+        int speakingScore,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
 }
 
 public class VocabularyGrpcClient : IVocabularyGrpcClient
@@ -293,6 +304,34 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
             cancellationToken: cancellationToken);
 
         return response.Items.Select(x => x.Text).ToList();
+    }
+
+    public async Task SubmitKnowledgeCheckResultAsync(
+        Guid userId,
+        Guid projectId,
+        List<string> termIds,
+        int readingScore,
+        int listeningScore,
+        int writingScore,
+        int speakingScore,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new SubmitKnowledgeCheckResultRequest
+        {
+            UserId = userId.ToString(),
+            ProjectId = projectId.ToString(),
+            ReadingScore = readingScore,
+            ListeningScore = listeningScore,
+            WritingScore = writingScore,
+            SpeakingScore = speakingScore
+        };
+        request.TermIds.AddRange(termIds);
+
+        await _lessonClient.SubmitKnowledgeCheckResultAsync(
+            request,
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken);
     }
 
     private static Metadata BuildMetadata(Guid userId, IEnumerable<string> roles) => new()

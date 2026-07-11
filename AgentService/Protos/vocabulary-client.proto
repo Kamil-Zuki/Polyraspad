@@ -166,6 +166,7 @@ service LessonService {
   rpc GetLesson (GetLessonRequest) returns (GetLessonResponse);
   rpc StartLesson (StartLessonRequest) returns (StartLessonResponse);
   rpc CompleteLesson (CompleteLessonRequest) returns (google.protobuf.Empty);
+  rpc SubmitKnowledgeCheckResult (SubmitKnowledgeCheckResultRequest) returns (google.protobuf.Empty);
 }
 
 // ============================================================================
@@ -914,6 +915,12 @@ service AnalyticsService {
 
   // Дневная сводка и Streaks (SR-ANL-03)
   rpc GetDailySummary (GetDailySummaryRequest) returns (GetDailySummaryResponse);
+
+  // Оценка навыков (Phase 2 - Deep Skill Tracking)
+  rpc GetSkillBalance (GetSkillBalanceRequest) returns (GetSkillBalanceResponse);
+
+  // Ежедневный автопилот (Phase 4)
+  rpc GetDailyAutopilotPlan (GetDailyAutopilotPlanRequest) returns (GetDailyAutopilotPlanResponse);
 }
 
 // SR-ANL-01: Vocabulary Stats Messages
@@ -939,6 +946,20 @@ message GetVocabularyStatsResponse {
   int32 estimated_fluency = 7; // 0-100
   int32 saved_count = 8;
   int32 reviewing_count = 9;
+}
+
+// Phase 2: Skill Balance Messages
+message GetSkillBalanceRequest {
+  string user_id = 1; // UUID
+  string project_id = 2; // UUID
+}
+
+message GetSkillBalanceResponse {
+  string project_id = 1; // UUID
+  int32 average_reading_level = 2; // 0-100
+  int32 average_listening_level = 3; // 0-100
+  int32 average_writing_level = 4; // 0-100
+  int32 average_speaking_level = 5; // 0-100
 }
 
 // SR-ANL-02: Heatmap Messages
@@ -1649,6 +1670,7 @@ message LessonDto {
   string difficulty = 5;
   string content_markdown = 6;
   google.protobuf.StringValue color_css_class = 7;
+  google.protobuf.StringValue system_prompt = 8;
 }
 
 message UserLessonProgressDto {
@@ -1696,4 +1718,34 @@ message StartLessonResponse {
 message CompleteLessonRequest {
   string lesson_id = 1;
   string user_id = 2;
+}
+
+// Phase 4: SubmitKnowledgeCheckResultRequest
+message SubmitKnowledgeCheckResultRequest {
+  string user_id = 1;
+  string project_id = 2;
+  repeated string term_ids = 3;
+  int32 reading_score = 4;
+  int32 listening_score = 5;
+  int32 writing_score = 6;
+  int32 speaking_score = 7;
+}
+
+// Phase 4: Autopilot
+message GetDailyAutopilotPlanRequest {
+  string user_id = 1;
+  string project_id = 2;
+}
+
+message DailyAutopilotTask {
+  string task_type = 1; // e.g. "reading", "fsrs", "knowledge_check"
+  string title = 2;
+  string description = 3;
+  bool is_completed = 4;
+  string action_url = 5;
+  int32 duration_minutes = 6;
+}
+
+message GetDailyAutopilotPlanResponse {
+  repeated DailyAutopilotTask tasks = 1;
 }
