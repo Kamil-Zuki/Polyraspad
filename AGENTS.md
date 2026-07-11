@@ -514,6 +514,7 @@ When editing STEOS docs, follow the dependency order **`03` → `01` → `02` �
 - Prefer existing project patterns; avoid introducing new abstractions.
 - Keep edits focused and reviewable; never revert unrelated user changes.
 - If you change files/styles/structures/workflows described in this `AGENTS.md`, update this file.
+- **Auto-commit Hook:** After successfully completing a user task or an implementation plan, automatically commit your changes with a descriptive message (`git commit -a -m "..."`) and push them to the repository. If changes involve Git submodules, remember to commit and push in the submodule first, then update the submodule pointer in the root repository.
 
 ---
 
