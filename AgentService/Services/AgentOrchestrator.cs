@@ -119,6 +119,17 @@ public class AgentOrchestrator : IAgentOrchestrator
             ? thread.SystemPromptOverride 
             : AgentSystemPromptBuilder.Build(project.Title, sourceLang, targetLang);
 
+        var intent = AgentIntentRouter.Route(request.UserText);
+        if (intent.ToolId == AgentToolId.GeneratePractice)
+        {
+            var terms = await _vocabularyClient.GetLearningTermsAsync(userId, projectId, 5, roles, cancellationToken);
+            if (terms.Any())
+            {
+                var termList = string.Join(", ", terms);
+                systemPrompt += $"\n\n[SYSTEM INSTRUCTION]\nThe user wants to practice. Here are some words they are currently learning: {termList}. Generate a short creative writing exercise, translation task, or roleplay scenario where they must use these words. Do not give them the answers yet, encourage them to respond.";
+            }
+        }
+
         var executedTools = new List<AgentToolCallRecord>();
         
         string assistantContent = string.Empty;

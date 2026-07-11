@@ -11,6 +11,7 @@ using static Pvs.Content.Grpc.AnalyticsService;
 using static Pvs.Content.Grpc.AIService;
 using static Pvs.Content.Grpc.ContentService;
 using static Pvs.Content.Grpc.CardService;
+using static Pvs.Content.Grpc.TermService;
 using static Vocab.VocabService;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
@@ -56,6 +57,8 @@ builder.Services.AddGrpcClient<CardServiceClient>(o => o.Address = new Uri(vocab
 builder.Services.AddGrpcClient<AnalyticsServiceClient>(o => o.Address = new Uri(vocabularyAddress))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
 builder.Services.AddGrpcClient<AIServiceClient>(o => o.Address = new Uri(vocabularyAddress))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
+builder.Services.AddGrpcClient<TermServiceClient>(o => o.Address = new Uri(vocabularyAddress))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
 
 var inclusiveAddress = builder.Configuration.GetValue<string>("Inclusive:GrpcAddress") ?? "http://localhost:40051";

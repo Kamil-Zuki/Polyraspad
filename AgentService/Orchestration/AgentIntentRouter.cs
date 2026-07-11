@@ -7,6 +7,7 @@ public enum AgentToolId
     ExplainWord,
     GrammarHelp,
     GenerateExample,
+    GeneratePractice,
     BuildCardDraft,
     GetProgress,
     Navigate,
@@ -38,6 +39,7 @@ public record RoutedAgentIntent(
         AgentToolId.ExplainWord => "explain_word",
         AgentToolId.GrammarHelp => "grammar_help",
         AgentToolId.GenerateExample => "generate_example",
+        AgentToolId.GeneratePractice => "generate_practice",
         AgentToolId.BuildCardDraft => "build_card_draft",
         AgentToolId.GetProgress => "get_progress",
         AgentToolId.Navigate => "navigate",
@@ -114,6 +116,13 @@ public static class AgentIntentRouter
             return new RoutedAgentIntent(
                 AgentToolId.GenerateExample,
                 Word: ExtractTargetTerm(text),
+                Domain: new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning));
+        }
+
+        if (Regex.IsMatch(lower, @"\btest me\b|\bpractice\b|\bgenerate practice\b|\bmake an exercise\b|\bупражнени[ея]\b|\bпотренир\b|\bсоставь предложени\b|\bdynamic lesson\b", RegexOptions.IgnoreCase))
+        {
+            return new RoutedAgentIntent(
+                AgentToolId.GeneratePractice,
                 Domain: new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning));
         }
 

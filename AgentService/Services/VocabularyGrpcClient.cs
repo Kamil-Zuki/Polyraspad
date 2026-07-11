@@ -5,6 +5,7 @@ using static Pvs.Content.Grpc.AIService;
 using static Pvs.Content.Grpc.ContentService;
 using static Pvs.Content.Grpc.CardService;
 using static Pvs.Content.Grpc.LessonService;
+using static Pvs.Content.Grpc.TermService;
 
 namespace AgentService.Services;
 
@@ -70,6 +71,13 @@ public interface IVocabularyGrpcClient
         Guid lessonId,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetLearningTermsAsync(
+        Guid userId,
+        Guid projectId,
+        int count,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
 }
 
 public class VocabularyGrpcClient : IVocabularyGrpcClient
@@ -79,19 +87,22 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
     private readonly ContentServiceClient _contentClient;
     private readonly CardServiceClient _cardClient;
     private readonly LessonServiceClient _lessonClient;
+    private readonly TermServiceClient _termClient;
 
     public VocabularyGrpcClient(
         AnalyticsServiceClient analyticsClient, 
         AIServiceClient aiClient,
         ContentServiceClient contentClient,
         CardServiceClient cardClient,
-        LessonServiceClient lessonClient)
+        LessonServiceClient lessonClient,
+        TermServiceClient termClient)
     {
         _analyticsClient = analyticsClient;
         _aiClient = aiClient;
         _contentClient = contentClient;
         _cardClient = cardClient;
         _lessonClient = lessonClient;
+        _termClient = termClient;
     }
 
     public Task<GetVocabularyStatsResponse> GetVocabularyStatsAsync(
@@ -254,13 +265,34 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
         CancellationToken cancellationToken = default)
     {
         await _lessonClient.CompleteLessonAsync(
-            new Pvs.Content.Grpc.CompleteLessonRequest
+            new CompleteLessonRequest
             {
                 UserId = userId.ToString(),
                 LessonId = lessonId.ToString()
             },
             headers: BuildMetadata(userId, roles),
             cancellationToken: cancellationToken);
+    }
+
+    public async Task<List<string>> GetLearningTermsAsync(
+        Guid userId,
+        Guid projectId,
+        int count,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _termClient.ListProjectTermsAsync(
+            new ListProjectTermsRequest
+            {
+                UserId = userId.ToString(),
+                ProjectId = projectId.ToString(),
+                Status = "SAVED",
+                PageSize = count
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken);
+
+        return response.Items.Select(x => x.Text).ToList();
     }
 
     private static Metadata BuildMetadata(Guid userId, IEnumerable<string> roles) => new()
