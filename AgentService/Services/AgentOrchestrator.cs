@@ -4,6 +4,7 @@ using AgentService.Options;
 using Microsoft.Extensions.Options;
 using Pvs.Content.Grpc;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace AgentService.Services;
 
@@ -20,21 +21,48 @@ public interface IAgentOrchestrator
 
 public class AgentOrchestrator : IAgentOrchestrator
 {
-    private static readonly HashSet<AgentToolId> LlmToolIds =
-    [
-        AgentToolId.ExplainWord,
-        AgentToolId.GrammarHelp,
-        AgentToolId.GenerateExample,
-        AgentToolId.BuildCardDraft,
-        AgentToolId.GeneralAnswer
-    ];
-
     private readonly IAgentThreadService _threadService;
     private readonly IVocabularyProjectAccessValidator _projectAccessValidator;
     private readonly IVocabularyGrpcClient _vocabularyClient;
     private readonly IAgentLlmProvider _llmProvider;
     private readonly AiOptions _aiOptions;
     private readonly ILogger<AgentOrchestrator> _logger;
+
+    private static readonly AgentToolDefinition[] AvailableTools = new[]
+    {
+        new AgentToolDefinition(
+            "create_deck",
+            "Create a new deck for organizing vocabulary cards.",
+            new {
+                type = "object",
+                properties = new {
+                    title = new { type = "string", description = "Title of the deck" },
+                    description = new { type = "string", description = "Optional description" }
+                },
+                required = new[] { "title" }
+            }),
+        new AgentToolDefinition(
+            "create_card",
+            "Create a new flashcard.",
+            new {
+                type = "object",
+                properties = new {
+                    deck_id = new { type = "string", description = "ID of the deck to add the card to. Ask the user if unknown." },
+                    word = new { type = "string", description = "The exact word or phrase" },
+                    translation = new { type = "string", description = "Translation in target language" },
+                    expression = new { type = "string", description = "Optional example sentence using the word" }
+                },
+                required = new[] { "deck_id", "word", "translation" }
+            }),
+        new AgentToolDefinition(
+            "get_user_vocabulary_stats",
+            "Get the user's progress and vocabulary statistics.",
+            new { type = "object", properties = new Dictionary<string, object>() }),
+        new AgentToolDefinition(
+            "get_recent_leeches",
+            "Get a list of problematic (leech) cards the user struggles with.",
+            new { type = "object", properties = new Dictionary<string, object>() })
+    };
 
     public AgentOrchestrator(
         IAgentThreadService threadService,
@@ -68,41 +96,112 @@ public class AgentOrchestrator : IAgentOrchestrator
 
         var sourceLang = request.SourceLang ?? project.SourceLang;
         var targetLang = request.TargetLang ?? project.TargetLang;
+        
         var history = await LoadHistoryAsync(userId, threadId, cancellationToken);
-        var intent = AgentIntentRouter.Route(request.UserText);
-        var domainDecision = AgentDomainPolicy.Classify(request.UserText);
-
-        if (LlmToolIds.Contains(intent.ToolId) && !domainDecision.Allowed)
-            intent = new RoutedAgentIntent(AgentToolId.OutOfScope, Domain: domainDecision);
-
-        AgentExecutionResult execution;
-        try
+        var messages = new List<AgentChatMessageDto>(history)
         {
-            execution = await ExecuteToolAsync(
-                intent,
-                request.UserText,
-                userId,
-                projectId,
-                project,
-                sourceLang,
-                targetLang,
-                request.FirstDeckId,
-                roles,
-                history,
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Agent tool execution failed for thread {ThreadId}", threadId);
-            execution = new AgentExecutionResult(
-                ex is InvalidOperationException ? ex.Message : "Something went wrong.",
-                intent.Domain ?? domainDecision,
-                Array.Empty<AgentToolCallRecord>(),
-                IsError: true);
-        }
+            new AgentChatMessageDto("user", request.UserText)
+        };
 
-        var effectiveDomain = intent.Domain ?? domainDecision;
-        var toolCall = AgentMessageMetadataBuilder.BuildToolCallRecord(intent, request.UserText, execution);
+        var systemPrompt = AgentSystemPromptBuilder.Build(project.Title, sourceLang, targetLang);
+        var executedTools = new List<AgentToolCallRecord>();
+        
+        string assistantContent = string.Empty;
+        int loops = 0;
+        const int maxLoops = 5;
+        
+        while (loops < maxLoops)
+        {
+            loops++;
+            var completion = await _llmProvider.CompleteChatAsync(systemPrompt, messages, AvailableTools, cancellationToken);
+            
+            if (completion.ToolCalls.Count == 0)
+            {
+                assistantContent = completion.Content;
+                break;
+            }
+            
+            // Append assistant's tool calls to context (so LLM knows what it asked to do)
+            var contentToAppend = string.IsNullOrWhiteSpace(completion.Content) ? "Executing tool..." : completion.Content;
+            messages.Add(new AgentChatMessageDto("assistant", contentToAppend));
+
+            foreach (var tc in completion.ToolCalls)
+            {
+                string outputJson;
+                string status = "completed";
+                
+                try
+                {
+                    outputJson = await ExecuteToolCoreAsync(tc.Name, tc.Arguments, userId, projectId, roles, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Tool execution failed: {Tool}", tc.Name);
+                    outputJson = JsonSerializer.Serialize(new { error = ex.Message });
+                    status = "failed";
+                }
+                
+                executedTools.Add(new AgentToolCallRecord(tc.Name, tc.Arguments, outputJson, status));
+                messages.Add(new AgentChatMessageDto("tool", outputJson));
+            }
+        }
+        var actions = new List<AgentActionCard>();
+        var cleanLines = new List<string>();
+        foreach (var line in assistantContent.Split('\n'))
+        {
+            var tLine = line.Trim();
+            if (tLine.StartsWith("ACTION: ", StringComparison.OrdinalIgnoreCase))
+            {
+                tLine = tLine.Substring(8).Trim();
+            }
+
+            if (tLine.StartsWith("NAVIGATE|"))
+            {
+                var parts = tLine.Split('|');
+                if (parts.Length >= 3)
+                {
+                    actions.Add(new AgentActionCard(
+                        Guid.NewGuid().ToString(),
+                        parts[2],
+                        "navigate",
+                        "/" + parts[1].TrimStart('/'),
+                        "Open",
+                        parts.Length >= 4 ? parts[3] : null));
+                    continue;
+                }
+            }
+            else if (tLine.StartsWith("OPEN_EDITOR_DRAFT|"))
+            {
+                var parts = tLine.Split('|');
+                var draft = new Dictionary<string, string>();
+                if (parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1])) draft["word"] = parts[1].Trim();
+                if (parts.Length > 2 && !string.IsNullOrWhiteSpace(parts[2])) draft["expression"] = parts[2].Trim();
+                if (parts.Length > 3 && !string.IsNullOrWhiteSpace(parts[3])) draft["translation"] = parts[3].Trim();
+                if (parts.Length > 4 && !string.IsNullOrWhiteSpace(parts[4])) draft["label"] = parts[4].Trim();
+                if (parts.Length > 5 && !string.IsNullOrWhiteSpace(parts[5])) draft["description"] = parts[5].Trim();
+
+                actions.Add(new AgentActionCard(
+                    Guid.NewGuid().ToString(),
+                    "Draft Card",
+                    "open_editor_draft",
+                    "/editor",
+                    "Open Editor",
+                    "Draft a new card in the editor",
+                    draft));
+                continue;
+            }
+            cleanLines.Add(line);
+        }
+        assistantContent = string.Join("\n", cleanLines).Trim();
+
+        var execution = new AgentExecutionResult(
+            assistantContent,
+            new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning),
+            executedTools,
+            IntentCategory: "language_learning",
+            Actions: actions.Count > 0 ? actions : null);
+
+        var effectiveDomain = new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning);
 
         return await _threadService.CreateRunAsync(userId, threadId, projectId, new CreateAgentRunDto
         {
@@ -119,49 +218,69 @@ public class AgentOrchestrator : IAgentOrchestrator
                 Category = effectiveDomain.CategoryName,
                 Reason = effectiveDomain.Reason
             },
-            ToolCalls =
-            [
-                new AgentToolCallInputDto
-                {
-                    ToolName = toolCall.ToolName,
-                    InputJson = toolCall.InputJson,
-                    OutputJson = toolCall.OutputJson,
-                    Status = toolCall.Status
-                }
-            ],
+            ToolCalls = executedTools.Select(toolCall => new AgentToolCallInputDto
+            {
+                ToolName = toolCall.ToolName,
+                InputJson = toolCall.InputJson,
+                OutputJson = toolCall.OutputJson,
+                Status = toolCall.Status
+            }).ToList(),
             Model = _aiOptions.Enabled ? _aiOptions.Model : null
         }, cancellationToken);
     }
 
-    private async Task<AgentExecutionResult> ExecuteToolAsync(
-        RoutedAgentIntent intent,
-        string userText,
-        Guid userId,
-        Guid projectId,
-        ProjectResponse project,
-        string sourceLang,
-        string targetLang,
-        string? firstDeckId,
+    private async Task<string> ExecuteToolCoreAsync(
+        string name, 
+        string arguments, 
+        Guid userId, 
+        Guid projectId, 
         IEnumerable<string> roles,
-        IReadOnlyList<AgentChatMessageDto> history,
         CancellationToken cancellationToken)
     {
-        return intent.ToolId switch
+        var args = JsonNode.Parse(arguments);
+        
+        switch (name)
         {
-            AgentToolId.Navigate => HandleNavigate(intent, firstDeckId),
-            AgentToolId.GetProgress => await HandleProgressAsync(userId, projectId, project.Title, firstDeckId, roles, cancellationToken),
-            AgentToolId.ExplainWord => await HandleExplainWordAsync(intent, userId, sourceLang, targetLang, firstDeckId, roles, history, cancellationToken),
-            AgentToolId.GrammarHelp => await HandleGrammarHelpAsync(intent, userId, targetLang, roles, cancellationToken),
-            AgentToolId.GenerateExample => await HandleGenerateExampleAsync(intent, userId, sourceLang, targetLang, roles, cancellationToken),
-            AgentToolId.BuildCardDraft => await HandleBuildCardDraftAsync(intent, userId, sourceLang, targetLang, roles, cancellationToken),
-            AgentToolId.OutOfScope => HandleOutOfScope(userText, sourceLang, intent, history),
-            AgentToolId.GeneralAnswer => await HandleGeneralAnswerAsync(userText, project.Title, sourceLang, targetLang, history, cancellationToken),
-            _ => new AgentExecutionResult(
-                "I couldn't understand that request yet.",
-                intent.Domain ?? AgentDomainPolicy.Classify(userText),
-                Array.Empty<AgentToolCallRecord>(),
-                IsError: true)
-        };
+            case "create_deck":
+                var title = args?["title"]?.GetValue<string>() ?? "New Deck";
+                var desc = args?["description"]?.GetValue<string>();
+                var deck = await _vocabularyClient.CreateDeckAsync(userId, projectId, title, desc, roles, cancellationToken);
+                return JsonSerializer.Serialize(new { deck.Id, deck.Title });
+                
+            case "create_card":
+                var deckIdStr = args?["deck_id"]?.GetValue<string>();
+                if (!Guid.TryParse(deckIdStr, out var deckId) || deckId == Guid.Empty)
+                {
+                    var tree = await _vocabularyClient.GetDeckTreeAsync(userId, projectId, roles, cancellationToken);
+                    var firstDeck = tree.RootDecks.FirstOrDefault();
+                    if (firstDeck == null)
+                        return JsonSerializer.Serialize(new { error = "No decks available in this project." });
+                    deckId = Guid.Parse(firstDeck.Id);
+                }
+                    
+                var word = args?["word"]?.GetValue<string>() ?? "";
+                var translation = args?["translation"]?.GetValue<string>() ?? "";
+                var expression = args?["expression"]?.GetValue<string>();
+                var card = await _vocabularyClient.CreateCardAsync(userId, deckId, word, translation, expression, roles, cancellationToken);
+                return JsonSerializer.Serialize(new { card.Id });
+                
+            case "get_user_vocabulary_stats":
+                var vocab = await _vocabularyClient.GetVocabularyStatsAsync(userId, projectId, roles, cancellationToken);
+                return JsonSerializer.Serialize(new { vocab.TotalLemmas, vocab.MatureCount, vocab.LearningCount, vocab.NewCount });
+                
+            case "get_recent_leeches":
+                var leeches = await _vocabularyClient.GetLeechCardsAsync(userId, projectId, roles, cancellationToken);
+                var mapped = leeches.Items.Select(c => new {
+                    c.Id,
+                    c.SrsStatus,
+                    Word = c.Note?.FieldValues?.GetValueOrDefault("Word")?.StringValue ?? "Unknown",
+                    Translation = c.Note?.FieldValues?.GetValueOrDefault("Translation")?.StringValue ?? "Unknown"
+                });
+                return JsonSerializer.Serialize(new { total = leeches.TotalCount, cards = mapped });
+                
+            default:
+                throw new InvalidOperationException($"Unknown tool {name}");
+        }
     }
 
     private async Task<IReadOnlyList<AgentChatMessageDto>> LoadHistoryAsync(
@@ -173,312 +292,11 @@ public class AgentOrchestrator : IAgentOrchestrator
         var list = await _threadService.ListMessagesAsync(userId, threadId, historyLimit, null, cancellationToken);
         if (list is null) return Array.Empty<AgentChatMessageDto>();
 
+        var validRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "user", "assistant" };
+        
         return list.Items
-            .Where(m => ValidHistoryRoles.Contains(m.Role.ToLowerInvariant()))
+            .Where(m => validRoles.Contains(m.Role.ToLowerInvariant()))
             .Select(m => new AgentChatMessageDto(m.Role.ToLowerInvariant(), m.Content))
             .ToList();
     }
-
-    private static readonly HashSet<string> ValidHistoryRoles = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "user", "assistant"
-    };
-
-    private static AgentExecutionResult HandleNavigate(RoutedAgentIntent intent, string? firstDeckId)
-    {
-        var destination = intent.Destination ?? AgentNavigateDestination.Library;
-        var action = BuildNavigateAction(destination, firstDeckId, intent.Sentence);
-        return new AgentExecutionResult(
-            $"Opening {action.Title}. You can continue there or ask me something else here.",
-            intent.Domain!,
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "product_navigation",
-            Actions: [action]);
-    }
-
-    private async Task<AgentExecutionResult> HandleProgressAsync(
-        Guid userId,
-        Guid projectId,
-        string projectTitle,
-        string? firstDeckId,
-        IEnumerable<string> roles,
-        CancellationToken cancellationToken)
-    {
-        var daily = await _vocabularyClient.GetDailySummaryAsync(userId, roles, cancellationToken);
-        var vocab = await _vocabularyClient.GetVocabularyStatsAsync(userId, projectId, roles, cancellationToken);
-
-        var streak = daily.CurrentStreak;
-        var content = AgentIntentRouter.SanitizeLemmaLabels($"""
-            Here's your progress for {projectTitle}:
-
-            • Streak: {streak} day{(streak == 1 ? "" : "s")}
-            • Reviews today: {daily.Reviews.Current} / {daily.Reviews.Target}{(daily.Reviews.IsCompleted ? " (goal met)" : "")}
-            • New cards today: {daily.NewCards.Current} / {daily.NewCards.Target}{(daily.NewCards.IsCompleted ? " (goal met)" : "")}
-            • Total terms: {vocab.TotalLemmas}
-            • Known (mature): {vocab.MatureCount}
-            • Learning: {vocab.LearningCount}
-            • New: {vocab.NewCount}
-            """);
-
-        return new AgentExecutionResult(
-            content,
-            new AgentDomainDecision(true, AgentDomainCategory.Progress),
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "progress",
-            Actions: [BuildNavigateAction(AgentNavigateDestination.Study, firstDeckId), BuildNavigateAction(AgentNavigateDestination.Vocabulary, firstDeckId)]);
-    }
-
-    private async Task<AgentExecutionResult> HandleExplainWordAsync(
-        RoutedAgentIntent intent,
-        Guid userId,
-        string sourceLang,
-        string targetLang,
-        string? firstDeckId,
-        IEnumerable<string> roles,
-        IReadOnlyList<AgentChatMessageDto> history,
-        CancellationToken cancellationToken)
-    {
-        var word = intent.Word?.Trim();
-        if (string.IsNullOrEmpty(word))
-        {
-            return new AgentExecutionResult(
-                "Tell me which exact word or phrase to explain, e.g. Explain the word \"slept\".",
-                intent.Domain!,
-                Array.Empty<AgentToolCallRecord>(),
-                IsError: true);
-        }
-
-        var systemPrompt = AgentSystemPromptBuilder.Build("this project", sourceLang, targetLang);
-        var userPrompt = $"""
-            Explain the exact word or phrase "{word}" for a language learner.
-            Source language: {sourceLang}. Explain in {targetLang}.
-            Context sentence: {intent.Sentence ?? "(none)"}
-            Use the exact surface form only. Do not use lemma labels.
-            """;
-
-        var messages = new List<AgentChatMessageDto>(history)
-        {
-            new AgentChatMessageDto("user", userPrompt)
-        };
-
-        var explanation = AgentIntentRouter.SanitizeLemmaLabels(await _llmProvider.CompleteChatAsync(systemPrompt, messages, cancellationToken));
-        var draft = new Dictionary<string, string> { ["Word"] = word };
-        if (!string.IsNullOrEmpty(intent.Sentence))
-            draft["Expression"] = intent.Sentence;
-
-        return new AgentExecutionResult(
-            explanation,
-            intent.Domain!,
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "language_learning",
-            Actions:
-            [
-                BuildEditorDraftAction(draft, "Create card", $"Save \"{word}\" as a flashcard draft."),
-                BuildNavigateAction(AgentNavigateDestination.Vocabulary, firstDeckId)
-            ]);
-    }
-
-    private async Task<AgentExecutionResult> HandleGrammarHelpAsync(
-        RoutedAgentIntent intent,
-        Guid userId,
-        string targetLang,
-        IEnumerable<string> roles,
-        CancellationToken cancellationToken)
-    {
-        var word = intent.Word?.Trim();
-        if (string.IsNullOrEmpty(word))
-        {
-            return new AgentExecutionResult(
-                "Include the exact word or phrase for grammar help, e.g. Why is \"went\" used here?",
-                intent.Domain!,
-                Array.Empty<AgentToolCallRecord>(),
-                IsError: true);
-        }
-
-        var response = await _vocabularyClient.ExplainGrammarAsync(
-            userId,
-            intent.Sentence ?? word,
-            word,
-            targetLang,
-            roles,
-            cancellationToken);
-
-        return new AgentExecutionResult(
-            AgentIntentRouter.SanitizeLemmaLabels(response.Explanation),
-            intent.Domain!,
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "language_learning");
-    }
-
-    private async Task<AgentExecutionResult> HandleGenerateExampleAsync(
-        RoutedAgentIntent intent,
-        Guid userId,
-        string sourceLang,
-        string targetLang,
-        IEnumerable<string> roles,
-        CancellationToken cancellationToken)
-    {
-        var word = intent.Word?.Trim();
-        if (string.IsNullOrEmpty(word))
-        {
-            return new AgentExecutionResult(
-                "Which exact word or phrase should I use in an example sentence? Try: Example for \"memory\".",
-                intent.Domain!,
-                Array.Empty<AgentToolCallRecord>(),
-                IsError: true);
-        }
-
-        var response = await _vocabularyClient.GenerateContextAsync(userId, word, sourceLang, roles, cancellationToken);
-        var suggestion = response.Suggestions.FirstOrDefault();
-        if (suggestion is null)
-            throw new InvalidOperationException("Could not generate an example sentence");
-
-        var content = AgentIntentRouter.SanitizeLemmaLabels(
-            $"Example for \"{word}\":\n{suggestion.Sentence}\n\nTranslation:\n{suggestion.Translation}");
-
-        var draft = new Dictionary<string, string>
-        {
-            ["Word"] = word,
-            ["Expression"] = suggestion.Sentence,
-            ["Translation"] = suggestion.Translation
-        };
-
-        return new AgentExecutionResult(
-            content,
-            intent.Domain!,
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "language_learning",
-            Actions: [BuildEditorDraftAction(draft, "Use in Editor", "Open the card editor with this draft.")]);
-    }
-
-    private async Task<AgentExecutionResult> HandleBuildCardDraftAsync(
-        RoutedAgentIntent intent,
-        Guid userId,
-        string sourceLang,
-        string targetLang,
-        IEnumerable<string> roles,
-        CancellationToken cancellationToken)
-    {
-        var word = intent.Word?.Trim();
-        if (string.IsNullOrEmpty(word))
-        {
-            return new AgentExecutionResult(
-                "Which exact word or phrase should the card use? Try: Create a flashcard for \"memory\".",
-                intent.Domain!,
-                Array.Empty<AgentToolCallRecord>(),
-                IsError: true);
-        }
-
-        var draft = new Dictionary<string, string> { ["Word"] = word };
-        if (!string.IsNullOrEmpty(intent.Sentence))
-            draft["Expression"] = intent.Sentence;
-
-        try
-        {
-            var response = await _vocabularyClient.GenerateContextAsync(userId, word, sourceLang, roles, cancellationToken);
-            var suggestion = response.Suggestions.FirstOrDefault();
-            if (suggestion is not null)
-            {
-                draft.TryAdd("Expression", suggestion.Sentence);
-                draft.TryAdd("Translation", suggestion.Translation);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Optional example generation failed for card draft");
-        }
-
-        var lines = new List<string> { $"Draft ready for exact surface form \"{word}\":" };
-        if (draft.TryGetValue("Translation", out var translation))
-            lines.Add($"Translation: {translation}");
-        if (draft.TryGetValue("Expression", out var expression))
-            lines.Add($"Example:\n{expression}");
-
-        return new AgentExecutionResult(
-            AgentIntentRouter.SanitizeLemmaLabels(string.Join("\n\n", lines)),
-            intent.Domain!,
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "language_learning",
-            Actions: [BuildEditorDraftAction(draft, "Open draft in Editor", "Review and save the card when ready.")]);
-    }
-
-    private static AgentExecutionResult HandleOutOfScope(
-        string userText,
-        string sourceLang,
-        RoutedAgentIntent intent,
-        IReadOnlyList<AgentChatMessageDto> history)
-    {
-        var domain = intent.Domain ?? AgentDomainPolicy.Classify(userText);
-        return new AgentExecutionResult(
-            AgentDomainPolicy.BuildOutOfScopeRefusal(userText, sourceLang),
-            domain,
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "out_of_scope",
-            Refusal: true,
-            SuggestedPrompts: AgentDomainPolicy.RefusalSuggestedPrompts.ToList());
-    }
-
-    private async Task<AgentExecutionResult> HandleGeneralAnswerAsync(
-        string userText,
-        string projectTitle,
-        string sourceLang,
-        string targetLang,
-        IReadOnlyList<AgentChatMessageDto> history,
-        CancellationToken cancellationToken)
-    {
-        var systemPrompt = AgentSystemPromptBuilder.Build(projectTitle, sourceLang, targetLang);
-        var messages = new List<AgentChatMessageDto>(history)
-        {
-            new AgentChatMessageDto("user", userText)
-        };
-
-        var trimmed = AgentIntentRouter.SanitizeLemmaLabels(await _llmProvider.CompleteChatAsync(systemPrompt, messages, cancellationToken));
-        var looksLikeRefusal = System.Text.RegularExpressions.Regex.IsMatch(
-            trimmed,
-            @"\b(can't|cannot|can't help|i can only|i'm only|refuse|not able to write code|language learning)\b",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-        return new AgentExecutionResult(
-            trimmed,
-            new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning),
-            Array.Empty<AgentToolCallRecord>(),
-            IntentCategory: "language_learning",
-            Refusal: looksLikeRefusal);
-    }
-
-    private static AgentActionCard BuildNavigateAction(AgentNavigateDestination destination, string? firstDeckId, string? sentence = null)
-    {
-        var (title, href, label, kind) = destination switch
-        {
-            AgentNavigateDestination.Reader => ("Reader", "/reader", "Open Reader", "navigate"),
-            AgentNavigateDestination.Editor => ("Create Card", "/editor", "Open Editor", "navigate"),
-            AgentNavigateDestination.Study => ("Study", firstDeckId is not null ? $"/study/{firstDeckId}" : "/study", "Start Review", "start_study"),
-            AgentNavigateDestination.Vocabulary => ("Vocabulary", "/vocabulary", "View Vocabulary", "navigate"),
-            AgentNavigateDestination.Import => ("Import", "/import", "Open Import", "navigate"),
-            AgentNavigateDestination.Decks => ("Decks", "/decks", "View Decks", "navigate"),
-            AgentNavigateDestination.Shadowing => ("Shadowing", BuildShadowingHref(sentence), "Open Shadowing", "navigate"),
-            _ => ("Library", "/library", "Open Library", "navigate")
-        };
-
-        return new AgentActionCard(
-            $"nav-{destination.ToString().ToLowerInvariant()}",
-            title,
-            kind,
-            href,
-            label,
-            $"Go to {title.ToLowerInvariant()}.");
-    }
-
-    private static string BuildShadowingHref(string? sentence)
-    {
-        if (string.IsNullOrWhiteSpace(sentence))
-            return "/shadowing";
-        return $"/shadowing?sentence={Uri.EscapeDataString(sentence.Trim())}";
-    }
-
-    private static AgentActionCard BuildEditorDraftAction(
-        Dictionary<string, string> draft,
-        string title,
-        string description) =>
-        new("open-editor-draft", title, "open_editor_draft", "/editor", "Open in Editor", description, draft);
 }

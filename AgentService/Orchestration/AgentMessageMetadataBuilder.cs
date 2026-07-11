@@ -55,6 +55,16 @@ public static class AgentMessageMetadataBuilder
         if (result.SuggestedPrompts is { Count: > 0 })
             metadata["suggestedPrompts"] = result.SuggestedPrompts;
 
+        if (result.ToolCalls is { Count: > 0 })
+        {
+            metadata["toolCalls"] = result.ToolCalls.Select(tc => new
+            {
+                name = tc.ToolName,
+                status = tc.Status,
+                result = tc.OutputJson
+            }).ToArray();
+        }
+
         return metadata.Count == 0 ? null : JsonSerializer.Serialize(metadata, JsonOptions);
     }
 
@@ -85,6 +95,6 @@ public static class AgentMessageMetadataBuilder
             intent.ToolName,
             input,
             output,
-            result.IsError ? "failed" : "completed");
+            result.IsError ? "error" : "completed");
     }
 }

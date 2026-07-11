@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using static Pvs.Content.Grpc.AnalyticsService;
 using static Pvs.Content.Grpc.AIService;
 using static Pvs.Content.Grpc.ContentService;
+using static Pvs.Content.Grpc.CardService;
 using static Vocab.VocabService;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
@@ -49,6 +50,8 @@ builder.Services.AddHttpClient<IAgentLlmProvider, OpenAiCompatibleAgentLlmProvid
 
 var vocabularyAddress = builder.Configuration.GetValue<string>("Vocabulary:GrpcAddress") ?? "http://localhost:5117";
 builder.Services.AddGrpcClient<ContentServiceClient>(o => o.Address = new Uri(vocabularyAddress))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
+builder.Services.AddGrpcClient<CardServiceClient>(o => o.Address = new Uri(vocabularyAddress))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
 builder.Services.AddGrpcClient<AnalyticsServiceClient>(o => o.Address = new Uri(vocabularyAddress))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });

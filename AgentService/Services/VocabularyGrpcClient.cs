@@ -2,6 +2,8 @@ using Grpc.Core;
 using Pvs.Content.Grpc;
 using static Pvs.Content.Grpc.AnalyticsService;
 using static Pvs.Content.Grpc.AIService;
+using static Pvs.Content.Grpc.ContentService;
+using static Pvs.Content.Grpc.CardService;
 
 namespace AgentService.Services;
 
@@ -32,17 +34,54 @@ public interface IVocabularyGrpcClient
         string language,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
+
+    Task<DeckResponse> CreateDeckAsync(
+        Guid userId,
+        Guid projectId,
+        string title,
+        string? description,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
+
+    Task<CardResponse> CreateCardAsync(
+        Guid userId,
+        Guid deckId,
+        string word,
+        string translation,
+        string? expression,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
+
+    Task<GetLeechCardsResponse> GetLeechCardsAsync(
+        Guid userId,
+        Guid projectId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
+
+    Task<GetDeckTreeResponse> GetDeckTreeAsync(
+        Guid userId,
+        Guid projectId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
 }
 
 public class VocabularyGrpcClient : IVocabularyGrpcClient
 {
     private readonly AnalyticsServiceClient _analyticsClient;
     private readonly AIServiceClient _aiClient;
+    private readonly ContentServiceClient _contentClient;
+    private readonly CardServiceClient _cardClient;
 
-    public VocabularyGrpcClient(AnalyticsServiceClient analyticsClient, AIServiceClient aiClient)
+    public VocabularyGrpcClient(
+        AnalyticsServiceClient analyticsClient, 
+        AIServiceClient aiClient,
+        ContentServiceClient contentClient,
+        CardServiceClient cardClient)
     {
         _analyticsClient = analyticsClient;
         _aiClient = aiClient;
+        _contentClient = contentClient;
+        _cardClient = cardClient;
     }
 
     public Task<GetVocabularyStatsResponse> GetVocabularyStatsAsync(
@@ -107,6 +146,92 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
                 Language = language,
                 UserLevel = "B1",
                 Count = 1
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken).ResponseAsync;
+    }
+
+    public Task<DeckResponse> CreateDeckAsync(
+        Guid userId,
+        Guid projectId,
+        string title,
+        string? description,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        return _contentClient.CreateDeckAsync(
+            new CreateDeckRequest
+            {
+                UserId = userId.ToString(),
+                ProjectId = projectId.ToString(),
+                Title = title,
+                Description = description,
+                IsPublic = false
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken).ResponseAsync;
+    }
+
+    public Task<CardResponse> CreateCardAsync(
+        Guid userId,
+        Guid deckId,
+        string word,
+        string translation,
+        string? expression,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        var fields = new Dictionary<string, NoteFieldValuePayload>
+        {
+            { "Word", new NoteFieldValuePayload { StringValue = word } },
+            { "Translation", new NoteFieldValuePayload { StringValue = translation } }
+        };
+
+        if (!string.IsNullOrWhiteSpace(expression))
+        {
+            fields["Expression"] = new NoteFieldValuePayload { StringValue = expression };
+        }
+
+        return _cardClient.CreateCardAsync(
+            new CreateCardRequest
+            {
+                UserId = userId.ToString(),
+                DeckId = deckId.ToString(),
+                FieldValues = { fields }
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken).ResponseAsync;
+    }
+
+    public Task<GetLeechCardsResponse> GetLeechCardsAsync(
+        Guid userId,
+        Guid projectId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        return _cardClient.GetLeechCardsAsync(
+            new GetLeechCardsRequest
+            {
+                UserId = userId.ToString(),
+                ProjectId = projectId.ToString(),
+                PageSize = 20,
+                PageNumber = 1
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken).ResponseAsync;
+    }
+
+    public Task<GetDeckTreeResponse> GetDeckTreeAsync(
+        Guid userId,
+        Guid projectId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        return _contentClient.GetDeckTreeAsync(
+            new GetDeckTreeRequest
+            {
+                UserId = userId.ToString(),
+                ProjectId = projectId.ToString()
             },
             headers: BuildMetadata(userId, roles),
             cancellationToken: cancellationToken).ResponseAsync;
