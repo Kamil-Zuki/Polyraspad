@@ -60,6 +60,8 @@ builder.Services.AddGrpcClient<AIServiceClient>(o => o.Address = new Uri(vocabul
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
 builder.Services.AddGrpcClient<TermServiceClient>(o => o.Address = new Uri(vocabularyAddress))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
+builder.Services.AddGrpcClient<Pvs.Content.Grpc.LessonService.LessonServiceClient>(o => o.Address = new Uri(vocabularyAddress))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { EnableMultipleHttp2Connections = true, UseProxy = false });
 
 var inclusiveAddress = builder.Configuration.GetValue<string>("Inclusive:GrpcAddress") ?? "http://localhost:40051";
 builder.Services.AddGrpcClient<VocabServiceClient>(o => o.Address = new Uri(inclusiveAddress))
