@@ -43,6 +43,7 @@ message CreateAgentThreadRequest {
   string user_id = 1;
   string project_id = 2;
   string agent_id = 3;
+  google.protobuf.StringValue system_prompt_override = 4;
 }
 
 message GetAgentThreadRequest {

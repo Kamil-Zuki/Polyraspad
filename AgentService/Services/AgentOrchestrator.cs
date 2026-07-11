@@ -61,7 +61,17 @@ public class AgentOrchestrator : IAgentOrchestrator
         new AgentToolDefinition(
             "get_recent_leeches",
             "Get a list of problematic (leech) cards the user struggles with.",
-            new { type = "object", properties = new Dictionary<string, object>() })
+            new { type = "object", properties = new Dictionary<string, object>() }),
+        new AgentToolDefinition(
+            "mark_lesson_completed",
+            "Mark the current lesson as completed. ONLY call this when the user has fully finished the lesson activities according to your assessment.",
+            new {
+                type = "object",
+                properties = new {
+                    lesson_id = new { type = "string", description = "ID of the lesson to mark as completed" }
+                },
+                required = new[] { "lesson_id" }
+            })
     };
 
     public AgentOrchestrator(
@@ -103,7 +113,12 @@ public class AgentOrchestrator : IAgentOrchestrator
             new AgentChatMessageDto("user", request.UserText)
         };
 
-        var systemPrompt = AgentSystemPromptBuilder.Build(project.Title, sourceLang, targetLang);
+        var thread = await _threadService.GetThreadAsync(userId, threadId, cancellationToken);
+
+        var systemPrompt = !string.IsNullOrWhiteSpace(thread?.SystemPromptOverride) 
+            ? thread.SystemPromptOverride 
+            : AgentSystemPromptBuilder.Build(project.Title, sourceLang, targetLang);
+
         var executedTools = new List<AgentToolCallRecord>();
         
         string assistantContent = string.Empty;
@@ -277,6 +292,13 @@ public class AgentOrchestrator : IAgentOrchestrator
                     Translation = c.Note?.FieldValues?.GetValueOrDefault("Translation")?.StringValue ?? "Unknown"
                 });
                 return JsonSerializer.Serialize(new { total = leeches.TotalCount, cards = mapped });
+                
+            case "mark_lesson_completed":
+                var lessonIdStr = args?["lesson_id"]?.GetValue<string>();
+                if (!Guid.TryParse(lessonIdStr, out var compLessonId))
+                    return JsonSerializer.Serialize(new { error = "Invalid lesson_id format" });
+                await _vocabularyClient.CompleteLessonAsync(userId, compLessonId, roles, cancellationToken);
+                return JsonSerializer.Serialize(new { status = "success", message = "Lesson marked as completed successfully." });
                 
             default:
                 throw new InvalidOperationException($"Unknown tool {name}");

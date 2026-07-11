@@ -41,6 +41,7 @@ public class AgentServiceContext : DbContext
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()").HasColumnName("updated_at");
             entity.Property(e => e.ArchivedAt).HasColumnName("archived_at");
             entity.Property(e => e.AgentId).HasColumnName("agent_id");
+            entity.Property(e => e.SystemPromptOverride).HasColumnName("system_prompt_override");
         });
 
         modelBuilder.Entity<AgentMessage>(entity =>

@@ -25,6 +25,8 @@ public class AgentThreadDto
 
     public string? AgentId { get; init; }
 
+    public string? SystemPromptOverride { get; init; }
+
     public required DateTime CreatedAt { get; init; }
 
     public required DateTime UpdatedAt { get; init; }

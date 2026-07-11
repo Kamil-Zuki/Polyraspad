@@ -101,7 +101,7 @@ public class AgentGrpcService : AgentServiceBase
         try
         {
             var roles = GrpcContextHelper.GetRoles(context);
-            var thread = await _threadService.CreateThreadAsync(userId, projectId, roles, request.AgentId, context.CancellationToken);
+            var thread = await _threadService.CreateThreadAsync(userId, projectId, roles, request.AgentId, request.SystemPromptOverride, context.CancellationToken);
             return _mapper.Map<AgentThreadResponse>(thread);
         }
         catch (KeyNotFoundException ex)

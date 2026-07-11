@@ -4,6 +4,7 @@ using static Pvs.Content.Grpc.AnalyticsService;
 using static Pvs.Content.Grpc.AIService;
 using static Pvs.Content.Grpc.ContentService;
 using static Pvs.Content.Grpc.CardService;
+using static Pvs.Content.Grpc.LessonService;
 
 namespace AgentService.Services;
 
@@ -63,6 +64,12 @@ public interface IVocabularyGrpcClient
         Guid projectId,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
+
+    Task CompleteLessonAsync(
+        Guid userId,
+        Guid lessonId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
 }
 
 public class VocabularyGrpcClient : IVocabularyGrpcClient
@@ -71,17 +78,20 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
     private readonly AIServiceClient _aiClient;
     private readonly ContentServiceClient _contentClient;
     private readonly CardServiceClient _cardClient;
+    private readonly LessonServiceClient _lessonClient;
 
     public VocabularyGrpcClient(
         AnalyticsServiceClient analyticsClient, 
         AIServiceClient aiClient,
         ContentServiceClient contentClient,
-        CardServiceClient cardClient)
+        CardServiceClient cardClient,
+        LessonServiceClient lessonClient)
     {
         _analyticsClient = analyticsClient;
         _aiClient = aiClient;
         _contentClient = contentClient;
         _cardClient = cardClient;
+        _lessonClient = lessonClient;
     }
 
     public Task<GetVocabularyStatsResponse> GetVocabularyStatsAsync(
@@ -221,20 +231,36 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
             cancellationToken: cancellationToken).ResponseAsync;
     }
 
-    public Task<GetDeckTreeResponse> GetDeckTreeAsync(
+    public async Task<GetDeckTreeResponse> GetDeckTreeAsync(
         Guid userId,
         Guid projectId,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default)
     {
-        return _contentClient.GetDeckTreeAsync(
+        return await _contentClient.GetDeckTreeAsync(
             new GetDeckTreeRequest
             {
                 UserId = userId.ToString(),
                 ProjectId = projectId.ToString()
             },
             headers: BuildMetadata(userId, roles),
-            cancellationToken: cancellationToken).ResponseAsync;
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task CompleteLessonAsync(
+        Guid userId,
+        Guid lessonId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        await _lessonClient.CompleteLessonAsync(
+            new Pvs.Content.Grpc.CompleteLessonRequest
+            {
+                UserId = userId.ToString(),
+                LessonId = lessonId.ToString()
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken);
     }
 
     private static Metadata BuildMetadata(Guid userId, IEnumerable<string> roles) => new()

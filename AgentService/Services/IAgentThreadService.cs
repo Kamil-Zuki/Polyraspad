@@ -16,6 +16,7 @@ public interface IAgentThreadService
         Guid projectId,
         IEnumerable<string> roles,
         string? agentId = null,
+        string? systemPromptOverride = null,
         CancellationToken cancellationToken = default);
 
     Task<AgentThreadDto?> GetThreadAsync(

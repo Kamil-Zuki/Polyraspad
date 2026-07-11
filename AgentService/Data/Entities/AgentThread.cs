@@ -12,6 +12,8 @@ public class AgentThread
 
     public string? AgentId { get; set; }
 
+    public string? SystemPromptOverride { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

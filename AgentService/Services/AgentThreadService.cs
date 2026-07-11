@@ -76,6 +76,7 @@ public class AgentThreadService : IAgentThreadService
         Guid projectId,
         IEnumerable<string> roles,
         string? agentId = null,
+        string? systemPromptOverride = null,
         CancellationToken cancellationToken = default)
     {
         await _projectAccessValidator.EnsureProjectAccessAsync(userId, projectId, roles, cancellationToken);
@@ -87,6 +88,7 @@ public class AgentThreadService : IAgentThreadService
             UserId = userId,
             ProjectId = projectId,
             AgentId = string.IsNullOrWhiteSpace(agentId) ? null : agentId.Trim(),
+            SystemPromptOverride = string.IsNullOrWhiteSpace(systemPromptOverride) ? null : systemPromptOverride.Trim(),
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -380,6 +382,7 @@ public class AgentThreadService : IAgentThreadService
         ProjectId = thread.ProjectId,
         Title = thread.Title ?? AgentThreadTitleHelper.DefaultTitle,
         AgentId = thread.AgentId,
+        SystemPromptOverride = thread.SystemPromptOverride,
         CreatedAt = thread.CreatedAt,
         UpdatedAt = thread.UpdatedAt,
         ArchivedAt = thread.ArchivedAt
