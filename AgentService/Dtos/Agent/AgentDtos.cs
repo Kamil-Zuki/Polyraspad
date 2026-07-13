@@ -107,6 +107,12 @@ public class ExecuteAgentRunDto
     public string? TargetLang { get; init; }
 
     public string? FirstDeckId { get; init; }
+
+    /// <summary>
+    /// When true, the orchestrator injects the daily plan context into the system prompt
+    /// and instructs the LLM to produce a personalized proactive greeting.
+    /// </summary>
+    public bool IsInitialGreeting { get; init; }
 }
 
 public class AgentRunDto

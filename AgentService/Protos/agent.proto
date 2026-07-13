@@ -120,6 +120,7 @@ message ExecuteAgentRunRequest {
   google.protobuf.StringValue source_lang = 5;
   google.protobuf.StringValue target_lang = 6;
   google.protobuf.StringValue first_deck_id = 7;
+  bool is_initial_greeting = 8;
 }
 
 message AgentRunItem {

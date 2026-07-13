@@ -95,6 +95,12 @@ public interface IVocabularyGrpcClient
         int speakingScore,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
+
+    Task<GetDailyAutopilotPlanResponse> GetDailyPlanAsync(
+        Guid userId,
+        Guid projectId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
 }
 
 public class VocabularyGrpcClient : IVocabularyGrpcClient
@@ -361,4 +367,20 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
         { "user_id", userId.ToString() },
         { "roles", string.Join(",", roles) }
     };
+
+    public Task<GetDailyAutopilotPlanResponse> GetDailyPlanAsync(
+        Guid userId,
+        Guid projectId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        return _analyticsClient.GetDailyAutopilotPlanAsync(
+            new GetDailyAutopilotPlanRequest
+            {
+                UserId = userId.ToString(),
+                ProjectId = projectId.ToString()
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken).ResponseAsync;
+    }
 }

@@ -95,7 +95,11 @@ public class AgentOrchestrator : IAgentOrchestrator
                     cefr_level = new { type = "string", description = "The CEFR level determined by the test: A1, A2, B1, B2, C1, or C2" }
                 },
                 required = new[] { "cefr_level" }
-            })
+            }),
+        new AgentToolDefinition(
+            "get_daily_plan",
+            "Get the user's personalized daily learning plan: due flashcard count, weakest skill, next curriculum lesson, and skill CEFR levels. Call this at the start of any conversation if you need context about the user's current state.",
+            new { type = "object", properties = new Dictionary<string, object>() })
     };
 
     public AgentOrchestrator(
@@ -151,6 +155,21 @@ public class AgentOrchestrator : IAgentOrchestrator
             {
                 var termList = string.Join(", ", terms);
                 systemPrompt += $"\n\n[SYSTEM INSTRUCTION]\nThe user wants to practice. Here are some words they are currently learning: {termList}. Generate a short creative writing exercise, translation task, or roleplay scenario where they must use these words. Do not give them the answers yet, encourage them to respond.";
+            }
+        }
+
+        // If this is a greeting / init run, inject daily plan context into system prompt
+        if (request.IsInitialGreeting)
+        {
+            try
+            {
+                var plan = await _vocabularyClient.GetDailyPlanAsync(userId, projectId, roles, cancellationToken);
+                var planSummary = BuildPlanSummary(plan);
+                systemPrompt += $"\n\n[LEARNER CONTEXT — {DateTime.UtcNow:yyyy-MM-dd}]\n{planSummary}\n\nYour task: greet the learner warmly, summarize their plan in 2-3 sentences, and suggest the single most important thing to do right now based on the weakest skill. Be concise and motivating. Do NOT list all tasks in bullet points — just guide them naturally.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not fetch daily plan for init greeting");
             }
         }
 
@@ -359,9 +378,44 @@ public class AgentOrchestrator : IAgentOrchestrator
                 await _vocabularyClient.SetPlacementLevelAsync(userId, cefrLevel, roles, cancellationToken);
                 return JsonSerializer.Serialize(new { status = "success", message = $"CEFR level set to {cefrLevel} successfully. All previous levels are unlocked." });
 
+            case "get_daily_plan":
+                var plan = await _vocabularyClient.GetDailyPlanAsync(userId, projectId, roles, cancellationToken);
+                var summary = BuildPlanSummary(plan);
+                return JsonSerializer.Serialize(new
+                {
+                    summary,
+                    tasks = plan.Tasks.Select(t => new
+                    {
+                        t.TaskType,
+                        t.Title,
+                        t.Description,
+                        t.DurationMinutes,
+                        t.ActionUrl
+                    })
+                });
+
             default:
                 throw new InvalidOperationException($"Unknown tool {name}");
         }
+    }
+
+    private static string BuildPlanSummary(GetDailyAutopilotPlanResponse plan)
+    {
+        var lines = new List<string>();
+        var fsrsTask = plan.Tasks.FirstOrDefault(t => t.TaskType == "fsrs");
+        var lessonTask = plan.Tasks.FirstOrDefault(t => t.TaskType == "lesson");
+        var checkTask = plan.Tasks.FirstOrDefault(t => t.TaskType == "knowledge_check");
+
+        if (fsrsTask != null)
+            lines.Add($"Due flashcards: {fsrsTask.Title} ({fsrsTask.DurationMinutes} min)");
+        if (lessonTask != null)
+            lines.Add($"Next lesson: {lessonTask.Title} ({lessonTask.DurationMinutes} min)");
+        if (checkTask != null)
+            lines.Add($"Skill focus: {checkTask.Title} — {checkTask.Description}");
+
+        return lines.Count > 0
+            ? string.Join("\n", lines)
+            : "No specific tasks for today. Encourage the learner to read or review vocabulary.";
     }
 
     private async Task<IReadOnlyList<AgentChatMessageDto>> LoadHistoryAsync(

@@ -249,7 +249,8 @@ public class AgentGrpcService : AgentServiceBase
                     UserText = request.UserText,
                     SourceLang = request.SourceLang,
                     TargetLang = request.TargetLang,
-                    FirstDeckId = request.FirstDeckId
+                    FirstDeckId = request.FirstDeckId,
+                    IsInitialGreeting = request.IsInitialGreeting
                 },
                 roles,
                 context.CancellationToken);
