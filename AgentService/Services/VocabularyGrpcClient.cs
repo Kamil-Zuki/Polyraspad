@@ -72,6 +72,12 @@ public interface IVocabularyGrpcClient
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
 
+    Task SetPlacementLevelAsync(
+        Guid userId,
+        string cefrLevel,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
+
     Task<List<string>> GetLearningTermsAsync(
         Guid userId,
         Guid projectId,
@@ -280,6 +286,22 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
             {
                 UserId = userId.ToString(),
                 LessonId = lessonId.ToString()
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken);
+    }
+
+    public async Task SetPlacementLevelAsync(
+        Guid userId,
+        string cefrLevel,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        await _lessonClient.SetPlacementLevelAsync(
+            new SetPlacementLevelRequest
+            {
+                UserId = userId.ToString(),
+                CefrLevel = cefrLevel
             },
             headers: BuildMetadata(userId, roles),
             cancellationToken: cancellationToken);

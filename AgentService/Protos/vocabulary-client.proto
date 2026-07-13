@@ -166,6 +166,7 @@ service LessonService {
   rpc GetLesson (GetLessonRequest) returns (GetLessonResponse);
   rpc StartLesson (StartLessonRequest) returns (StartLessonResponse);
   rpc CompleteLesson (CompleteLessonRequest) returns (google.protobuf.Empty);
+  rpc SetPlacementLevel (SetPlacementLevelRequest) returns (google.protobuf.Empty);
   rpc SubmitKnowledgeCheckResult (SubmitKnowledgeCheckResultRequest) returns (google.protobuf.Empty);
 }
 
@@ -1718,6 +1719,11 @@ message StartLessonResponse {
 message CompleteLessonRequest {
   string lesson_id = 1;
   string user_id = 2;
+}
+
+message SetPlacementLevelRequest {
+  string user_id = 1;
+  string cefr_level = 2; // e.g. A1, A2, B1, B2, C1, C2
 }
 
 // Phase 4: SubmitKnowledgeCheckResultRequest

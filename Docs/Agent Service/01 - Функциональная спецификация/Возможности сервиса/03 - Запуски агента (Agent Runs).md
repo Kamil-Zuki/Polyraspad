@@ -61,6 +61,7 @@
 | Принцип | Описание |
 | :--- | :--- |
 | **Pipeline** | EnsureProjectAccess → Route → Domain gate for LLM tools → ExecuteTool → CreateRun. |
+| **System Prompt** | Использует стандартный промпт (Study Copilot) или подставляет `SystemPromptOverride` из БД треда, если он был задан при создании. |
 | **Lang context** | `source_lang` / `target_lang` override или из ProjectResponse. |
 | **Error softening** | Tool exception → assistant error text, tool status failed, run persisted. |
 | **Model tag** | `Ai:Model` если `Ai:Enabled`. |
@@ -70,9 +71,10 @@
 Представим ExecuteRun как **полный цикл «вопрос → маршрут → инструмент → запись» в одном gRPC-вызове**.
 
 1. **Access & context:** `EnsureProjectAccessAsync` через Vocabulary; `source_lang`/`target_lang` из override или ProjectResponse; archived thread блокируется.
-2. **Route & domain gate:** `AgentIntentRouter` выбирает tool по priority; для LLM-tools domain policy должна разрешить категорию, иначе force OutOfScope.
-3. **Tool execution:** orchestrator вызывает handler (`explain_word`, `navigate`, …); исключение tool → assistant error text, tool status `failed`, run всё равно persist.
-4. **Persist & tag:** результат упаковывается в CreateRun payload; при `Ai:Enabled` run помечается model tag из `Ai:Model`.
+2. **Context Build:** оркестратор считывает `SystemPromptOverride` из треда (если есть) и использует его вместо стандартного промпта Study Copilot, что позволяет менять поведение ИИ (например, для Placement Test).
+3. **Route & domain gate:** `AgentIntentRouter` выбирает tool по priority; для LLM-tools domain policy должна разрешить категорию, иначе force OutOfScope.
+4. **Tool execution:** orchestrator вызывает handler (`explain_word`, `navigate`, …); исключение tool → assistant error text, tool status `failed`, run всё равно persist.
+5. **Persist & tag:** результат упаковывается в CreateRun payload; при `Ai:Enabled` run помечается model tag из `Ai:Model`.
 
 Таким образом, PolyGuide chat получает один primary UX path — пользователь пишет текст, сервис сам решает инструмент и сохраняет полный audit trail.
 

@@ -16,6 +16,7 @@ Agent Service **не дублирует** project/content domain. Доступ �
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **SR-AGENT-VOC-01** | **Project access validation:** GetProjectDetails с metadata user_id + roles. |
 | **SR-AGENT-VOC-02** | **Analytics и AI helpers:** Stats, daily summary, grammar, context generation. |
+| **SR-AGENT-VOC-03** | **Учебный план и Оценка уровня:** Управление уроками (Start/Complete) и Placement Test (`set_cefr_placement`). |
 
 ---
 
@@ -80,6 +81,32 @@ Agent Service **не дублирует** project/content domain. Доступ �
 1. User removed from project.
 2. EnsureProjectAccess throws.
 3. gRPC NOT_FOUND to client.
+
+---
+
+## SR-AGENT-VOC-03: Учебный план и Оценка уровня {#SR-AGENT-VOC-03}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Уроки (Lessons)** | Оркестратор умеет стартовать и завершать уроки в VocabularyService (`StartLesson`, `CompleteLesson`). |
+| **Тестирование навыков** | Вызов `SubmitKnowledgeCheckResult` по окончании теста навыков. |
+| **Placement Test** | Вызов `set_cefr_placement` для массового зачета уровней. |
+
+### 2. Высокоуровневое описание
+
+Агент может выступать в роли "Учителя", проводящего структурированный урок. В начале сессии фронтенд запрашивает старт урока, а агент (через оркестратор) вызывает `LessonService` в `VocabularyService`, чтобы изменить статус урока на `InProgress`.
+
+В случае диагностического теста (Placement Test), агент оценивает знания пользователя и, приняв решение, вызывает инструмент `set_cefr_placement`. Оркестратор транслирует этот вызов в gRPC `SetPlacementLevel`, что приводит к автокомплиту всех нижестоящих уровней.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Завершение Placement Test (Happy Path)
+1. Агент-экзаменатор задает вопросы и определяет, что уровень пользователя — B1.
+2. Агент возвращает `ToolCall(set_cefr_placement, { cefr_level: "B1" })`.
+3. Оркестратор перехватывает вызов и вызывает `VocabularyGrpcClient.SetPlacementLevelAsync("B1")`.
+4. VocabularyService помечает A1 и A2 пройденными; агент сообщает пользователю об успехе.
 
 ---
 

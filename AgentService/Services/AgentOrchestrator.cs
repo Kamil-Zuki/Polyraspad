@@ -85,6 +85,16 @@ public class AgentOrchestrator : IAgentOrchestrator
                     speaking_score = new { type = "integer", description = "Score for Speaking (0-100), 0 if not evaluated" }
                 },
                 required = new[] { "term_ids" }
+            }),
+        new AgentToolDefinition(
+            "set_cefr_placement",
+            "Set the user's CEFR level after a placement test. This unlocks curriculum lessons for them.",
+            new {
+                type = "object",
+                properties = new {
+                    cefr_level = new { type = "string", description = "The CEFR level determined by the test: A1, A2, B1, B2, C1, or C2" }
+                },
+                required = new[] { "cefr_level" }
             })
     };
 
@@ -341,6 +351,14 @@ public class AgentOrchestrator : IAgentOrchestrator
                 await _vocabularyClient.SubmitKnowledgeCheckResultAsync(userId, projectId, termIds!, rScore, lScore, wScore, sScore, roles, cancellationToken);
                 return JsonSerializer.Serialize(new { status = "success", message = "Knowledge check results submitted successfully." });
                 
+            case "set_cefr_placement":
+                var cefrLevel = args?["cefr_level"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(cefrLevel))
+                    return JsonSerializer.Serialize(new { error = "cefr_level is required" });
+                
+                await _vocabularyClient.SetPlacementLevelAsync(userId, cefrLevel, roles, cancellationToken);
+                return JsonSerializer.Serialize(new { status = "success", message = $"CEFR level set to {cefrLevel} successfully. All previous levels are unlocked." });
+
             default:
                 throw new InvalidOperationException($"Unknown tool {name}");
         }
