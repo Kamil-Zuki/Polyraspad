@@ -9,6 +9,8 @@ using static Pvs.Content.Grpc.TermService;
 
 namespace AgentService.Services;
 
+public record LearningTermDto(string Id, string Text);
+
 public interface IVocabularyGrpcClient
 {
     Task<GetVocabularyStatsResponse> GetVocabularyStatsAsync(
@@ -78,7 +80,7 @@ public interface IVocabularyGrpcClient
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
 
-    Task<List<string>> GetLearningTermsAsync(
+    Task<List<LearningTermDto>> GetLearningTermsAsync(
         Guid userId,
         Guid projectId,
         int count,
@@ -99,6 +101,13 @@ public interface IVocabularyGrpcClient
     Task<GetDailyAutopilotPlanResponse> GetDailyPlanAsync(
         Guid userId,
         Guid projectId,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default);
+
+    Task<GetSkillAssessmentHistoryResponse> GetSkillAssessmentHistoryAsync(
+        Guid userId,
+        Guid projectId,
+        int limit,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
 }
@@ -313,7 +322,7 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
             cancellationToken: cancellationToken);
     }
 
-    public async Task<List<string>> GetLearningTermsAsync(
+    public async Task<List<LearningTermDto>> GetLearningTermsAsync(
         Guid userId,
         Guid projectId,
         int count,
@@ -331,7 +340,7 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
             headers: BuildMetadata(userId, roles),
             cancellationToken: cancellationToken);
 
-        return response.Items.Select(x => x.Text).ToList();
+        return response.Items.Select(x => new LearningTermDto(x.TermId, x.Text)).ToList();
     }
 
     public async Task SubmitKnowledgeCheckResultAsync(
@@ -382,5 +391,23 @@ public class VocabularyGrpcClient : IVocabularyGrpcClient
             },
             headers: BuildMetadata(userId, roles),
             cancellationToken: cancellationToken).ResponseAsync;
+    }
+
+    public async Task<GetSkillAssessmentHistoryResponse> GetSkillAssessmentHistoryAsync(
+        Guid userId,
+        Guid projectId,
+        int limit,
+        IEnumerable<string> roles,
+        CancellationToken cancellationToken = default)
+    {
+        return await _analyticsClient.GetSkillAssessmentHistoryAsync(
+            new GetSkillAssessmentHistoryRequest
+            {
+                UserId = userId.ToString(),
+                ProjectId = projectId.ToString(),
+                Limit = limit
+            },
+            headers: BuildMetadata(userId, roles),
+            cancellationToken: cancellationToken);
     }
 }

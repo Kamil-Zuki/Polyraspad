@@ -10,6 +10,7 @@ public enum AgentToolId
     GeneratePractice,
     BuildCardDraft,
     GetProgress,
+    GetDailyPlan,
     Navigate,
     GeneralAnswer,
     OutOfScope
@@ -42,6 +43,7 @@ public record RoutedAgentIntent(
         AgentToolId.GeneratePractice => "generate_practice",
         AgentToolId.BuildCardDraft => "build_card_draft",
         AgentToolId.GetProgress => "get_progress",
+        AgentToolId.GetDailyPlan => "get_daily_plan",
         AgentToolId.Navigate => "navigate",
         AgentToolId.GeneralAnswer => "general_answer",
         _ => "out_of_scope"
@@ -141,6 +143,13 @@ public static class AgentIntentRouter
                 AgentToolId.ExplainWord,
                 Word: ExtractTargetTerm(text),
                 Sentence: ExtractSentenceContext(text),
+                Domain: new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning));
+        }
+
+        if (Regex.IsMatch(lower, @"\b(начнём|начнем)\b|\bчто делаем сегодня\b|\b(start|begin)\b|\bwhat are we doing today\b", RegexOptions.IgnoreCase))
+        {
+            return new RoutedAgentIntent(
+                AgentToolId.GetDailyPlan,
                 Domain: new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning));
         }
 

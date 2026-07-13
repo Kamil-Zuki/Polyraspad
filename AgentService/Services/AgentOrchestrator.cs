@@ -99,6 +99,14 @@ public class AgentOrchestrator : IAgentOrchestrator
         new AgentToolDefinition(
             "get_daily_plan",
             "Get the user's personalized daily learning plan: due flashcard count, weakest skill, next curriculum lesson, and skill CEFR levels. Call this at the start of any conversation if you need context about the user's current state.",
+            new { type = "object", properties = new Dictionary<string, object>() }),
+        new AgentToolDefinition(
+            "generate_writing_task",
+            "Get a list of words the user is currently learning to generate a writing or translation task for them.",
+            new { type = "object", properties = new Dictionary<string, object>() }),
+        new AgentToolDefinition(
+            "get_skill_assessment_history",
+            "Get the history of the user's skill assessments (reading, listening, writing, speaking scores) to analyze trends and suggest focused practice.",
             new { type = "object", properties = new Dictionary<string, object>() })
     };
 
@@ -153,7 +161,7 @@ public class AgentOrchestrator : IAgentOrchestrator
             var terms = await _vocabularyClient.GetLearningTermsAsync(userId, projectId, 5, roles, cancellationToken);
             if (terms.Any())
             {
-                var termList = string.Join(", ", terms);
+                var termList = string.Join(", ", terms.Select(t => t.Text));
                 systemPrompt += $"\n\n[SYSTEM INSTRUCTION]\nThe user wants to practice. Here are some words they are currently learning: {termList}. Generate a short creative writing exercise, translation task, or roleplay scenario where they must use these words. Do not give them the answers yet, encourage them to respond.";
             }
         }
@@ -391,6 +399,26 @@ public class AgentOrchestrator : IAgentOrchestrator
                         t.Description,
                         t.DurationMinutes,
                         t.ActionUrl
+                    })
+                });
+
+            case "generate_writing_task":
+                var practiceTerms = await _vocabularyClient.GetLearningTermsAsync(userId, projectId, 7, roles, cancellationToken);
+                return JsonSerializer.Serialize(new
+                {
+                    instruction = "Generate a short writing task (e.g. write a 3-sentence story, or translate a specific phrase) that requires the user to use the following words. Do not give them the answer. When they reply, evaluate their use of these words and their grammar, then call submit_knowledge_check to record their writing score (0-100) for these specific term_ids.",
+                    terms = practiceTerms.Select(t => new { term_id = t.Id, text = t.Text })
+                });
+
+            case "get_skill_assessment_history":
+                var history = await _vocabularyClient.GetSkillAssessmentHistoryAsync(userId, projectId, 20, roles, cancellationToken);
+                return JsonSerializer.Serialize(new
+                {
+                    logs = history.Logs.Select(l => new
+                    {
+                        l.Skill,
+                        l.Score,
+                        Date = l.CreatedAt
                     })
                 });
 

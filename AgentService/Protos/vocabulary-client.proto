@@ -644,6 +644,10 @@ message TermDetailsResponse {
   google.protobuf.StringValue first_source_title = 10;
   google.protobuf.StringValue first_source_url = 11;
   repeated CardPreview related_cards = 12;
+  int32 reading_level = 13;
+  int32 listening_level = 14;
+  int32 writing_level = 15;
+  int32 speaking_level = 16;
 }
 
 message SearchTermDuplicatesResponse {
@@ -677,6 +681,10 @@ message ProjectTermListItem {
   google.protobuf.StringValue first_source_url = 10;
   google.protobuf.Timestamp updated_at = 11;
   int32 related_card_count = 12;
+  int32 reading_level = 13;
+  int32 listening_level = 14;
+  int32 writing_level = 15;
+  int32 speaking_level = 16;
 }
 
 message ListProjectTermsResponse {
@@ -922,6 +930,9 @@ service AnalyticsService {
 
   // Ежедневный автопилот (Phase 4)
   rpc GetDailyAutopilotPlan (GetDailyAutopilotPlanRequest) returns (GetDailyAutopilotPlanResponse);
+
+  // История оценки навыков
+  rpc GetSkillAssessmentHistory (GetSkillAssessmentHistoryRequest) returns (GetSkillAssessmentHistoryResponse);
 }
 
 // SR-ANL-01: Vocabulary Stats Messages
@@ -1672,6 +1683,11 @@ message LessonDto {
   string content_markdown = 6;
   google.protobuf.StringValue color_css_class = 7;
   google.protobuf.StringValue system_prompt = 8;
+  string cefr_level = 9;
+  int32 order_index = 10;
+  google.protobuf.StringValue unlocks_after_lesson_id = 11;
+  string target_skills = 12;
+  int32 estimated_minutes = 13;
 }
 
 message UserLessonProgressDto {
@@ -1682,6 +1698,8 @@ message UserLessonProgressDto {
   google.protobuf.StringValue agent_thread_id = 5;
   google.protobuf.Timestamp started_at = 6;
   google.protobuf.Timestamp completed_at = 7;
+  int32 score_percent = 8;       // 0-100, set on completion
+  int32 time_spent_seconds = 9;  // total time spent in lesson
 }
 
 message LessonWithProgressDto {
@@ -1719,6 +1737,8 @@ message StartLessonResponse {
 message CompleteLessonRequest {
   string lesson_id = 1;
   string user_id = 2;
+  int32 score_percent = 3;       // 0-100 result score (optional, 0 = not graded)
+  int32 time_spent_seconds = 4;  // session time in seconds (optional)
 }
 
 message SetPlacementLevelRequest {
@@ -1754,4 +1774,21 @@ message DailyAutopilotTask {
 
 message GetDailyAutopilotPlanResponse {
   repeated DailyAutopilotTask tasks = 1;
+}
+
+message GetSkillAssessmentHistoryRequest {
+  string user_id = 1; // UUID
+  string project_id = 2; // UUID
+  int32 limit = 3; // optional, default 20
+}
+
+message SkillAssessmentLogDto {
+  string id = 1; // UUID
+  string skill = 2; // reading, listening, writing, speaking
+  int32 score = 3; // 0-100
+  string created_at = 4; // ISO 8601
+}
+
+message GetSkillAssessmentHistoryResponse {
+  repeated SkillAssessmentLogDto logs = 1;
 }
