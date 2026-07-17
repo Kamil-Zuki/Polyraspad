@@ -8,6 +8,14 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+Write-Host "Setting remote HEAD for all submodules..." -foregroundColor Cyan
+git submodule foreach git remote set-head origin -a
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to set remote HEAD for submodules."
+    exit $LASTEXITCODE
+}
+
 Write-Host "Fetching and updating submodules to their remote tracking branches..." -foregroundColor Cyan
 git submodule update --recursive --remote
 
@@ -17,3 +25,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "All submodules successfully updated!" -foregroundColor Green
+
