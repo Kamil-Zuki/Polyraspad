@@ -142,12 +142,35 @@
 
 ---
 
+## 9. Tag
+
+`Tag` — сущность для гибкого тегирования и категоризации заметок в рамках проекта.
+
+**Поля:**
+- `Id` (Guid, PK)
+- `ProjectId` (Guid, FK to Project)
+- `Name` (string) — название тега.
+- `CreatedAt` (DateTime)
+
+---
+
+## 10. NoteTag
+
+`NoteTag` — связующая таблица для реализации отношения многие-ко-многим между заметками и тегами.
+
+**Поля:**
+- `NoteId` (Guid, PK, FK to Note)
+- `TagId` (Guid, PK, FK to Tag)
+
+---
+
 ## Связи сущностей ядра
 
 ```mermaid
 erDiagram
     Project ||--o{ Deck : contains
     Project ||--o{ NoteType : defines
+    Project ||--o{ Tag : owns
     NoteType ||--o{ NoteField : contains
     NoteType ||--o{ CardTemplate : contains
     NoteType ||--o{ Note : structures
@@ -155,4 +178,7 @@ erDiagram
     Deck ||--o{ Card : holds
     Note ||--o{ Card : generates
     Card ||--|| UserCardProgress : tracks
+    Note ||--o{ NoteTag : tagged_with
+    Tag ||--o{ NoteTag : references
 ```
+

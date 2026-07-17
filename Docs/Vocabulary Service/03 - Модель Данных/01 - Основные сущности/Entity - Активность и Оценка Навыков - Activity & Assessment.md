@@ -109,6 +109,34 @@
 
 ---
 
+## 7. GrammarTopic
+
+`GrammarTopic` — справочник грамматических тем (правил), разбитых по уровням CEFR.
+
+**Поля:**
+- `Id` (Guid, PK)
+- `Code` (string) — уникальный строковый код темы (например, `"past-simple"`, `"passive-voice"`).
+- `Title` (string) — название темы.
+- `Description` (string?) — описание грамматического правила.
+- `CefrLevel` (string) — уровень сложности темы (A1..C2).
+
+---
+
+## 8. UserGrammarProgress
+
+`UserGrammarProgress` — индивидуальный прогресс освоения конкретного грамматического правила пользователем.
+
+**Поля:**
+- `Id` (Guid, PK)
+- `UserId` (Guid)
+- `ProjectId` (Guid, FK to Project)
+- `GrammarTopicId` (Guid, FK to GrammarTopic)
+- `Status` (string) — статус изучения (`"NEW"`, `"LEARNING"`, `"MASTERED"`).
+- `ConfidenceScore` (float) — степень уверенности владения правилом (0.0..1.0, рассчитывается ИИ на основе анализа речи/письма).
+- `UpdatedAt` (DateTime)
+
+---
+
 ## Связи сущностей активности и прогресса
 
 ```mermaid
@@ -116,8 +144,11 @@ erDiagram
     Project ||--o{ UserSkillActivity : tracks_daily
     Project ||--o{ UserSkillProgress : tracks_overall
     Project ||--o{ UserBookProgress : reads
+    Project ||--o{ UserGrammarProgress : tracks_grammar
     SkillType ||--o{ UserSkillActivity : defines
     SkillType ||--o{ UserSkillProgress : defines
     Card ||--o{ ShadowingAttempt : exercises
     Project ||--o{ SkillAssessmentLog : logs_assessment
+    GrammarTopic ||--o{ UserGrammarProgress : defines
 ```
+

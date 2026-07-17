@@ -9,6 +9,7 @@
 | Треды и сообщения | `AgentThread`, `AgentMessage` | [[Entity - Треды и сообщения - Threads Messages]] |
 | Запуски и аудит | `AgentRun`, `AgentToolCall`, `AgentDomainDecision` | [[Entity - Запуски и аудит - Runs Audit]] |
 | Артефакты | `AgentArtifact` | [[Entity - Артефакты - Artifacts]] |
+| Кастомные сценарии | `CustomScenario` | [[Entity - Кастомные Сценарии - Custom Scenarios]] |
 
 ## Связи (обзор)
 
@@ -20,6 +21,7 @@ erDiagram
   AgentRun ||--o{ AgentToolCall : invokes
   AgentRun ||--o| AgentDomainDecision : records
   AgentRun ||--o{ AgentArtifact : produces
+  CustomScenario ||--o{ AgentThread : configures
 ```
 
 ## Индексы и ограничения
@@ -32,5 +34,6 @@ erDiagram
 | `agent_tool_calls` | `(run_id, created_at)` | Tool calls run |
 | `agent_domain_decisions` | `(run_id)` UNIQUE | Одно решение на run |
 | `agent_artifacts` | `(thread_id, created_at)` | Артефакты треда |
+| `custom_scenarios` | `(user_id, created_at)` | Сценарии пользователя |
 
 Миграции: `AgentService/Migrations/`; применяются при старте контейнера (`db.Database.Migrate()`).
