@@ -42,6 +42,27 @@
 
 ---
 
+## 3. UserBookProgress
+
+`UserBookProgress` — сущность, отвечающая за сохранение прогресса пользователя при чтении конкретных книг или документов в ридере. Эта сущность заменяет собой устаревший подход с сохранением ID книги в JSON поле `Metadata` сущности `UserSkillProgress`.
+
+**Поля:**
+- `Id` (Guid, PK)
+- `UserId` (Guid) — идентификатор пользователя.
+- `ProjectId` (Guid, FK to Project) — идентификатор проекта изучения.
+- `BookId` (string) — внешний идентификатор книги (например, ID из MediaService).
+- `ProgressPercent` (float) — процент прочитанного (0-100).
+- `LastPositionLocator` (string?) — строковый локатор последней позиции (например, номер страницы для PDF или EPUB CFI).
+- `LastChapter` (string?) — название последней прочитанной главы.
+- `IsFinished` (bool) — статус полного прочтения.
+- `LastReadAt` (DateTime) — дата и время последнего чтения.
+- `CreatedAt` (DateTime) — дата создания записи.
+
+**Использование:**
+Сущность обновляется по мере продвижения пользователя по книге. Используется в библиотеке (`/library`) для отображения карточки "Continue reading" и процента прогресса по всем книгам.
+
+---
+
 ## Связь сущностей в рамках группы 4
 
 ```mermaid
@@ -50,4 +71,6 @@ erDiagram
     User ||--o{ ShadowingAttempt : records
     User ||--o{ SkillAssessmentLog : evaluated_through
     Project ||--o{ SkillAssessmentLog : tracks_for
+    Project ||--o{ UserBookProgress : contains
+    User ||--o{ UserBookProgress : tracks
 ```
