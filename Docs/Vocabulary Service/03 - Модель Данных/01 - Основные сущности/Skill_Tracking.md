@@ -42,10 +42,40 @@
 
 ---
 
+## 3. UserSkillProgress
+
+`UserSkillProgress` — постоянная сущность-аккумулятор долгосрочного прогресса пользователя по навыку. В отличие от `UserSkillActivity`, не сбрасывается по дням, а накапливается за всё время.
+
+**Составной PK:** `(UserId, ProjectId, SkillTypeId)` — одна строка на комбинацию пользователь + проект + навык.
+
+**Поля:**
+- `UserId` (Guid, PK) — идентификатор пользователя.
+- `ProjectId` (Guid, PK, FK to Project) — идентификатор проекта.
+- `SkillTypeId` (int, PK, FK to SkillType) — ссылка на тип навыка.
+- `Level` (int) — текущий расчётный уровень навыка (0–100). Обновляется по алгоритму на стороне сервиса.
+- `TotalValue` (int) — суммарное накопленное значение за всё время (в единицах `SkillType.Unit`).
+- `Metadata` (jsonb?) — произвольные данные, специфичные для навыка. Примеры:
+  - `reading`: `{"lastBookId": "...", "lastPage": 42}`
+  - `listening`: `{"lastEpisodeId": "..."}`
+  - `writing`, `speaking`: могут быть `null`
+- `UpdatedAt` (DateTime) — дата последнего обновления.
+
+**Ключевое отличие от UserSkillActivity:**
+
+| | `UserSkillActivity` | `UserSkillProgress` |
+|---|---|---|
+| Период | Ежедневный (сбрасывается) | Постоянный (накапливается) |
+| Назначение | Daily Missions (выполнил за сегодня) | Уровень навыка, история позиции |
+| Unique index | `(UserId, ProjectId, Date, SkillTypeId)` | `(UserId, ProjectId, SkillTypeId)` PK |
+
+---
+
 ## Связь сущностей
 
 ```mermaid
 erDiagram
-    Project ||--o{ UserSkillActivity : tracks
+    Project ||--o{ UserSkillActivity : tracks_daily
+    Project ||--o{ UserSkillProgress : tracks_overall
     SkillType ||--o{ UserSkillActivity : defines
+    SkillType ||--o{ UserSkillProgress : defines
 ```
