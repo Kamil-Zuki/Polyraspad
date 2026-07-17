@@ -45,10 +45,11 @@ Settings scoped **per user**, not per project — хранятся в Vocabulary
 
 Представим settings как **preferences file в облаке**.
 
-1. **App load:** frontend GET settings — applies Reader page-turn behavior, UI toggles, study defaults.
+1. **App load:** frontend GET settings — applies Reader page-turn behavior, UI toggles, study defaults (DailyGoalNew, DailyGoalReview, RolloverHour).
 2. **User change:** PUT partial/full `UpdateUserSettingsDto` from settings page.
 3. **Vocabulary** persists authoritative state; Aggregator returns mapped `UserSettingsResponseDto`.
 4. **Reader bulk-known:** when enabled, page turn triggers bulk-known term ids (domain reads same settings).
+5. **Rollover Hour & Goals:** `RolloverHour` defines when the study day rolls over for daily streak calculations, and `DailyGoalNew`/`DailyGoalReview` set daily spaced repetition targets.
 
 Aggregator не кэширует settings between requests — React Query cache on frontend.
 

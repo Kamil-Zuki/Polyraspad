@@ -45,10 +45,10 @@ Identity propagation: SR-AGG-CONTENT-03 (metadata `user_id`, `roles`).
 
 Представим карточку как **каталожную карточку книги в архиве**, а Aggregator — **окно выдачи**.
 
-1. **Читатель (Frontend / Editor):** заполняет поля note (Front, Back, …) и нажимает Save — «хочу новую карточку на полке X».
-2. **Окно выдачи (Aggregator):** проверяет JWT, упаковывает поля в `CreateCardRequest`, **не проверяя**, дубликат ли это.
-3. **Архив (CardService):** создаёт note+card, инициализирует SRS, возвращает `CardResponseDto`.
-4. **Чтение / правка:** GET по id или PUT update — тот же путь: JWT → metadata → gRPC → JSON.
+1. **Читатель (Frontend / Editor):** заполняет поля note (Front, Back, …), указывает список тегов (tags) и нажимает Save — «хочу новую карточку на полке X».
+2. **Окно выдачи (Aggregator):** проверяет JWT, упаковывает поля и теги в `CreateCardRequest`, **не проверяя**, дубликат ли это.
+3. **Архив (CardService):** создаёт note+card, привязывает теги (через связующие сущности в Vocabulary Core), инициализирует SRS, возвращает `CardResponseDto` с массивом назначенных тегов.
+4. **Чтение / правка:** GET по id или PUT update (с обновлением списка тегов) — тот же путь: JWT → metadata → gRPC → JSON.
 
 Aggregator не хранит черновики карточек между запросами — каждая операция stateless.
 
@@ -91,7 +91,7 @@ Aggregator не хранит черновики карточек между за
 | Принцип | Описание |
 | :--- | :--- |
 | **Search** | Full-text + pagination (`pageNumber`, `pageSize` default 20). |
-| **Scope** | Filters: `projectId`, `deckId`, `srsStatuses[]`. |
+| **Scope** | Filters: `projectId`, `deckId`, `srsStatuses[]`, `tags[]`. |
 | **Capture** | Отдельный RPC для external/mining context. |
 | **Bulk import** | POST `/api/Cards/import` — many cards одной колоде. |
 | **Duplicates** | POST `check-duplicates` до create. |
@@ -100,7 +100,7 @@ Aggregator не хранит черновики карточек между за
 
 Представим расширенные операции как **разные окна одного архива**.
 
-1. **Поиск (Search):** библиотекарь принимает ключевые слова и **номер страницы каталога** — Aggregator передаёт query в `SearchCards`, Vocabulary возвращает page + total count.
+1. **Поиск (Search):** библиотекарь принимает ключевые слова, **список тегов** и **номер страницы каталога** — Aggregator передаёт query и tags в `SearchCards`, Vocabulary возвращает page + total count.
 2. **Проверка дубликатов:** перед добавлением книги клиент спрашивает «нет ли уже такой на полке?» — `CheckCardDuplicates`, ответ без создания.
 3. **Capture:** extension «бросает» на стойку фото страницы/субтитры — `CaptureCard` с source metadata; domain решает note shape.
 4. **Bulk import:** CSV/JSON batch — один gRPC `BulkCreateCards`; BFF возвращает список созданных id.
