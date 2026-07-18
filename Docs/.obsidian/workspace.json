@@ -185,6 +185,7 @@
   },
   "active": "e52d8ff49010c6e0",
   "lastOpenFiles": [
+    "Frontend/UserFlows.md",
     "Frontend/Features/UserTesting.md",
     "Frontend/Features",
     "Frontend/TEMPLATE.md",
@@ -212,7 +213,6 @@
     "Aggregator Service/01 - Функциональная спецификация/Возможности сервиса/17 - Уроки и прогресс (Lessons).md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Vocabulary_Core.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Инфраструктура OIDC и Интеграция - OIDC Infrastructure.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Защита Периметра и Гостевые Квоты - Security & Quotas.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности",
     "Vocabulary Service/03 - Модель Данных",
     "Vocabulary Service/02 - Архитектура",
