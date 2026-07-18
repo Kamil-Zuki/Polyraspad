@@ -25,4 +25,8 @@ public class AgentThread
     public virtual ICollection<AgentRun> Runs { get; set; } = new List<AgentRun>();
 
     public virtual ICollection<AgentArtifact> Artifacts { get; set; } = new List<AgentArtifact>();
+
+    public Guid? CustomScenarioId { get; set; }
+    
+    public virtual CustomScenario? CustomScenario { get; set; }
 }

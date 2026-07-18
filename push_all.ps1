@@ -1,70 +1,50 @@
-$ErrorActionPreference = "Stop"
-$submodules = @("AggregatorService", "VocabularyService", "authorization-module", "polyraspad-frontend", "inclusive", "BillingService")
+param (
+    [string]$Type = "chore",
+    [string]$Scope = "",
+    [string]$Message = "auto-update repositories"
+)
 
-foreach ($sub in $submodules) {
-    if (-not (Test-Path $sub)) {
-        Write-Host "Submodule $sub not found, skipping."
-        continue
-    }
-
-    Write-Host "----------------------------------------"
-    Write-Host "Processing $sub..."
-    Push-Location $sub
-    
-    # Check current branch
-    $branch = git branch --show-current
-    if ([string]::IsNullOrWhiteSpace($branch)) {
-        Write-Host "$sub is in detached HEAD. Moving changes to master..."
-        # We are detached. Let's create a temporary branch to hold current state
-        git checkout -b temp_detached
-        git checkout master
-        git merge temp_detached
-        git branch -d temp_detached
-    } elseif ($branch -ne "master") {
-        Write-Host "$sub is on branch $branch. Moving changes to master..."
-        $currentBranch = $branch
-        git checkout master
-        git merge $currentBranch
-    } else {
-        Write-Host "$sub is already on master."
-    }
-    
-    # Check for uncommitted changes
-    $status = git status --porcelain
-    if (![string]::IsNullOrWhiteSpace($status)) {
-        Write-Host "Uncommitted changes found in $sub. Committing..."
-        git add .
-        git commit -m "chore: auto-commit local changes"
-    } else {
-        Write-Host "No uncommitted changes in $sub."
-    }
-    
-    # Push to master
-    Write-Host "Pushing $sub to origin master..."
-    git push origin master
-    
-    Pop-Location
+# Формируем сообщение в формате Conventional Commits
+$CommitMsg = if ([string]::IsNullOrWhiteSpace($Scope)) {
+    "${Type}: $Message"
+} else {
+    "${Type}(${Scope}): $Message"
 }
 
-Write-Host "----------------------------------------"
-Write-Host "Processing Root repository..."
-$branch = git branch --show-current
-if ($branch -ne "master") {
-    Write-Host "Root is on $branch, moving to master..."
-    $currentBranch = $branch
-    git checkout master
-    git merge $currentBranch
-}
+Write-Host "========================================" -ForegroundColor Magenta
+Write-Host "1. PROCESSING SUBMODULES" -ForegroundColor Magenta
+Write-Host "========================================" -ForegroundColor Magenta
 
+Write-Host "Switching submodules to 'master' and pulling latest changes..." -foregroundColor Cyan
+git submodule foreach "git checkout master && git pull origin master || true"
+
+Write-Host "Staging and committing changes in submodules..." -foregroundColor Cyan
+git submodule foreach "git add . && git commit -m '$CommitMsg' || true"
+
+Write-Host "Pushing submodules to remote master..." -foregroundColor Cyan
+git submodule foreach "git push origin master"
+
+
+Write-Host "========================================" -ForegroundColor Magenta
+Write-Host "2. PROCESSING ROOT REPOSITORY" -ForegroundColor Magenta
+Write-Host "========================================" -ForegroundColor Magenta
+
+Write-Host "Switching Root repository to 'master' and pulling latest changes..." -foregroundColor Cyan
+git checkout master
+git pull origin master
+
+# Сохраняем корневые изменения (включая обновленные ссылки на сабмодули)
 $status = git status --porcelain
 if (![string]::IsNullOrWhiteSpace($status)) {
-    Write-Host "Uncommitted changes found in Root. Committing..."
+    Write-Host "Committing changes in Root repository..." -foregroundColor Cyan
     git add .
-    git commit -m "chore: update submodules and local changes"
+    git commit -m "$CommitMsg"
 } else {
-    Write-Host "No uncommitted changes in Root."
+    Write-Host "No uncommitted changes in Root." -foregroundColor Yellow
 }
 
-Write-Host "Pushing Root to origin master..."
+Write-Host "Pushing Root to origin master..." -foregroundColor Cyan
 git push origin master
-Write-Host "Done!"
+
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "ALL REPOSITORIES SUCCESSFULLY COMMITTED AND PUSHED!" -ForegroundColor Green

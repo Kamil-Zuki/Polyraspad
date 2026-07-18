@@ -153,7 +153,7 @@ public class AgentOrchestrator : IAgentOrchestrator
 
         var systemPrompt = !string.IsNullOrWhiteSpace(thread?.SystemPromptOverride) 
             ? thread.SystemPromptOverride 
-            : AgentSystemPromptBuilder.Build(project.Title, sourceLang, targetLang);
+            : AgentSystemPromptBuilder.Build(thread?.AgentId ?? "study-copilot", project.Title, sourceLang, targetLang);
 
         var intent = AgentIntentRouter.Route(request.UserText);
         if (intent.ToolId == AgentToolId.GeneratePractice)
@@ -167,7 +167,7 @@ public class AgentOrchestrator : IAgentOrchestrator
         }
 
         // If this is a greeting / init run, inject daily plan context into system prompt
-        if (request.IsInitialGreeting)
+        if (request.IsInitialGreeting && thread?.AgentId != "placement-copilot")
         {
             try
             {
@@ -202,6 +202,7 @@ public class AgentOrchestrator : IAgentOrchestrator
             var contentToAppend = string.IsNullOrWhiteSpace(completion.Content) ? "Executing tool..." : completion.Content;
             messages.Add(new AgentChatMessageDto("assistant", contentToAppend));
 
+            bool shouldBreak = false;
             foreach (var tc in completion.ToolCalls)
             {
                 string outputJson;
@@ -220,6 +221,19 @@ public class AgentOrchestrator : IAgentOrchestrator
                 
                 executedTools.Add(new AgentToolCallRecord(tc.Name, tc.Arguments, outputJson, status));
                 messages.Add(new AgentChatMessageDto("tool", outputJson));
+
+                if (tc.Name == "set_cefr_placement" && status == "completed")
+                {
+                    shouldBreak = true;
+                }
+            }
+
+            if (shouldBreak)
+            {
+                assistantContent = string.IsNullOrWhiteSpace(completion.Content) 
+                    ? "Placement test completed. Your level has been updated." 
+                    : completion.Content;
+                break;
             }
         }
         var actions = new List<AgentActionCard>();

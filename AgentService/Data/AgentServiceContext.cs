@@ -21,6 +21,8 @@ public class AgentServiceContext : DbContext
 
     public virtual DbSet<AgentArtifact> AgentArtifacts { get; set; }
 
+    public virtual DbSet<CustomScenario> CustomScenarios { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("internal");
@@ -42,6 +44,11 @@ public class AgentServiceContext : DbContext
             entity.Property(e => e.ArchivedAt).HasColumnName("archived_at");
             entity.Property(e => e.AgentId).HasColumnName("agent_id");
             entity.Property(e => e.SystemPromptOverride).HasColumnName("system_prompt_override");
+            entity.Property(e => e.CustomScenarioId).HasColumnName("custom_scenario_id");
+
+            entity.HasOne(d => d.CustomScenario).WithMany(p => p.Threads)
+                .HasForeignKey(d => d.CustomScenarioId)
+                .HasConstraintName("fk_agent_threads_custom_scenarios");
         });
 
         modelBuilder.Entity<AgentMessage>(entity =>
@@ -144,6 +151,33 @@ public class AgentServiceContext : DbContext
             entity.HasOne(d => d.Thread).WithMany(p => p.Artifacts)
                 .HasForeignKey(d => d.ThreadId)
                 .HasConstraintName("fk_agent_artifacts_threads");
+        });
+
+        modelBuilder.Entity<CustomScenario>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("custom_scenarios_pkey");
+            entity.ToTable("custom_scenarios");
+
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "idx_custom_scenarios_user_created");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("uuid_generate_v4()").HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Title).HasColumnName("title");
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.TargetSkill).HasDefaultValue("Speaking").HasColumnName("target_skill");
+            entity.Property(e => e.SystemPromptTemplate).HasColumnName("system_prompt_template");
+            entity.Property(e => e.Difficulty).HasColumnName("difficulty");
+            
+            entity.Property(e => e.Goals)
+                .HasColumnType("jsonb")
+                .HasColumnName("goals");
+                
+            entity.Property(e => e.ContextConfiguration)
+                .HasColumnType("jsonb")
+                .HasColumnName("context_configuration");
+                
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()").HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()").HasColumnName("updated_at");
         });
     }
 }

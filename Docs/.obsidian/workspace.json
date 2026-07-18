@@ -185,6 +185,10 @@
   },
   "active": "e52d8ff49010c6e0",
   "lastOpenFiles": [
+    "Frontend/Features/UserTesting.md",
+    "Frontend/Features",
+    "Frontend/TEMPLATE.md",
+    "Frontend",
     "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-08_SystemSettings.md",
     "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-07_MarketplaceCommunity.md",
     "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-06_ActivityAssessment.md",
@@ -209,8 +213,6 @@
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Vocabulary_Core.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Инфраструктура OIDC и Интеграция - OIDC Infrastructure.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Защита Периметра и Гостевые Квоты - Security & Quotas.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entities - Список сущностей микросервиса Authorization Service.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Curriculum.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности",
     "Vocabulary Service/03 - Модель Данных",
     "Vocabulary Service/02 - Архитектура",
@@ -218,8 +220,6 @@
     "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/Socket",
     "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/REST API",
     "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/gRPC",
-    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/DTO",
-    "Vocabulary Service/04 - Бекенд, API и Контракты/Работа с Redis",
-    "Vocabulary Service/04 - Бекенд, API и Контракты/Работа с Rabbit MQ"
+    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/DTO"
   ]
 }
