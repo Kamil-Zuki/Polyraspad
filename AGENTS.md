@@ -553,3 +553,12 @@ The active learning direction is the **LingQ-style reader model**:
 2. **No root .NET solution file:** only `authorization-module/authorization-module.sln` exists.
 3. **Submodules:** six major components are separate Git repositories; changes inside them require separate submodule commits/pushes.
 4. **Migrations at startup:** convenient for local Docker but should be reviewed carefully for production.
+
+---
+
+## 16. Versioning Strategy
+
+- **Global Versioning**: The entire Polyraspad platform shares a single version number (e.g., `v1.0.0`) using SemVer (`MAJOR.MINOR.PATCH`).
+- **Do not version microservices independently** (e.g., avoid `Billing v1.2` while `Frontend is v2.0`).
+- The primary source of truth is the **Git Tag** on the root repository.
+- When completing a major implementation plan, the agent must update `CHANGELOG.md` to reflect the new version and remind the user to bump versions in `polyraspad-frontend/package.json` and root Git Tags.

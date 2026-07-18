@@ -8,17 +8,32 @@
 
 ## 🛠️ Шаги реализации
 
-### Шаг 1. Настройка Feature Flags (Скрытие AI-агентов)
-Необходимо временно скрыть сложные AI-модули (чат-агенты, автопилоты), оставив только перевод по клику.
+### Шаг 1. Настройка Feature Flags (Скрытие AI и сложных модулей)
+Необходимо полностью скрыть недоделанные AI-инструменты и не-MVP разделы, оставив только перевод по клику.
 
 * **[ ] Frontend:**
   * Файл: `polyraspad-frontend/.env.example` и локальный `.env`.
-  * Добавить переменную `NEXT_PUBLIC_FF_AI_AGENTS=false`.
-  * Файлы UI (сайдбар, Command Center, Omnibar): скрыть разделы "Агенты/Autopilot", если флаг `false`.
+  * Добавить флаги:
+    * `NEXT_PUBLIC_FF_AI_AGENTS=false` — отключает ИИ-функции:
+      * **Inspector** при чтении книг (панель объяснения грамматики и разбора текста через LLM).
+      * Панель **Ассистента** (AI Assistant).
+      * **Автозаполнение** полей карточки при создании (AI mining drafts).
+      * **Генерацию аудио** озвучки с использованием LLM-ключей (mistral/openai).
+    * `NEXT_PUBLIC_FF_ADVANCED_MODULES=false` — скрывает не-MVP разделы:
+      * **Lessons** (Уроки).
+      * **Marketplace** (Маркетплейс).
+      * **Shadowing** (Техника теневого повтора в плеере/читалке).
+  * В коде фронтенда скрыть ссылки в сайдбаре, кнопки вызова данных панелей и блокировку генерации аудио на основе этих флагов.
 * **[ ] Backend:**
   * Файл: `AggregatorService/appsettings.json` и `appsettings.Development.json`.
-  * Добавить секцию `"Features": { "EnableAIAgents": false }`.
-  * Внедрить Middleware или проверку в контроллерах `AgentService` в Aggregator, возвращая `503 Service Unavailable` или `404`, если фича выключена.
+  * Добавить секцию:
+    ```json
+    "Features": {
+      "EnableAIAgents": false,
+      "EnableAdvancedModules": false
+    }
+    ```
+  * Внедрить проверки во все смежные API-эндпоинты в `AggregatorService`, возвращая `404 Not Found` или `503 Service Unavailable`, если соответствующие модули отключены флагами.
 
 ---
 
