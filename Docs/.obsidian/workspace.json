@@ -185,6 +185,9 @@
   },
   "active": "e52d8ff49010c6e0",
   "lastOpenFiles": [
+    "Plans/01_MVP_Completion.md",
+    "Plans/README.md",
+    "Plans",
     "01Strategic_Roadmap_Founder.md",
     "Product/01Feature_Map.md",
     "Product/Feature_Map.md",
@@ -211,15 +214,12 @@
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Ядро Словаря - Vocabulary Core.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Skill_Tracking.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Activity_Assessment.md",
-    "Product Requirements — Полный реестр функциональных требований.md",
-    "Aggregator Service/99 - Staging — Разрывы согласованности (DO NOT DELETE)/ISSUE-004-missing-lessons-autopilot-entities.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности",
     "Vocabulary Service/03 - Модель Данных",
     "Vocabulary Service/02 - Архитектура",
     "Vocabulary Service/99 - Staging — Разрывы согласованности (DO NOT DELETE)",
     "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/Socket",
     "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/REST API",
-    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/gRPC",
-    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/DTO"
+    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/gRPC"
   ]
 }

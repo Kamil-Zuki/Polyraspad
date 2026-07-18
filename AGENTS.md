@@ -15,7 +15,8 @@ This file stays at the repository root on purpose (tooling and hierarchical agen
 | Path | Purpose |
 |------|---------|
 | `Docs/` | Authoritative, stable documentation for humans and the team. STEOS microservice docs use folders `01`–`05` and `99 - Staging`. |
-| `Docs/Product/` | Product-level docs: user flows, MVP scope, page priorities, feature specs. Not STEOS microservice docs. |
+| `Docs/Product/` | Product-level docs: user flows, MVP scope, page priorities, feature specs. Not STEOS microservice docs. (e.g., `01Feature_Map.md`, `01Strategic_Roadmap_Founder.md`). |
+| `Docs/Plans/` | Technical step-by-step implementation plans for the AI agent. |
 | `Docs/(Done) Authorization Service/` | **Formatting etalon only** — folder tree, heading depth, tables, block order for future service docs. Not a content source; do not copy Auth domain text into other services. |
 | `polyraspad-frontend/` | Next.js 16 application (App Router) — the main learning UI. |
 | `polyraspad-landing/` | Next.js 16 marketing landing page (localized `ru/en/ko`). |
@@ -482,7 +483,8 @@ Any change touching vocabulary status, duplicates, or the reader must preserve:
 
 ## 11. Documentation Boundaries
 
-- **`Docs/`** — official, stable docs for humans and the team. Product specs live in `Docs/Product/`. STEOS microservice documentation uses folders `01`–`05` and `99 - Staging`.
+- **`Docs/`** — official, stable docs for humans and the team. Product specs live in `Docs/Product/` (e.g. `01Feature_Map.md`). STEOS microservice documentation uses folders `01`–`05` and `99 - Staging`.
+- **`Docs/Plans/`** — technical, step-by-step implementation plans for AI agents. Instruct the agent to read plans from this folder before beginning a task.
 - **`Docs/(Done) Authorization Service/`** — formatting etalon only (layout, headings, tables). Do not copy Auth domain text into other services.
 - **`Docs/Шаблон документации микросервиса STEOS/`** — short layout copies for new services.
 
