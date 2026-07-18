@@ -516,6 +516,8 @@ When editing STEOS docs, follow the dependency order **`03` → `01` → `02` �
 - Prefer existing project patterns; avoid introducing new abstractions.
 - Keep edits focused and reviewable; never revert unrelated user changes.
 - If you change files/styles/structures/workflows described in this `AGENTS.md`, update this file.
+- Use the `context7` MCP server to leverage modern development approaches.
+- Do not hardcode values.
 
 
 ---

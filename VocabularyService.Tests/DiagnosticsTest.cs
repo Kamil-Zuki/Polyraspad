@@ -23,6 +23,16 @@ public class DiagnosticsTest
         _output = output;
     }
 
+    private sealed class TestContext : VocabularyServiceContext
+    {
+        public TestContext(DbContextOptions<VocabularyServiceContext> options) : base(options) { }
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<Card>().Ignore(c => c.SearchVector);
+        }
+    }
+
     [Fact]
     public async Task SimulateDeckStatsAndStudyQueue()
     {
@@ -30,13 +40,13 @@ public class DiagnosticsTest
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
 
-        using var context = new VocabularyServiceContext(options);
+        using var context = new TestContext(options);
         
         var userId = Guid.NewGuid();
         var projectId = Guid.NewGuid();
         var deckId = Guid.NewGuid();
 
-        var deck = new Deck { Id = deckId, ProjectId = projectId, OwnerId = userId };
+        var deck = new Deck { Id = deckId, ProjectId = projectId, OwnerId = userId, Title = "Deck", ContributionPolicy = "OPEN", LicenseType = "PRIVATE" };
         context.Decks.Add(deck);
 
         var card1 = new Card { Id = Guid.NewGuid(), DeckId = deckId, CreatorId = userId, CreatedAt = DateTime.UtcNow };
