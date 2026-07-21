@@ -34,9 +34,18 @@ Media Service не владеет метаданными карточек или
 
 ## 4. Жизненный цикл
 
-1. **Upload:** `PutObject` с `content_type`; возврат `url` + `image_id`.
-2. **Read URL:** `GetImageUrl` — server-fetch URL (presigned или `PublicBaseUrl` / `ServerFetchBaseUrl`).
+1. **Upload:** `PutObject` с `content_type`; ответ `Upload*` вызывает `GetMediaUrlAsync` → **`PublicBaseUrl`** (если задан) иначе **presigned** S3 URL; возвращает `url` + `*_id`.
+2. **Get*Url RPC:** `GetImageUrl` / `GetAudioUrl` / `GetDocumentUrl` вызывают `GetMediaUrlForServerFetchAsync` → **`ServerFetchBaseUrl`** (fallback `PublicBaseUrl`, иначе presigned).
 3. **Delete:** явный delete в текущей реализации **не реализован** — объекты персистентны до ручной очистки bucket.
+
+## 5. Двойная модель URL (не персистится)
+
+| Путь | Метод storage | База URL |
+| :--- | :--- | :--- |
+| Upload response (`UploadImage` / `UploadAudio` / `UploadDocument`) | `GetMediaUrlAsync` | `Storage:PublicBaseUrl` → else presigned |
+| Get URL RPC (`GetImageUrl` / …) | `GetMediaUrlForServerFetchAsync` | `Storage:ServerFetchBaseUrl` → else `PublicBaseUrl` → else presigned |
+
+Поля `url` в gRPC responses — **проекции**, не колонки БД (БД нет).
 
 ---
 
@@ -56,7 +65,7 @@ Media Service не владеет метаданными карточек или
 
 ## 3. Жизненный цикл
 
-Аналогично image: upload → optional `GetAudioUrl`. TTS синтез на Aggregator может вызвать `UploadAudio` после локальной генерации.
+Аналогично image: **Upload** URL через `PublicBaseUrl`/presigned; **GetAudioUrl** через `ServerFetchBaseUrl` cascade. TTS синтез на Aggregator может вызвать `UploadAudio` после локальной генерации.
 
 ---
 
@@ -87,4 +96,4 @@ Media Service не владеет метаданными карточек или
 
 ## 4. Жизненный цикл
 
-Upload → ссылка в book record → чтение через `GetDocumentUrl` или public URL в ответе upload.
+Upload → `url` через `GetMediaUrlAsync` (PublicBaseUrl/presigned) → ссылка `document_id` в book record → чтение через `GetDocumentUrl` (`ServerFetchBaseUrl` cascade).

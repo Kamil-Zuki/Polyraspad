@@ -14,7 +14,7 @@
 | :--- | :--- | :---: | :--- |
 | `Id` | `Guid` | да | PK, default `Guid.NewGuid()` |
 | `Token` | `string` | да | Base64, 64 random bytes; unique lookup key |
-| `UserId` | `string` | да | FK → `ApplicationUser.Id` |
+| `UserId` | `string` | да | Логическая ссылка на `ApplicationUser.Id`; **EF FK constraint в миграции отсутствует** (нет `HasOne`/FK в `CreateTable RefreshTokens`) |
 | `ExpiryDate` | `DateTime` (UTC) | да | Default: `UtcNow + 7 days` при создании |
 | `IsRevoked` | `bool` | да | `true` после refresh или logout |
 
@@ -40,5 +40,6 @@
 
 ## Индексы и ограничения
 
-- Lookup по `Token` (FirstOrDefault в `AuthService.RefreshToken`)
-- Явный unique index в миграции — проверить при production hardening (ISSUE при необходимости)
+- Lookup по `Token` (`FirstOrDefault` в `AuthService.RefreshToken`) — **без unique index** на `Token` в миграции (hardening gap: дубликаты теоретически возможны).
+- **Нет FK** `UserId` → `AspNetUsers.Id` на уровне PostgreSQL (см. ISSUE-002).
+- PK только на `Id`.

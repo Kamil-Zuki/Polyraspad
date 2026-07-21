@@ -9,13 +9,13 @@ SaaS-биллинг платформы Polyraspad: provider-agnostic ядро, �
 | [[01 - Функциональная спецификация]] | SR-группы и сервисные требования (`SR-BILL-*`) |
 | [[02 - Архитектура]] | КАР, слои, интеграции |
 | [[03 - Модель Данных]] | PostgreSQL schema `billing`, сущности EF Core |
-| [[04 - Бекенд, API и Контракты]] | gRPC, DTO (batch — по `steos-docs-04-coordinator`) |
+| [[04 - Бекенд, API и Контракты]] | gRPC, DTO (batch — по правилам `Docs/.cursor/rules/` для папки 04) |
 | [[99 - Staging — Разрывы согласованности (DO NOT DELETE)]] | ISSUE при расхождениях `01`↔`03` |
 
 ## Эталон формата
 
 - Полный образец: `(Done) Authorization Service/` — **layout only**
-- Правила: `Docs/.cursor/rules/steos-docs-*`
+- Правила: `Docs/.cursor/rules/`
 
 ## Код
 

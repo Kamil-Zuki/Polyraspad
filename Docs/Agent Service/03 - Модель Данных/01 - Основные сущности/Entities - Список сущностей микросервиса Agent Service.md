@@ -29,6 +29,7 @@ erDiagram
 | Таблица | Индекс / ограничение | Назначение |
 | :--- | :--- | :--- |
 | `agent_threads` | `(user_id, project_id, updated_at DESC)` | Список тредов пользователя в проекте |
+| `agent_threads` | `custom_scenario_id` (FK index) | Optional link to `custom_scenarios` |
 | `agent_messages` | `(thread_id, created_at)` | Пагинация истории |
 | `agent_runs` | `(thread_id)` | Запуски по треду |
 | `agent_tool_calls` | `(run_id, created_at)` | Tool calls run |

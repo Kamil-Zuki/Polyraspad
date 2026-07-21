@@ -21,9 +21,10 @@ Identity propagation: SR-AGG-CONTENT-03 (metadata `user_id`, `roles`).
 
 | Код | Название и Описание |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **SR-AGG-CARD-01** | **CRUD учебной карточки:** Создание, чтение и обновление note/card через CardService; FSRS-состояние и валидация полей — на стороне domain. |
+| **SR-AGG-CARD-01** | **CRUD учебной карточки:** Создание, чтение, обновление и удаление note/card через CardService. |
 | **SR-AGG-CARD-02** | **Поиск, захват и импорт карточек:** Full-text search, проверка exact-дубликатов, capture из extension и пакетный import в колоду. |
 | **SR-AGG-CARD-03** | **Схема note type для редактора:** Динамические поля и Anki-like templates для Card Editor без hardcoded schema во frontend. |
+| **SR-AGG-CARD-04** | **Обслуживание карточек:** bulk-delete, move, bulk-reset-progress, leeches, missing-media. |
 
 ---
 
@@ -192,6 +193,29 @@ Aggregator не кэширует schema между пользователями 
 
 1. **GET** с чужим projectId.
 2. **gRPC:** `PermissionDenied` → HTTP **403**.
+
+---
+
+## SR-AGG-CARD-04: Обслуживание карточек {#SR-AGG-CARD-04}
+
+Пакетные и служебные операции CardService, экспонированные в REST.
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| Thin BFF | Логика фильтрации leeches / missing media — в Vocabulary. |
+| JWT | Все маршруты `[Authorize]`. |
+
+### 2. Высокоуровневое описание
+
+REST-поверхность включает delete одной карточки, bulk-delete, move между колодами, bulk-reset-progress, списки leeches и missing-media.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Bulk delete (Happy Path)
+1. Клиент вызывает bulk-delete с массивом cardId.
+2. BFF проксирует gRPC; возвращает результат удаления.
 
 ---
 

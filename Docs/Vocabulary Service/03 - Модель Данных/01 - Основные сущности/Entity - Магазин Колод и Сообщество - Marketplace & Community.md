@@ -66,7 +66,7 @@
 - `TargetDeckId` (Guid, FK to Deck) — целевая колода для изменений.
 - `TargetCardId` (Guid?, FK to Card) — конкретная изменяемая карточка (если применимо).
 - `AuthorId` (Guid) — автор контрибуции.
-- `Type` (string) — тип вклада (например, `"SUGGEST_EDIT"`, `"ADD_CARD"`).
+- `Type` (string) — тип вклада: `"EDIT"`, `"ADD"`, `"DELETE"` (значения из `CommunityService`).
 - `Payload` (JSONB) — сериализованные измененные данные карточки/заметки.
 - `Comment` (string?) — комментарий автора к изменениям.
 - `Status` (string) — статус модерации (`"PENDING"`, `"APPROVED"`, `"REJECTED"`).

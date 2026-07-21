@@ -1,4 +1,4 @@
-# ISSUE-004: GetSubscription не использует effective subscription logic
+# ISSUE-004: GetSubscription ≠ FindEffective (access / entitlements)
 
 ## Тип
 
@@ -6,28 +6,25 @@
 
 ## В двух словах
 
-`01` SR-BILL-SUB-01 требует «effective row» с grace для PastDue. `SubscriptionService.GetActiveSubscriptionAsync` возвращает только Active/Trialing с `CurrentPeriodEnd > now`, без `SubscriptionQueryHelper` и без PastDue в grace window.
+`01` SR-BILL-SUB-01 выровнен с кодом: только Active/Trialing + period > now. CheckAccess / GetEntitlements используют `FindEffectiveSubscription` (включая PastDue + grace). UI snapshot и access-check могут расходиться. Ранее дублировался как ISSUE-002-getsubscription-effective-logic — канон теперь ISSUE-004.
 
 ## Где проблема
 
 | Источник | Якорь | Что не сходится |
 | :--- | :--- | :--- |
-| 01 | SR-BILL-SUB-01 | «Effective row» — последняя релевантная подписка |
-| 03 | Effective subscription selection | PastDue + grace cutoff |
-| 04 | `#grpc-GetSubscription` | Шаг 3: `FindEffectiveSubscription` |
-| Код | `GetActiveSubscriptionAsync` | Filter только Active/Trialing |
+| 01 | SR-BILL-SUB-01 | Active/Trialing only (code-aligned) |
+| 03 | FindEffective (access) | PastDue + GracePeriodDays |
+| код | `GetActiveSubscriptionAsync` vs `SubscriptionQueryHelper` | Разные селекторы |
 
-Путь к файлу (вторично): `BillingService/Services/SubscriptionService.cs`
+Путь (вторично): `BillingService/Services/SubscriptionService.cs`
 
 ## Доказательство
 
-Код: `.Where(s => s.Status == Active || s.Status == Trialing).Where(s => s.CurrentPeriodEnd > now)`
-
-`CheckAccess` / `GetEntitlements` используют `SubscriptionQueryHelper.FindEffectiveSubscription` с grace.
+GetSubscription filter: `Active || Trialing` и `CurrentPeriodEnd > now`. CheckAccess: `FindEffectiveSubscription`.
 
 ## Рекомендуемое действие
 
-Унифицировать `GetSubscription` через `SubscriptionQueryHelper` (как в `04` gRPC doc) или явно уточнить SR-BILL-SUB-01 если UI snapshot намеренно уже.
+Унифицировать GetSubscription через helper **или** оставить намеренный узкий UI snapshot и держать этот ISSUE как известный product gap.
 
 ## Статус
 

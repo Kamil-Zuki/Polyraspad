@@ -6,99 +6,101 @@
 
 ## 1. Lesson
 
-`Lesson` — системный урок в глобальной программе обучения.
+`Lesson` — системный урок в глобальной программе обучения. Таблица: `Lessons`.
 
 **Поля:**
 - `Id` (Guid, PK)
-- `Title` (string) — название урока (например, "Greetings").
+- `Title` (string) — название урока.
 - `Description` (string) — описание урока.
-- `CefrLevel` (string) — уровень сложности по шкале CEFR (A1, A2, B1, B2, C1, C2).
-- `OrderIndex` (int) — порядковый номер урока в рамках одного уровня CEFR.
-- `SystemPromptTemplate` (string) — шаблон системного промпта для ИИ-агента, проводящего урок.
-- `UnlocksAfterLessonId` (Guid?) — ссылка на предыдущий урок, обязательный для разблокировки текущего.
+- `Category` (string) — категория (например, `"Grammar & Structure"`).
+- `Difficulty` (string) — сложность урока.
+- `SystemPrompt` (string) — системный промпт для ИИ-агента (поле C#: `SystemPrompt`, не `SystemPromptTemplate`).
+- `ContentMarkdown` (string) — markdown-контент урока.
+- `ColorCssClass` (string?) — CSS-класс оформления.
+- `CefrLevel` (string) — уровень CEFR (`A1`…`C2`).
+- `OrderIndex` (int) — порядок внутри уровня.
+- `UnlocksAfterLessonId` (Guid?) — предыдущий урок, обязательный для разблокировки.
+- `TargetSkills` (string) — целевые навыки, comma-separated (`R`/`L`/`W`/`S`).
+- `EstimatedMinutes` (int) — ориентировочная длительность.
+- `CreatedAt` (DateTime)
+- `UpdatedAt` (DateTime)
 
 ---
 
 ## 2. UserLessonProgress
 
-`UserLessonProgress` — индивидуальный прогресс прохождения конкретного урока пользователем.
+`UserLessonProgress` — индивидуальный прогресс прохождения урока. Таблица: `UserLessonProgresses`.
 
 **Поля:**
-- `UserId` (Guid, PK)
-- `LessonId` (Guid, PK, FK to Lesson)
-- `Status` (string) — статус прохождения: `"NotStarted"`, `"InProgress"`, `"Completed"`.
-- `ScorePercent` (int) — оценка успешности от ИИ в диапазоне 0–100%.
-- `TimeSpentSeconds` (int) — общее количество секунд, затраченное пользователем.
-- `StartedAt` (DateTime) — дата и время начала прохождения.
-- `CompletedAt` (DateTime?) — дата и время успешного завершения.
-- `AgentThreadId` (Guid?) — идентификатор диалога с ИИ в `AgentService`.
+- `Id` (Guid, PK)
+- `UserId` (Guid)
+- `LessonId` (Guid, FK to Lesson)
+- `Status` (`LessonStatus` enum → int) — `NotStarted = 0`, `InProgress = 1`, `Completed = 2`.
+- `AgentThreadId` (Guid?) — идентификатор диалога в `AgentService`.
+- `ScorePercent` (int) — оценка 0–100 при завершении.
+- `TimeSpentSeconds` (int) — суммарное время в секундах.
+- `StartedAt` (DateTime)
+- `CompletedAt` (DateTime?)
 
 ---
 
 ## 3. UserCefrProgress
 
-`UserCefrProgress` — агрегированный прогресс освоения уровней CEFR пользователем.
+`UserCefrProgress` — агрегированный прогресс освоения уровней CEFR. Таблица: `UserCefrProgresses`.
 
 **Поля:**
-- `UserId` (Guid, PK)
-- `Level` (string, PK) — код уровня (A1, A2...).
-- `Status` (string) — статус уровня: `"Locked"`, `"InProgress"`, `"Completed"`.
-- `CompletedLessonsCount` (int) — число пройденных уроков на уровне.
-- `TotalLessonsCount` (int) — общее число доступных уроков на уровне.
+- `Id` (Guid, PK)
+- `UserId` (Guid)
+- `CefrLevel` (string) — код уровня (`A1`…`C2`).
+- `CompletedLessons` (int)
+- `TotalLessons` (int)
+- `IsLevelCompleted` (bool)
+- `LevelCompletedAt` (DateTime?)
+- `UpdatedAt` (DateTime)
 
 ---
 
 ## 4. StudySession
 
-`StudySession` — учебная сессия повторения карточек (например, ежедневный проход колоды).
+`StudySession` — учебная сессия повторения карточек. Таблица: `internal.study_sessions`.
 
 **Поля:**
 - `Id` (Guid, PK)
 - `UserId` (Guid)
 - `ProjectId` (Guid, FK to Project)
-- `DeckId` (Guid?, FK to Deck) — колода, по которой запущена сессия (если null, то по всему проекту).
+- `DeckId` (Guid?, FK to Deck) — колода сессии (`null` = весь проект).
 - `StartTime` (DateTime)
 - `EndTime` (DateTime)
-- `CardsReviewed` (int) — количество карточек, пройденных за сессию.
-- `DurationSec` (int) — общая продолжительность в секундах.
-- `NewLearned` (int) — количество новых изученных карточек.
-- `Status` (string) — статус сессии: `"ACTIVE"` или `"COMPLETED"`.
+- `CardsReviewed` (int)
+- `DurationSec` (int)
+- `NewLearned` (int)
+- `Status` (string) — `"ACTIVE"` или `"COMPLETED"`.
 
 ---
 
 ## 5. ReviewLog
 
-`ReviewLog` — детальный лог каждого ответа на карточку. Используется для оптимизации параметров весов FSRS.
+`ReviewLog` — детальный лог каждого ответа на карточку. Таблица: `internal.review_logs`.
 
 **Поля:**
 - `Id` (Guid, PK)
 - `UserId` (Guid)
 - `CardId` (Guid, FK to Card)
-- `SessionId` (Guid) — идентификатор сессии `StudySession`.
-- `Rating` (short) — оценка пользователя: `1=Again`, `2=Hard`, `3=Good`, `4=Easy`.
-- `StateBefore` (short) — FSRS статус карточки до ответа.
-- `StateAfter` (short) — FSRS статус карточки после ответа.
-- `StepBefore` (int)
-- `StepAfter` (int)
-- `RepsBefore` (int)
-- `RepsAfter` (int)
-- `LapsesBefore` (int)
-- `LapsesAfter` (int)
-- `ElapsedDaysBefore` (int)
-- `ElapsedDaysAfter` (int)
-- `ScheduledDaysBefore` (int)
-- `ScheduledDaysAfter` (int)
-- `LastReviewBefore` (DateTime)
-- `LastReviewAfter` (DateTime)
-- `DueBefore` (DateTime)
-- `DueAfter` (DateTime)
-- `StabilityBefore` (float)
-- `StabilityAfter` (float)
-- `DifficultyBefore` (float)
-- `DifficultyAfter` (float)
-- `ReviewDurationMs` (int) — время размышления над карточкой в миллисекундах.
-- `UserAnswer` (string?) — текстовый ответ пользователя (для активных типов карточек).
-- `AnswerValidationResult` (string?) — результат проверки ответа ИИ или системой.
+- `SessionId` (Guid) — идентификатор `StudySession`.
+- `Rating` (short) — `1=Again`, `2=Hard`, `3=Good`, `4=Easy`.
+- `StateBefore` / `StateAfter` (short) — FSRS state.
+- `StepBefore` / `StepAfter` (int)
+- `RepsBefore` / `RepsAfter` (int)
+- `LapsesBefore` / `LapsesAfter` (int)
+- `ElapsedDaysBefore` / `ElapsedDaysAfter` (int)
+- `ScheduledDaysBefore` / `ScheduledDaysAfter` (int)
+- `LastReviewBefore` / `LastReviewAfter` (DateTime)
+- `DueBefore` / `DueAfter` (DateTime)
+- `StabilityBefore` / `StabilityAfter` (float)
+- `DifficultyBefore` / `DifficultyAfter` (float)
+- `ReviewDurationMs` (int)
+- `UserAnswer` (string?) — текстовый ответ пользователя.
+- `AnswerValidationResult` (JSONB?) — структурированный результат проверки ответа (не произвольная строка).
 - `CreatedAt` (DateTime)
 
 ---
@@ -108,7 +110,7 @@
 ```mermaid
 erDiagram
     Lesson ||--o{ UserLessonProgress : tracks
-    UserCefrProgress }o--|| Project : aggregates_for
+    UserCefrProgress }o--|| User : aggregates_for
     StudySession ||--o{ ReviewLog : contains
     Card ||--o{ ReviewLog : logged_for
 ```

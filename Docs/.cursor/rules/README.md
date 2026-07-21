@@ -1,16 +1,16 @@
-# Cursor Rules — naming convention (STEOS documentation)
+# Cursor Rules — naming convention (microservice documentation)
 
-Все правила генерации markdown-документации микросервисов используют префикс **`steos-docs-`**.
+Все правила генерации markdown-документации микросервисов используют префикс **`docs-`**.
 
 ## Паттерн имени файла
 
 ```
-steos-docs-{scope}[-{section}].mdc
+docs-{scope}[-{section}].mdc
 ```
 
 | Часть | Значение | Пример |
 | :--- | :--- | :--- |
-| `steos-docs-` | фиксированный префикс репозитория | — |
+| `docs-` | фиксированный префикс репозитория | — |
 | `{scope}` | область: `core`, `folders-010305`, `folder-04-coordinator`, `folder-04-{section}` | `folder-04-grpc` |
 | `{section}` | slug подпапки 04 (kebab-case, англ.) | `dto`, `rest-api`, `rabbitmq` |
 
@@ -22,21 +22,21 @@ steos-docs-{scope}[-{section}].mdc
 
 | Файл | glob | Назначение |
 | :--- | :--- | :--- |
-| [`steos-docs-core.mdc`](steos-docs-core.mdc) | `alwaysApply: true` | Порядок `03→01→02→04`, BFF, anti-hallucination, staging |
+| [`docs-core.mdc`](docs-core.mdc) | `alwaysApply: true` | Порядок `03→01→02→04`, BFF, anti-hallucination, staging |
 
 ### G1 — Папки 01, 02, 03, 05
 
 | Файл | glob | Назначение |
 | :--- | :--- | :--- |
-| [`steos-docs-folders-010305.mdc`](steos-docs-folders-010305.mdc) | `01/`, `02/`, `03/`, `05/` | SR-блоки, КАР, TOC, Obsidian |
-| [`steos-docs-staging-0103.mdc`](steos-docs-staging-0103.mdc) | **`01/` + `03/` only** | **ОБЯЗАТЕЛЬНО:** сверка 01↔03 → запись ISSUE в `99` на диск |
-| [`steos-docs-staging-issues.mdc`](steos-docs-staging-issues.mdc) | **`99 - Staging …/`** | Стиль ISSUE: язык для человека, якорь SR/entity/RPC |
+| [`docs-folders-010305.mdc`](docs-folders-010305.mdc) | `01/`, `02/`, `03/`, `05/` | SR-блоки, КАР, TOC, Obsidian |
+| [`docs-staging-0103.mdc`](docs-staging-0103.mdc) | **`01/` + `03/` only** | **ОБЯЗАТЕЛЬНО:** сверка 01↔03 → запись ISSUE в `99` на диск |
+| [`docs-staging-issues.mdc`](docs-staging-issues.mdc) | **`99 - Staging …/`** | Стиль ISSUE: язык для человека, якорь SR/entity/RPC |
 
 ### G2 — Папка 04, координатор
 
 | Файл | glob | Назначение |
 | :--- | :--- | :--- |
-| [`steos-docs-folder-04-coordinator.mdc`](steos-docs-folder-04-coordinator.mdc) | `04 - Бекенд, API и Контракты/**` | Дерево, Contract Layers, alignment, consistency, skills |
+| [`docs-folder-04-coordinator.mdc`](docs-folder-04-coordinator.mdc) | `04 - Бекенд, API и Контракты/**` | Дерево, Contract Layers, alignment, consistency, skills |
 
 Координатор **без slug подпапки** — суффикс `-coordinator`, не `-backend-api`.
 
@@ -46,20 +46,20 @@ steos-docs-{scope}[-{section}].mdc
 
 | Файл | Подпапка 04 | Block template |
 | :--- | :--- | :--- |
-| [`steos-docs-folder-04-dto.mdc`](steos-docs-folder-04-dto.mdc) | `Методы API/DTO/` | DTO, `#dto-*` |
-| [`steos-docs-folder-04-grpc.mdc`](steos-docs-folder-04-grpc.mdc) | `Методы API/gRPC/` + `.proto` | RPC, proto, `#grpc-*` |
-| [`steos-docs-folder-04-rest-api.mdc`](steos-docs-folder-04-rest-api.mdc) | `Методы API/REST API/` | REST endpoint |
-| [`steos-docs-folder-04-socket.mdc`](steos-docs-folder-04-socket.mdc) | `Методы API/Socket/` | WebSocket event |
-| [`steos-docs-folder-04-integrations.mdc`](steos-docs-folder-04-integrations.mdc) | `Интеграции со сторонними сервисами/` | HTTP/gRPC outward |
-| [`steos-docs-folder-04-rabbitmq.mdc`](steos-docs-folder-04-rabbitmq.mdc) | `Работа с Rabbit MQ/` | RabbitMQ message |
-| [`steos-docs-folder-04-redis.mdc`](steos-docs-folder-04-redis.mdc) | `Работа с Redis/` | Redis operation |
-| [`steos-docs-folder-04-algorithms.mdc`](steos-docs-folder-04-algorithms.mdc) | `Алгоритмы и методы бекенда/` | Algorithm |
+| [`docs-folder-04-dto.mdc`](docs-folder-04-dto.mdc) | `Методы API/DTO/` | DTO, `#dto-*` |
+| [`docs-folder-04-grpc.mdc`](docs-folder-04-grpc.mdc) | `Методы API/gRPC/` + `.proto` | RPC, proto, `#grpc-*` |
+| [`docs-folder-04-rest-api.mdc`](docs-folder-04-rest-api.mdc) | `Методы API/REST API/` | REST endpoint |
+| [`docs-folder-04-socket.mdc`](docs-folder-04-socket.mdc) | `Методы API/Socket/` | WebSocket event |
+| [`docs-folder-04-integrations.mdc`](docs-folder-04-integrations.mdc) | `Интеграции со сторонними сервисами/` | HTTP/gRPC outward |
+| [`docs-folder-04-rabbitmq.mdc`](docs-folder-04-rabbitmq.mdc) | `Работа с Rabbit MQ/` | RabbitMQ message |
+| [`docs-folder-04-redis.mdc`](docs-folder-04-redis.mdc) | `Работа с Redis/` | Redis operation |
+| [`docs-folder-04-algorithms.mdc`](docs-folder-04-algorithms.mdc) | `Алгоритмы и методы бекенда/` | Algorithm |
 
 ```mermaid
 flowchart TB
-  G0["G0 steos-docs-core"]
-  G1["G1 steos-docs-folders-010305"]
-  G2["G2 steos-docs-folder-04-coordinator"]
+  G0["G0 docs-core"]
+  G1["G1 docs-folders-010305"]
+  G2["G2 docs-folder-04-coordinator"]
   G3dto["G3 …-dto"]
   G3grpc["G3 …-grpc"]
   G3rest["G3 …-rest-api"]
@@ -73,7 +73,7 @@ flowchart TB
 ## Правила добавления нового rule
 
 1. Выбрать группу **G0–G3**; для новой подпапки 04 — **G3**, slug = kebab-case от имени папки.
-2. Имя: `steos-docs-folder-04-{slug}.mdc` (или `steos-docs-folders-…` для других папок документации).
+2. Имя: `docs-folder-04-{slug}.mdc` (или `docs-folders-…` для других папок документации).
 3. `description`: `[G{n} · …] краткое назначение`.
 4. `globs`: полный путь от корня сервиса, как в эталоне Auth.
 5. Обновить таблицу в [`AGENTS.md`](../../AGENTS.md) и при необходимости G2 coordinator (таблица Specialized Rules).
@@ -82,6 +82,6 @@ flowchart TB
 
 Пакетная генерация `04` — [`.cursor/skills/README.md`](../skills/README.md). Block templates **не** дублировать в skills.
 
-## Вне группы STEOS docs
+## Вне группы правил документации
 
-Прочие `.mdc` в этой папке (billing, clockwork и т.д.) **не** используют префикс `steos-docs-` и не входят в G0–G3.
+Прочие `.mdc` в этой папке (billing, clockwork и т.д.) **не** используют префикс `docs-` и не входят в G0–G3.

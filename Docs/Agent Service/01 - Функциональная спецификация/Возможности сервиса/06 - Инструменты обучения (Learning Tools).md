@@ -2,9 +2,11 @@
 
 ## Введение
 
-Language-learning tools вызываются из **AgentOrchestrator** после routing. Часть использует **LLM**, часть — **VocabularyService AIService**. Все ответы проходят **SanitizeLemmaLabels**.
+В текущем **ExecuteRun** learning side-effects выполняются через **LLM function-calling tools** (`AvailableTools` в `AgentOrchestrator`) → `ExecuteToolCoreAsync` → Vocabulary gRPC.
 
-**Метафора:** learning tools — **ящик инструментов репетитора**. Объяснение слова, грамматика, пример и карточка — разные «ключи», но все служат одной цели — учить язык точными формами, не леммами.
+**Classic intent IDs** (`explain_word`, `grammar_help`, …) остаются в `AgentIntentRouter` как классификация текста, но **не** являются server-side handlers ExecuteRun. `CustomScenario` — entity reserved без API.
+
+**Метафора:** toolbox репетитора — LLM выбирает «ключ» (deck/card/stats/lesson/placement), а не фиксированный regex→handler pipeline.
 
 ---
 
@@ -14,194 +16,374 @@ Language-learning tools вызываются из **AgentOrchestrator** посл
 
 | Код | Название и Описание |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **SR-AGENT-TOOL-01** | **explain_word:** LLM prompt с exact surface form; actions open editor draft / vocabulary. |
-| **SR-AGENT-TOOL-02** | **grammar_help:** AIService ExplainGrammarAsync. |
-| **SR-AGENT-TOOL-03** | **generate_example:** GenerateContext + translation in response. |
-| **SR-AGENT-TOOL-04** | **build_card_draft:** Draft dict Word/Expression/Translation; optional example. |
-| **SR-AGENT-TOOL-05** | **general_answer:** PolyGuide system prompt; refuse non-learning in prompt. |
-| **SR-AGENT-TOOL-06** | **custom_roleplay:** Запуск интерактивной ролевой игры или диалога с ИИ-тьютором на основе выбранного кастомного/системного сценария. |
+| **SR-AGENT-TOOL-01** | **explain_word (intent id):** Regex intent; ответ через LLM chat, не ExecuteToolCore. |
+| **SR-AGENT-TOOL-02** | **grammar_help (intent id):** Regex intent; не ExecuteToolCore handler. |
+| **SR-AGENT-TOOL-03** | **generate_example (intent id):** Regex intent; не ExecuteToolCore handler. |
+| **SR-AGENT-TOOL-04** | **build_card_draft (intent id):** Regex intent; persist card — tool `create_card`. |
+| **SR-AGENT-TOOL-05** | **general_answer (intent id):** Fallback classify; ExecuteRun всегда LLM chat. |
+| **SR-AGENT-TOOL-06** | **custom_roleplay (reserved):** `CustomScenario` entity; no gRPC/CRUD/ExecuteRun wiring. |
+| **SR-AGENT-TOOL-07** | **create_deck:** LLM tool → CreateDeck. |
+| **SR-AGENT-TOOL-08** | **create_card:** LLM tool → CreateCard. |
+| **SR-AGENT-TOOL-09** | **get_user_vocabulary_stats:** LLM tool → GetVocabularyStats. |
+| **SR-AGENT-TOOL-10** | **get_recent_leeches:** LLM tool → GetLeechCards. |
+| **SR-AGENT-TOOL-11** | **mark_lesson_completed:** LLM tool → CompleteLesson. |
+| **SR-AGENT-TOOL-12** | **submit_knowledge_check:** LLM tool → SubmitKnowledgeCheckResult. |
+| **SR-AGENT-TOOL-13** | **set_cefr_placement:** LLM tool → SetPlacementLevel. |
+| **SR-AGENT-TOOL-14** | **get_daily_plan:** LLM tool → GetDailyPlan. |
+| **SR-AGENT-TOOL-15** | **generate_writing_task:** LLM tool → GetLearningTerms + instruction. |
+| **SR-AGENT-TOOL-16** | **get_skill_assessment_history:** LLM tool → GetSkillAssessmentHistory. |
 
 ---
 
 # Детальная спецификация требований
 
-## SR-AGENT-TOOL-01: explain_word {#SR-AGENT-TOOL-01}
+## SR-AGENT-TOOL-01: explain_word (intent id) {#SR-AGENT-TOOL-01}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Exact form** | Prompt: «exact word or phrase»; no lemma labels. |
-| **Missing word** | Error assistant message asking for quoted term. |
-| **Actions** | open_editor_draft + navigate vocabulary. |
+| **Intent only** | `AgentToolId.ExplainWord` в router; **нет** case в `ExecuteToolCoreAsync`. |
+| **ExecuteRun** | Объяснение даёт LLM chat (+ optional `OPEN_EDITOR_DRAFT` ACTION line). |
 
 ### 2. Высокоуровневое описание
 
-Представим explain_word как **репетитор, который объясняет точную форму слова, а не лемму из словаря**.
-
-1. **Term check:** orchestrator передаёт extracted word/phrase; если термин отсутствует — assistant просит указать слово в кавычках.
-2. **LLM prompt:** `IAgentLlmProvider.CompleteAsync` с system rules «exact word or phrase»; языки из project context (`source_lang`/`target_lang`).
-3. **Sanitize:** ответ проходит `SanitizeLemmaLabels` перед persist — UI не показывает legacy lemma labels.
-4. **Follow-up actions:** metadata содержит `open_editor_draft` и navigate to vocabulary для продолжения обучения в Reader/Editor.
-
-Таким образом, «slept» объясняется как **slept**, не как лемма sleep, с готовыми UI actions для карточки и словаря.
+Intent «explain/define/what does» извлекает term для документации/подсказок. Primary path — LLM в ExecuteRun, не отдельный explain_word RPC handler.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
 #### Сценарий А: Explain «slept» (Happy Path)
 
 1. User: «What does slept mean?»
-2. Tool объясняет форму **slept**, не лемму sleep.
-3. Actions: editor draft + link to vocabulary.
+2. Router → ExplainWord (hint).
+3. LLM отвечает в chat; UI может показать draft ACTION.
 
 ---
 
-## SR-AGENT-TOOL-02: grammar_help {#SR-AGENT-TOOL-02}
+## SR-AGENT-TOOL-02: grammar_help (intent id) {#SR-AGENT-TOOL-02}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Vocabulary delegate** | Sentence + targetWord + nativeLanguage → ExplainGrammarResponse. |
-| **Word required** | Clarification if term missing. |
+| **Intent only** | Grammar patterns → `GrammarHelp`; Vocabulary `ExplainGrammar` **не** вызывается из текущего ExecuteRun. |
 
 ### 2. Высокоуровневое описание
 
-Представим grammar_help как **грамматический разбор предложения с выделенным словом через отдел словаря**.
-
-1. **Input assembly:** orchestrator собирает sentence, targetWord и nativeLanguage из routed intent и project context.
-2. **Vocabulary delegate:** вместо LLM вызывается AIService `ExplainGrammarAsync` с metadata `user_id` + `roles`.
-3. **Clarification path:** если targetWord не извлечён — assistant просит указать слово в контексте предложения.
-4. **Sanitized output:** ответ форматируется для чата и проходит lemma-label sanitization перед persist.
-
-Таким образом, грамматические объяснения опираются на Vocabulary AIService и сохраняют term-first подход PolyGuide.
+Грамматические вопросы обрабатывает LLM; делегирование AIService ExplainGrammar в ExecuteRun отсутствует (исторический intent id).
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
-#### Сценарий А: Grammar in context (Happy Path)
+#### Сценарий А: Grammar question (Happy Path)
 
-1. User выделяет слово в предложении и просит объяснить грамматику.
-2. gRPC `ExplainGrammarAsync` с sentence + targetWord.
-3. Assistant возвращает объяснение без lemma labels.
+1. «Why is went used here?» → GrammarHelp intent.
+2. LLM отвечает в рамках language learning prompt.
 
 ---
 
-## SR-AGENT-TOOL-03: generate_example {#SR-AGENT-TOOL-03}
+## SR-AGENT-TOOL-03: generate_example (intent id) {#SR-AGENT-TOOL-03}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **GenerateContext** | Count=1, UserLevel B1 default. |
-| **Output** | Sentence + Translation lines; editor draft action. |
+| **Intent only** | Example patterns → `GenerateExample`; `GenerateContext` не вызывается из ExecuteToolCore. |
 
 ### 2. Высокоуровневое описание
 
-Представим generate_example как **подбор одного учебного предложения с переводом для изучаемой формы**.
-
-1. **Context request:** orchestrator вызывает AIService `GenerateContext` с count=1 и UserLevel B1 по умолчанию для target form.
-2. **Dual-line output:** assistant message содержит Sentence + Translation lines для читаемого ответа в PolyGuide.
-3. **Editor bridge:** metadata action `open_editor_draft` передаёт точную форму (например, **take off**) в Card Editor.
-4. **Persist:** результат сохраняется как обычный run с tool_call record для audit.
-
-Таким образом, пользователь получает контекстный пример и может сразу открыть draft карточки без повторного ввода формы.
+Запрос примера — LLM chat; writing practice terms — tool `generate_writing_task`.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
-#### Сценарий А: Example for phrase (Happy Path)
+#### Сценарий А: Example request (Happy Path)
 
-1. User: «Give me an example with take off».
-2. Tool генерирует sentence + translation для фразы **take off**.
-3. Action: open_editor_draft с точной формой.
+1. «Give me an example with take off» → GenerateExample intent; LLM отвечает.
 
 ---
 
-## SR-AGENT-TOOL-04: build_card_draft {#SR-AGENT-TOOL-04}
+## SR-AGENT-TOOL-04: build_card_draft (intent id) {#SR-AGENT-TOOL-04}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Draft fields** | Word, optional Expression/Translation. |
-| **Best-effort example** | GenerateContext optional; failure logged debug only. |
+| **Intent only** | Card patterns → `BuildCardDraft`. |
+| **Persist path** | Создание карточки в Vocabulary — LLM tool `create_card` (TOOL-08). |
 
 ### 2. Высокоуровневое описание
 
-Представим build_card_draft как **черновик карточки на столе редактора — без автосохранения в deck**.
-
-1. **Draft assembly:** orchestrator формирует structured fields Word, optional Expression/Translation из extracted term и LLM/Vocabulary helpers.
-2. **Best-effort example:** опциональный `GenerateContext`; failure логируется debug-only — draft всё равно возвращается.
-3. **Action metadata:** `open_editor_draft` передаёт payload в Card Editor; пользователь подтверждает save в UI.
-4. **Term-first:** Word хранит surface form («slept»), не лемму; card draft готов к LingQ-style workflow.
-
-Таким образом, чат быстро превращает запрос «сделай карточку» в редактируемый draft без mandatory persist в Vocabulary.
+Regex card intent не создаёт draft handler; LLM может вызвать `create_card` или выдать `OPEN_EDITOR_DRAFT` ACTION.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
-#### Сценарий А: Draft from chat (Happy Path)
+#### Сценарий А: Card via tool (Happy Path)
 
-1. User просит карточку для слова «slept».
-2. Draft: Word=slept, Translation=…; optional example если GenerateContext успешен.
+1. User просит карточку.
+2. LLM → `create_card` с word/translation/deck_id.
 
 ---
 
-## SR-AGENT-TOOL-05: general_answer {#SR-AGENT-TOOL-05}
+## SR-AGENT-TOOL-05: general_answer (intent id) {#SR-AGENT-TOOL-05}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Strict system rules** | Language learning only; no code; term-first. |
-| **Refusal detection** | Regex on output → metadata refusal flag. |
+| **Fallback intent** | Unmatched + allowed domain → `GeneralAnswer`. |
+| **ExecuteRun** | Всегда LLM `CompleteChatAsync` с system prompt (override или builder). |
 
 ### 2. Высокоуровневое описание
 
-Представим general_answer как **универсальный репетитор PolyGuide для вопросов в рамках language learning**.
-
-1. **Strict system prompt:** LLM получает правила «language learning only», no code, term-first — ответы про точные формы, не леммы.
-2. **Fallback routing:** intent router направляет сюда unmatched messages при allowed domain после специализированных tools.
-3. **Refusal detection:** regex на output LLM может пометить off-domain ответ; metadata `refusal: true` для UI styling.
-4. **Sanitize & persist:** ответ санитизируется от lemma labels и сохраняется как completed run с model tag.
-
-Таким образом, PolyGuide закрывает общие учебные вопросы одним fallback tool, не ослабляя domain guardrails.
+Fallback classification не меняет path ExecuteRun — ответ всегда из LLM loop.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
-#### Сценарий А: sleep vs slept (term-first)
+#### Сценарий А: Open question (Happy Path)
 
-1. User asks about «slept» — tool explains **slept**, not lemma sleep.
-2. Card draft uses surface form «slept».
+1. User задаёт учебный вопрос без спец-паттерна.
+2. LLM отвечает в рамках PolyGuide prompt.
 
 ---
 
-## SR-AGENT-TOOL-06: custom_roleplay {#SR-AGENT-TOOL-06}
+## SR-AGENT-TOOL-06: custom_roleplay (reserved) {#SR-AGENT-TOOL-06}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Interactive Roleplay** | Чат-сессия с заданными параметрами роли, локации, сложности и целей общения. |
-| **Scenario Prompting** | Использование кастомного системного промпта сценария (пользовательского или предустановленного). |
-| **Target Evaluation** | Фиксация завершения ИИ-агентом с выставлением оценки по достигнутым целям. |
+| **Entity reserved** | Таблица `custom_scenarios` + FK `agent_threads.custom_scenario_id` существуют. |
+| **Not exposed** | Нет gRPC CRUD; CreateThread не принимает scenario id; ExecuteRun не загружает `SystemPromptTemplate`. |
+| **No live tool** | Инструмент `custom_roleplay` **не** входит в `AvailableTools`. |
 
 ### 2. Высокоуровневое описание
 
-Инструмент `custom_roleplay` позволяет запустить интерактивную симуляцию реального общения (диалог по ролям):
-
-1. **Инициализация:** Orchestrator загружает промпт и настройки выбранного сценария (`CustomScenario`).
-2. **Запуск сессии:** Создается новый тред в `AgentService` с системным промптом, описывающим роль ИИ (например, "Японский бариста"), роль пользователя, сложность (CEFR) и цели диалога (например, "Успешно заказать кофе без сахара").
-3. **Ведение диалога:** ИИ общается с пользователем в рамках сценария, мягко исправляя ошибки в речевых оборотах (если включен режим подсказок) и направляя его к выполнению целей.
-4. **Завершение и Срез:** При выполнении целей диалога (или по команде пользователя) ИИ-агент подводит итоги, оценивает успешность (0-100%) и записывает результат через API в `VocabularyService` в виде лога оценки навыков (`SkillAssessmentLog`).
+Модель данных подготовлена под ролевые сценарии, но продуктовый path не wired. Документируется как reserved capability (ISSUE-002).
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
-#### Сценарий А: Заказ кофе (Happy Path)
-1. User выбирает сценарий "Кафе в Токио".
-2. Tool инициализирует сессию с промптом бариста.
-3. User общается, делает заказ.
-4. ИИ-агент подтверждает достижение цели, завершает сессию и записывает оценку `speaking` (Score = 95).
+#### Сценарий А: Gap (Negative Path)
+
+1. Client пытается выбрать CustomScenario в UI.
+2. Agent Service API сценариев отсутствует — flow не поддерживается до wiring.
+
+---
+
+## SR-AGENT-TOOL-07: create_deck {#SR-AGENT-TOOL-07}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **LLM tool** | Args: `title` (required), `description` optional. |
+| **Vocabulary** | `CreateDeckAsync(user, project, title, desc)`. |
+
+### 2. Высокоуровневое описание
+
+LLM создаёт колоду в проекте; output JSON `{ id, title }` возвращается в tool message.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: New deck (Happy Path)
+
+1. User: «Create a deck Travel phrases».
+2. Tool `create_deck` → Vocabulary; assistant подтверждает.
+
+---
+
+## SR-AGENT-TOOL-08: create_card {#SR-AGENT-TOOL-08}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Required args** | `deck_id`, `word`, `translation`; optional `expression`. |
+| **Deck fallback** | Invalid/empty deck_id → first deck from `GetDeckTreeAsync`. |
+
+### 2. Высокоуровневое описание
+
+Создаёт flashcard с exact surface form `word` через Vocabulary CreateCard.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Card without deck_id (Happy Path)
+
+1. LLM вызывает `create_card` без валидного deck_id.
+2. Orchestrator берёт first root deck; card создаётся.
+
+---
+
+## SR-AGENT-TOOL-09: get_user_vocabulary_stats {#SR-AGENT-TOOL-09}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Read-only** | `GetVocabularyStatsAsync` → counts (total/mature/learning/new). |
+
+### 2. Высокоуровневое описание
+
+LLM запрашивает прогресс словаря для ответа о статистике.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Stats question (Happy Path)
+
+1. User спрашивает о прогрессе.
+2. Tool возвращает counts; LLM формулирует ответ.
+
+---
+
+## SR-AGENT-TOOL-10: get_recent_leeches {#SR-AGENT-TOOL-10}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Leeches** | `GetLeechCardsAsync` → id, srs, Word/Translation из note fields. |
+
+### 2. Высокоуровневое описание
+
+Список проблемных карточек для focused practice.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Leech review (Happy Path)
+
+1. User: «Which cards am I failing?»
+2. Tool → leech list; LLM предлагает практику.
+
+---
+
+## SR-AGENT-TOOL-11: mark_lesson_completed {#SR-AGENT-TOOL-11}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Args** | `lesson_id` (GUID). |
+| **Vocabulary** | `CompleteLessonAsync`. |
+
+### 2. Высокоуровневое описание
+
+Агент отмечает урок завершённым после assessment в диалоге.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Finish lesson (Happy Path)
+
+1. LLM вызывает `mark_lesson_completed` с lesson_id.
+2. Vocabulary обновляет статус урока.
+
+---
+
+## SR-AGENT-TOOL-12: submit_knowledge_check {#SR-AGENT-TOOL-12}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Args** | `term_ids` + optional reading/listening/writing/speaking scores 0–100. |
+| **Vocabulary** | `SubmitKnowledgeCheckResultAsync`. |
+
+### 2. Высокоуровневое описание
+
+Фиксация результатов knowledge check / skill exam в конце урока.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: End of knowledge check (Happy Path)
+
+1. LLM передаёт term_ids и scores.
+2. Vocabulary сохраняет skill assessment.
+
+---
+
+## SR-AGENT-TOOL-13: set_cefr_placement {#SR-AGENT-TOOL-13}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Args** | `cefr_level` (A1..C2). |
+| **Vocabulary** | `SetPlacementLevelAsync`. |
+| **Loop break** | После successful call ExecuteRun завершает tool loop. |
+
+### 2. Высокоуровневое описание
+
+Placement copilot фиксирует CEFR и unlock curriculum levels.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Placement B1 (Happy Path)
+
+1. Tool `set_cefr_placement` `{ cefr_level: "B1" }`.
+2. Loop break; assistant completion message.
+
+---
+
+## SR-AGENT-TOOL-14: get_daily_plan {#SR-AGENT-TOOL-14}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **LLM tool** | `GetDailyPlanAsync` → summary + tasks (fsrs/lesson/knowledge_check). |
+| **Greeting inject** | `IsInitialGreeting` (не placement) добавляет plan summary в system prompt без tool call. |
+
+### 2. Высокоуровневое описание
+
+Персональный daily plan для guidance в начале сессии или по запросу LLM.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Init greeting (Happy Path)
+
+1. ExecuteRun с `IsInitialGreeting=true`.
+2. Plan summary в system prompt; LLM приветствует и предлагает next step.
+
+---
+
+## SR-AGENT-TOOL-15: generate_writing_task {#SR-AGENT-TOOL-15}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Terms** | `GetLearningTermsAsync` (limit 7) + instruction для writing/translation task. |
+| **Follow-up** | Instruction просит затем вызвать `submit_knowledge_check` с writing_score. |
+
+### 2. Высокоуровневое описание
+
+Готовит payload для writing practice на текущих learning terms.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Writing practice (Happy Path)
+
+1. LLM вызывает `generate_writing_task`.
+2. Получает terms + instruction; формулирует задание пользователю.
+
+---
+
+## SR-AGENT-TOOL-16: get_skill_assessment_history {#SR-AGENT-TOOL-16}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **History** | `GetSkillAssessmentHistoryAsync` (limit 20) → skill, score, date. |
+
+### 2. Высокоуровневое описание
+
+Тренды reading/listening/writing/speaking для рекомендаций focused practice.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Skill trends (Happy Path)
+
+1. User: «How is my speaking improving?»
+2. Tool history → LLM анализирует scores.
 
 ---
 
 *Следующая группа: [[07 - Навигация и прогресс (Navigation & Progress)]].*
-

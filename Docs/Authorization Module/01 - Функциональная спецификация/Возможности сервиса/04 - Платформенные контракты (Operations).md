@@ -20,6 +20,7 @@
 | **SR-AUTHMOD-OPS-02** | **CORS policy:** Explicit origins, AllowCredentials; wildcard запрещён в prod validation. |
 | **SR-AUTHMOD-OPS-03** | **Production startup validation:** JWT, ConfirmationLink, Email SMTP, CORS — fail-fast. |
 | **SR-AUTHMOD-OPS-04** | **EF Core migrations at startup:** `db.Database.Migrate()` после legacy baseline helper. |
+| **SR-AUTHMOD-OPS-05** | **Swagger (Development):** OpenAPI UI `authorization-module/swagger`. |
 
 ---
 
@@ -170,6 +171,35 @@ Fail-fast guard против placeholder config в Production.
 1. Empty postgres database `auth-module`.
 2. **Startup:** migrations applied; AspNetUsers + RefreshTokens exist.
 3. **Result:** gRPC RegisterUser succeeds.
+
+---
+
+## SR-AUTHMOD-OPS-05: Swagger (Development) {#SR-AUTHMOD-OPS-05}
+
+OpenAPI для прямого REST/gRPC exploration в Development.
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Route prefix** | `authorization-module/swagger` (UI + JSON document). |
+| **Title** | SwaggerDoc «Personal Vocabulary API» / Authorization API endpoint label. |
+| **Dev-oriented** | Зарегистрирован в `Program.cs` (`AddSwaggerGen` / `UseSwagger` / `UseSwaggerUI`). |
+
+### 2. Высокоуровневое описание
+
+Представим Swagger как **технический паспорт REST legacy** на отдельном этаже здания — для ручной проверки endpoints без Frontend.
+
+1. **Register:** `AddSwaggerGen` с document `v1`.
+2. **Mount:** `UseSwagger` route template `authorization-module/swagger/{documentname}/swagger.json`.
+3. **UI:** `UseSwaggerUI` RoutePrefix `authorization-module/swagger`.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Open Swagger UI (Happy Path)
+
+1. Browser: `/authorization-module/swagger`.
+2. UI загружает `v1` document; доступны legacy REST операции.
 
 ---
 

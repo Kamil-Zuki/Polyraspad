@@ -62,4 +62,4 @@ Billing Service экспонирует только gRPC API и liveness probe �
 
 ---
 
-*Документация групп 01 завершена. Следующий шаг STEOS workflow: `04 - Бекенд, API и Контракты` (gRPC blocks).*
+*Документация групп 01 завершена. Следующий шаг workflow: `04 - Бекенд, API и Контракты` (gRPC blocks).*

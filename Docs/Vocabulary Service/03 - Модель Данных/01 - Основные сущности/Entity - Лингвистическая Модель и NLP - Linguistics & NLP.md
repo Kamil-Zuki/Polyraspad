@@ -12,7 +12,7 @@
 - `Id` (Guid, PK)
 - `ProjectId` (Guid, FK to Project)
 - `Text` (string) — исходный текст термина (с сохранением регистра первого добавления).
-- `NormalizedText` (string) — нормализованный текст для сравнения (в нижнем регистре, с убранными пробелами и знаками препинания).
+- `NormalizedText` (string) — ключ совпадения: `trim` + `ToLowerInvariant` + схлопывание пробелов (`TermNormalizer`). Знаки препинания **не** удаляются.
 - `Type` (string) — тип учебной единицы: `"WORD"` (одиночное слово) или `"PHRASE"` (словосочетание).
 - `Language` (string?) — язык термина.
 - `CreatedAt` (DateTime)
@@ -29,7 +29,7 @@
 - `UserId` (Guid)
 - `ProjectId` (Guid, FK to Project)
 - `ProjectTermId` (Guid, FK to ProjectTerm)
-- `Status` (string) — текущий статус: `"NEW"` (новое слово), `"SAVED"` (сохраненное, с переводом), `"KNOWN"` (известное), `"IGNORED"` (игнорируемое).
+- `Status` (string) — текущий статус: `"NEW"`, `"SAVED"` (сохранённый термин с переводом), `"KNOWN"`, `"IGNORED"`. В старых данных встречаются legacy `"LINGQ"` / `"LEARNING"` — наружу через API нормализуются в `"SAVED"` (`TermApiStatusFormatter`).
 - `ReadingLevel` (int) — уровень владения чтением для термина (0–4).
 - `ListeningLevel` (int) — уровень владения аудированием (0–4).
 - `WritingLevel` (int) — уровень владения письмом (0–4).
@@ -44,9 +44,9 @@
 
 ---
 
-## 3. ProjectLemma
+## 3. ProjectLemma (legacy)
 
-`ProjectLemma` — лемма (начальная словарная форма), объединяющая различные словоформы в рамках изучаемого языка.
+`ProjectLemma` — лемма (начальная словарная форма). Таблица сохранена в EF, но продуктовая модель Polyraspad — **term-first**: статусы, дубликаты и карточки опираются на `ProjectTerm` (точные формы), а не на леммы.
 
 **Поля:**
 - `Id` (Guid, PK)

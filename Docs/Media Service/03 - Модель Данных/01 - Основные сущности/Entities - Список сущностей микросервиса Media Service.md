@@ -9,7 +9,7 @@
 | Группа | Файл | Ключи / формат |
 | :--- | :--- | :--- |
 | Объектное хранилище медиа | [[Entity - Объектное хранилище медиа - Object Storage]] | `images/{uuid}`, `audio/{uuid}`, `documents/{uuid}` |
-| Reader Library | [[Entity - Reader Library - Reader Library]] | `reader-library/{userId}/{projectId}/index.json`, `reader-collections/{userId}/{projectId}/index.json` |
+| Reader Library | [[Entity - Reader Library - Reader Library]] | JSON indexes + in-memory `ReaderSharedCollectionRecord`; gRPC projections `book_count` / `is_shared_with_me` / `can_edit` / `url` |
 
 ## gRPC ↔ сущности
 

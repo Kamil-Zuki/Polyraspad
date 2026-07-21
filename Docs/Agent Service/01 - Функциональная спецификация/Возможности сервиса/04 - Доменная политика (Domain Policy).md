@@ -27,10 +27,11 @@ PolyGuide **только для language learning**. Domain policy класси�
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Categories** | `language_learning`, `product_navigation`, `progress`, `out_of_scope`. |
+| **Categories (Classify)** | `language_learning`, `product_navigation`, `progress`, `out_of_scope` (`AgentDomainPolicy`). |
+| **Validator extra** | CreateRun принимает также `automation` (`AgentThreadService.ValidCategories`). |
 | **Learning override** | «Explain vocabulary from this code snippet» → allowed language_learning. |
 | **Hard block** | Programming implementation patterns → out_of_scope. |
-| **LLM gate** | Если LLM tool и !allowed → force OutOfScope tool. |
+| **ExecuteRun persist** | Текущий ExecuteRun **не** применяет Classify к gate; всегда persist `language_learning` / allowed=true (ISSUE-003). |
 | **Persist** | Каждый run сохраняет AgentDomainDecision 1:1. |
 
 ### 2. Высокоуровневое описание

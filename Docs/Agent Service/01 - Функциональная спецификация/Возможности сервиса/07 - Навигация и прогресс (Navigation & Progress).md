@@ -2,9 +2,9 @@
 
 ## Введение
 
-Product-facing tools помогают пользователю **перейти в нужный раздел** Polyraspad или **увидеть прогресс обучения** без ручного поиска в меню.
+Product-facing surfaces: **navigate destinations** (intent + ACTION lines в ответе LLM) и **vocabulary progress** (LLM tool `get_user_vocabulary_stats` / related analytics).
 
-**Метафора:** навигация и прогресс — **GPS и дневник тренировок**. Агент не только отвечает на вопрос, но может «отвести» в Reader или Study и показать, сколько уже выучено.
+**Метафора:** навигация и прогресс — **GPS и дневник тренировок** внутри чата PolyGuide.
 
 ---
 
@@ -14,72 +14,65 @@ Product-facing tools помогают пользователю **перейти 
 
 | Код | Название и Описание |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **SR-AGENT-NAV-01** | **navigate tool:** Action cards с href Reader/Editor/Study/Vocabulary/Import/Library. |
-| **SR-AGENT-NAV-02** | **get_progress tool:** Streak, daily goals, vocabulary counts из AnalyticsService. |
+| **SR-AGENT-NAV-01** | **navigate destinations:** Reader, Editor, Study, Vocabulary, Import, Library, Shadowing, Decks. |
+| **SR-AGENT-NAV-02** | **progress / stats:** Vocabulary stats via `get_user_vocabulary_stats` (and related tools). |
 
 ---
 
 # Детальная спецификация требований
 
-## SR-AGENT-NAV-01: navigate tool {#SR-AGENT-NAV-01}
+## SR-AGENT-NAV-01: navigate destinations {#SR-AGENT-NAV-01}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Action metadata** | `AgentActionCard`: id, title, kind, href, label, description. |
-| **Study href** | `/study/{firstDeckId}` если first_deck_id передан в ExecuteRun. |
-| **No LLM** | Static assistant copy «Opening …». |
+| **Destinations** | Reader, Editor, Study, Vocabulary, Import, Library, **Shadowing**, **Decks** (`AgentNavigateDestination`). |
+| **Intent match** | `AgentIntentRouter.MatchNavigation` — product_navigation category. |
+| **ExecuteRun UI** | Переходы в UI — через строки `NAVIGATE\|path\|title…` в ответе LLM → `AgentActionCard` (нет server-side navigate tool handler). |
+| **Study href** | Client/`first_deck_id` на Aggregator/UI стороне для `/study/{deckId}` при необходимости. |
 
 ### 2. Высокоуровневое описание
 
-Представим navigate tool как **GPS-карточку с кнопкой «перейти» в нужный раздел Polyraspad**.
-
-1. **Early match:** IntentRouter распознаёт navigation phrases («Open Reader», «Go to Study») до language tools; domain = `product_navigation`.
-2. **Destination resolve:** из intent извлекается Reader/Editor/Study/Vocabulary/Import/Library; Study href = `/study/{firstDeckId}` если `first_deck_id` передан в ExecuteRun.
-3. **Static response:** без LLM — assistant copy «Opening …» и `AgentActionCard` в metadata (id, title, kind, href, label, description).
-4. **Persist:** run сохраняется с tool_call navigate для audit; UI рендерит action card как кликабельный переход.
-
-Таким образом, пользователь из чата одним кликом попадает в нужный product surface без ручного поиска в меню.
+1. **Regex:** «open/go to reader|editor|decks|library|vocab|import|shadow|study…».
+2. **LLM:** может эмитить ACTION navigate lines; metadata actions рендерятся как кликабельные cards.
+3. **Audit:** navigate не пишется как отдельный ExecuteToolCore name — только если LLM tool loop вызвал другие tools.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
-#### Сценарий А: Open Reader (Happy Path)
+#### Сценарий А: Open Decks (Happy Path)
 
-1. User: «Open the reader».
-2. navigate tool → action card href `/reader` (или project-scoped path).
-3. Assistant: «Opening Reader…».
+1. User: «Go to my decks».
+2. Intent → Navigate/Decks; LLM/ACTION ведёт UI на decks surface.
+
+#### Сценарий Б: Open Shadowing (Happy Path)
+
+1. User: «Practice pronunciation / open shadowing».
+2. Destination Shadowing.
 
 ---
 
-## SR-AGENT-NAV-02: get_progress tool {#SR-AGENT-NAV-02}
+## SR-AGENT-NAV-02: progress / stats {#SR-AGENT-NAV-02}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Dual fetch** | GetDailySummary + GetVocabularyStats parallel conceptually. |
-| **Sanitize stats labels** | SanitizeLemmaLabels on progress text (legacy lemma field names in stats DTO). |
-| **Follow-up actions** | Navigate Study + Vocabulary. |
+| **Primary tool** | LLM `get_user_vocabulary_stats` → GetVocabularyStats. |
+| **Related** | `get_recent_leeches`, `get_daily_plan`, `get_skill_assessment_history`. |
+| **Intent get_progress** | Router всё ещё матчит «how am I doing» → GetProgress; ExecuteRun не вызывает classic get_progress handler. |
 
 ### 2. Высокоуровневое описание
 
-Представим get_progress как **дневник тренировок, который агент зачитывает из AnalyticsService**.
-
-1. **Intent match:** «How am I doing?» → `get_progress`; domain category `progress`.
-2. **Dual fetch:** orchestrator запрашивает `GetDailySummary` и `GetVocabularyStats` через Vocabulary AnalyticsService с metadata user_id + roles.
-3. **Formatted reply:** streak, daily goals, reviews, new cards и term counts собираются в assistant text; stats labels проходят `SanitizeLemmaLabels`.
-4. **Follow-up actions:** metadata содержит navigate Study + Vocabulary для продолжения обучения из ответа.
-
-Таким образом, пользователь видит актуальный прогресс проекта в чате и может сразу перейти к study или словарю.
+Прогресс в чате строится через Vocabulary gRPC tools, которые выбирает LLM, а не через фиксированный get_progress pipeline.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
 #### Сценарий А: How am I doing? (Happy Path)
 
-1. User: «How am I doing this week?»
-2. Intent get_progress.
-3. Assistant lists streak, reviews, new cards, term counts.
+1. User спрашивает о прогрессе.
+2. LLM вызывает `get_user_vocabulary_stats` (и при необходимости plan/leeches).
+3. Assistant формулирует summary.
 
 ---
 

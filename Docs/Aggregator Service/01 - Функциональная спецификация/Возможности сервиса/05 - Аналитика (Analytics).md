@@ -90,4 +90,24 @@ Aggregator для каждого отчёта: JWT → metadata → один gRP
 
 ---
 
+## SR-AGG-ANALYTICS-02: Баланс навыков {#SR-AGG-ANALYTICS-02}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| Read-only | `GET /api/analytics/skills` |
+| Downstream | Vocabulary Analytics SkillBalance |
+
+### 2. Высокоуровневое описание
+Dashboard виджет баланса Reading/Listening/Writing/Speaking проксируется без локального кэша на BFF.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Happy Path
+1. GET `/api/analytics/skills?projectId=…` с JWT.
+2. gRPC SkillBalance → HTTP 200 JSON.
+
+---
+
 *Следующая группа: [[06 - Reader и термины (Reader)]].*

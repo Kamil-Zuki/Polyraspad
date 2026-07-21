@@ -6,12 +6,12 @@
 
 ## Группы сущностей
 
-| Группа | Файл | Таблицы |
+| Группа | Файл | Таблицы (schema `billing`, EF PascalCase) |
 | :--- | :--- | :--- |
-| Клиенты и платёжные методы | [[Entity - Клиенты и платёжные методы - Customers]] | `customers`, `payment_methods` |
-| Каталог SaaS-планов | [[Entity - Каталог SaaS-планов - Plans]] | `plans`, `plan_provider_prices` |
-| Подписки SaaS | [[Entity - Подписки SaaS - Subscriptions]] | `subscriptions` |
-| Инвойсы и webhook-идемпотентность | [[Entity - Инвойсы и webhook-идемпотентность - Invoices]] | `invoices`, `processed_webhooks` |
+| Клиенты и платёжные методы | [[Entity - Клиенты и платёжные методы - Customers]] | `Customers`, `PaymentMethods` |
+| Каталог SaaS-планов | [[Entity - Каталог SaaS-планов - Plans]] | `Plans`, `PlanProviderPrices` |
+| Подписки SaaS | [[Entity - Подписки SaaS - Subscriptions]] | `Subscriptions` |
+| Инвойсы и webhook-идемпотентность | [[Entity - Инвойсы и webhook-идемпотентность - Invoices]] | `Invoices`, `ProcessedWebhooks` |
 
 ## gRPC ↔ сущности
 

@@ -14,7 +14,7 @@
 
 ## 2. Атрибуты (поля) сущности
 
-**Таблица:** `billing.invoices`
+**Таблица:** `billing.Invoices`
 
 | Название | Тип данных | Огр-ния | Описание |
 | :--- | :--- | :--- | :--- |
@@ -49,22 +49,25 @@
 
 ## 2. Атрибуты (поля) сущности
 
-**Таблица:** `billing.processed_webhooks`
+**Таблица:** `billing.ProcessedWebhooks`
 
 | Название | Тип данных | Огр-ния | Описание |
 | :--- | :--- | :--- | :--- |
 | `Provider` | `enum` | PK (part) | Провайдер события. |
-| `EventId` | `text` | PK (part) | Уникальный ID события от провайдера. |
-| `EventType` | `text` | NOT NULL | Тип (`payment.succeeded`, …). |
+| `EventId` | `text` | PK (part) | В **текущем коде** = SHA-256 hex всего `payload` (тот же string, что и `PayloadHash`). Не provider-native event id. |
+| `EventType` | `text` | NOT NULL | Тип (`payment.succeeded`, …) после parse adapter. |
 | `ProcessedAt` | `timestamp` | NOT NULL | UTC обработки. |
-| `PayloadHash` | `text` | NOT NULL | Хэш payload для аудита replay. |
+| `PayloadHash` | `text` | NOT NULL | В коде записывается **то же значение**, что `EventId` (`ComputePayloadHash`). |
 
-## 3. Алгоритм
+> **Согласованность:** желаемая модель «EventId от провайдера + отдельный PayloadHash» зафиксирована в ISSUE-002; `03` здесь отражает **фактическое** поведение кода.
 
-1. `ProcessWebhook` → provider `VerifyWebhookSignature`.
-2. INSERT `processed_webhooks` — при conflict → return 200 без повторного apply.
-3. Provider adapter → normalized `DomainEvent` list.
-4. `WebhookOrchestrator.ApplyEventsAsync` обновляет subscriptions, invoices, payment_methods.
+## 3. Алгоритм (код)
+
+1. `ProcessWebhook` вычисляет `eventId = SHA256(payload)` (hex).
+2. Lookup `ProcessedWebhooks` по (`Provider`, `EventId`) — при hit → already processed (no re-apply).
+3. Provider adapter парсит payload → normalized `DomainEvent` list (signature verify — см. ISSUE-003).
+4. INSERT `ProcessedWebhooks` с `EventId = PayloadHash = eventId`.
+5. `WebhookOrchestrator.ApplyEventsAsync` обновляет `Subscriptions`, `Invoices`, `PaymentMethods`.
 
 ## 4. Нормализованные события (v1)
 

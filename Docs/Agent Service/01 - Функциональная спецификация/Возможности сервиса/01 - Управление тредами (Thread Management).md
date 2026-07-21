@@ -15,9 +15,10 @@ AI-ассистент PolyGuide работает в **контексте язы�
 | Код | Название и Описание |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **SR-AGENT-THREAD-01** | **Список тредов проекта:** Активные треды user+project по `updated_at` DESC; archived скрыты. |
-| **SR-AGENT-THREAD-02** | **Создание треда:** Пустой тред после EnsureProjectAccess. |
-| **SR-AGENT-THREAD-03** | **Получение треда:** Get by id + user ownership. |
+| **SR-AGENT-THREAD-02** | **Создание треда:** Пустой тред; optional `agent_id`, `system_prompt_override`. |
+| **SR-AGENT-THREAD-03** | **Получение треда:** Get by id + user ownership (`agent_id` / override в ответе). |
 | **SR-AGENT-THREAD-04** | **Архивация треда:** Soft archive; блок новых runs на archived thread. |
+| **SR-AGENT-THREAD-05** | **Фильтр по agent_id:** Optional `agent_id` в ListThreads. |
 
 ---
 
@@ -33,6 +34,7 @@ AI-ассистент PolyGuide работает в **контексте язы�
 | **Access gate** | `EnsureProjectAccessAsync` до query. |
 | **Sort** | `updated_at DESC` — недавние диалоги первыми. |
 | **Default title** | Если `title` null — UI title из `AgentThreadTitleHelper.DefaultTitle`. |
+| **Optional agent filter** | См. [[#SR-AGENT-THREAD-05]]; без `agent_id` — все активные треды проекта. |
 
 ### 2. Высокоуровневое описание
 
@@ -67,9 +69,10 @@ AI-ассистент PolyGuide работает в **контексте язы�
 | Принцип | Описание |
 | :--- | :--- |
 | **Empty thread** | Без начальных messages; title null до первого run. |
-| **SystemPromptOverride** | Опциональное поле для переопределения системного промпта в данном треде. |
-| **UUID v4** | Client-generated id на стороне БД default. |
+| **agent_id** | Опциональная persona (`study-copilot`, `placement-copilot`, …); влияет на default system prompt builder. |
+| **SystemPromptOverride** | Опциональный полный override system prompt для ExecuteRun. |
 | **Timestamps** | `created_at` = `updated_at` = UTC now. |
+| **CustomScenario** | Поле `custom_scenario_id` в entity есть; CreateThread его **не** принимает (reserved). |
 
 ### 2. Высокоуровневое описание
 
@@ -151,6 +154,34 @@ AI-ассистент PolyGuide работает в **контексте язы�
 1. User удаляет чат из списка.
 2. gRPC `ArchiveThread`.
 3. Thread исчезает из sidebar list.
+
+---
+
+## SR-AGENT-THREAD-05: Фильтр по agent_id {#SR-AGENT-THREAD-05}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Exact match** | Если `agent_id` передан и не empty — `WHERE agent_id = request.agent_id`. |
+| **Optional** | Пустой/absent `agent_id` — фильтр не применяется. |
+| **UI personas** | Позволяет разделить sidebar placement-copilot vs study-copilot. |
+
+### 2. Высокоуровневое описание
+
+Представим фильтр `agent_id` как **вкладки разных репетиторов в одной папке проекта**.
+
+1. **Request:** `ListThreads` принимает optional `agent_id` из Aggregator/UI.
+2. **SQL filter:** после project access — дополнительный predicate на `agent_threads.agent_id`.
+3. **Response:** только треды выбранной persona; archived по-прежнему скрыты.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Placement threads only (Happy Path)
+
+1. UI открывает Placement Test history.
+2. gRPC `ListThreads(project_id, agent_id="placement-copilot")`.
+3. Response содержит только треды с `agent_id=placement-copilot`.
 
 ---
 

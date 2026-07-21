@@ -49,7 +49,7 @@ gRPC контракт: `media.proto` — `UploadImage`, `UploadAudio`, `UploadDo
 1. **Приём груза:** Caller (Aggregator) передаёт `bytes` и `content_type` на границу gRPC `UploadImage`.
 2. **Проверка на входе:** Сервис проверяет размер (≤ 5 MB) и MIME (`image/*`, default `image/png`); иначе — `InvalidArgument` без `PutObject`.
 3. **Маркировка и размещение:** Для валидного payload генерируется новый `Guid` и выполняется `PutObject` в bucket по ключу `images/{guid}`.
-4. **Выдача адреса:** В ответ возвращаются публичный URL (или presigned) и `image_id` для Card Editor / note fields и последующего `GetImageUrl`.
+4. **Выдача адреса:** Upload response URL строится через `GetMediaUrlAsync` (`PublicBaseUrl` → else presigned) + `image_id`. Поздний `GetImageUrl` использует **другую** базу (`ServerFetchBaseUrl` cascade) — см. `03` dual URL model.
 
 Таким образом, каждый upload изображения получает стабильный UUID-идентификатор и URL; Aggregator валидирует размер/MIME на BFF, Media Service повторяет критичные проверки на границе сервиса.
 

@@ -6,28 +6,41 @@
 
 ## 1. Project
 
-`Project` — базовая сущность, определяющая языковое пространство пользователя. Все колоды, заметки и карточки привязаны к конкретному проекту.
+`Project` — базовая сущность, определяющая языковое пространство пользователя. Все колоды, заметки и карточки привязаны к конкретному проекту. Таблица: `internal.projects`.
 
 **Поля:**
 - `Id` (Guid, PK)
 - `UserId` (Guid) — идентификатор владельца проекта.
-- `Name` (string) — название (например, "English").
-- `TargetLanguage` (string) — изучаемый (целевой) язык (ISO код).
-- `NativeLanguage` (string) — родной язык пользователя (ISO код).
-- `IsActive` (bool) — флаг активного в данный момент проекта.
+- `Title` (string) — название проекта.
+- `SourceLang` (string) — родной / исходный язык (ISO).
+- `TargetLang` (string) — изучаемый язык (ISO).
+- `FsrsSettings` (JSONB / `FsrsSettings`) — параметры FSRS проекта: `request_retention`, `maximum_interval`, `w[]`, `learning_steps_seconds?`, `relearning_steps_seconds?`, `enable_fuzzing?`.
+- `Stats` (JSONB / `ProjectStats`) — кэш статистики: `total_lemmas`, `mature_lemmas`.
+- `IsArchived` (bool) — архивирован ли проект (по умолчанию `false`).
+- `CreatedAt` (DateTime)
+- `UpdatedAt` (DateTime)
 
 ---
 
 ## 2. Deck
 
-`Deck` — колода для группировки карточек. Поддерживает иерархическую структуру (вложенные колоды).
+`Deck` — колода для группировки карточек. Поддерживает иерархическую структуру (вложенные колоды). Таблица: `internal.decks`.
 
 **Поля:**
 - `Id` (Guid, PK)
 - `ProjectId` (Guid, FK to Project)
 - `ParentDeckId` (Guid?, FK to Deck) — ссылка на родительскую колоду (для построения дерева).
+- `OwnerId` (Guid) — владелец колоды.
 - `Title` (string) — название колоды.
 - `Description` (string?) — описание колоды.
+- `CoverImageUrl` (string?) — обложка.
+- `IsPublic` (bool) — опубликована ли колода.
+- `ContributionPolicy` (string) — политика вкладов (`OPEN` / `RESTRICTED` / `CLOSED`).
+- `LicenseType` (string) — лицензия (`PRIVATE` / `FREE_ATTRIBUTION` / `COMMERCIAL` / `COMMERCIAL_DERIVATIVE`; в сервисах также встречаются строки `FREE` / `COMMERCIAL`).
+- `ForkedFromId` (Guid?) — исходная колода при fork.
+- `CardCount` (int) — денормализованное число карточек.
+- `CreatedAt` (DateTime)
+- `UpdatedAt` (DateTime)
 
 ---
 
@@ -142,25 +155,9 @@
 
 ---
 
-## 9. Tag
+## 9. Теги (без отдельной entity)
 
-`Tag` — сущность для гибкого тегирования и категоризации заметок в рамках проекта.
-
-**Поля:**
-- `Id` (Guid, PK)
-- `ProjectId` (Guid, FK to Project)
-- `Name` (string) — название тега.
-- `CreatedAt` (DateTime)
-
----
-
-## 10. NoteTag
-
-`NoteTag` — связующая таблица для реализации отношения многие-ко-многим между заметками и тегами.
-
-**Поля:**
-- `NoteId` (Guid, PK, FK to Note)
-- `TagId` (Guid, PK, FK to Tag)
+Отдельных таблиц `Tag` / `NoteTag` **нет**. Теги задаются через значение поля заметки, у которого `NoteField.FieldType = "tags"` (строка/JSON в `Note.FieldValues`).
 
 ---
 
@@ -170,7 +167,6 @@
 erDiagram
     Project ||--o{ Deck : contains
     Project ||--o{ NoteType : defines
-    Project ||--o{ Tag : owns
     NoteType ||--o{ NoteField : contains
     NoteType ||--o{ CardTemplate : contains
     NoteType ||--o{ Note : structures
@@ -178,7 +174,7 @@ erDiagram
     Deck ||--o{ Card : holds
     Note ||--o{ Card : generates
     Card ||--|| UserCardProgress : tracks
-    Note ||--o{ NoteTag : tagged_with
-    Tag ||--o{ NoteTag : references
+    ProjectTerm ||--o{ Note : optional_link
+    ProjectTerm ||--o{ Card : optional_link
 ```
 

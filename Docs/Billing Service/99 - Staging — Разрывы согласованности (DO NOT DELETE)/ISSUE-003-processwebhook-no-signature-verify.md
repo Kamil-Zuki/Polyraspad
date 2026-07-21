@@ -6,26 +6,25 @@
 
 ## В двух словах
 
-SR-BILL-WH-01 и `03` требуют verify webhook signature перед apply. `BillingGrpcService.ProcessWebhook` сразу проверяет idempotency и вызывает `HandleWebhookAsync`, не вызывая `IPaymentProvider.VerifyWebhookSignature`.
+SR-BILL-WH-01 ожидает verify webhook signature перед apply. `BillingGrpcService.ProcessWebhook` не вызывает `IPaymentProvider.VerifyWebhookSignature`. Дубликат `ISSUE-003-processwebhook-signature-verify.md` сведён сюда как канон.
 
 ## Где проблема
 
 | Источник | Якорь | Что не сходится |
 | :--- | :--- | :--- |
-| 01 | SR-BILL-WH-01 | «Verify signature, idempotency insert, provider parse» |
-| 03 | `processed_webhooks` алгоритм шаг 1 | `VerifyWebhookSignature` |
-| 04 | `#grpc-ProcessWebhook` | Шаг 2: verify signature → PERMISSION_DENIED |
-| Код | `BillingGrpcService.ProcessWebhook` | Нет вызова `VerifyWebhookSignature` |
+| 01 | SR-BILL-WH-01 | «Verify signature…» |
+| код | `BillingGrpcService.ProcessWebhook` | Нет вызова verify |
+| 04 | `#grpc-ProcessWebhook` | Может всё ещё описывать verify step |
 
-Путь к файлу (вторично): `BillingService/Grpc/BillingGrpcService.cs`
+Путь (вторично): `BillingService/Grpc/BillingGrpcService.cs`
 
 ## Доказательство
 
-`IPaymentProvider` defines `bool VerifyWebhookSignature(WebhookPayload payload, string? secret)` — метод существует в `YooKassaPaymentProvider`, но не вызывается из gRPC handler.
+`VerifyWebhookSignature` есть у провайдеров, но gRPC handler идёт в idempotency → `HandleWebhookAsync` без verify.
 
 ## Рекомендуемое действие
 
-Добавить verify до idempotency check в `ProcessWebhook`; при failure — `RpcException(PermissionDenied)`.
+Добавить verify до apply; при failure — `PERMISSION_DENIED`. Или явно сузить SR, если verify только на Aggregator.
 
 ## Статус
 

@@ -2,15 +2,11 @@
 
 ## Введение
 
-В этом разделе описывается REST-прокси Aggregator Service к **VocabularyService** для **глобальных user settings** — GET/PUT `/api/settings`. Включает Reader preferences (например, mark blue words known on page turn), study defaults и прочие flags по контракту `UserSettingsResponseDto`.
+В этом разделе описывается REST-прокси Aggregator Service к **VocabularyService** для **глобальных user settings** — GET/PUT `/api/settings` по контракту `UserSettingsResponseDto` / `UpdateUserSettingsDto`.
+
+Фактические поля DTO: `RolloverHour`, `DailyGoalNew`, `DailyGoalReview`, `InterfaceLanguage`, `CurrentStreak`, `MaxStreak`. Поля **AutoMarkAsKnownOnPageTurn нет** — page-turn mark-known инициирует клиент через `BulkMarkKnown` (`SR-AGG-READER-01`).
 
 Settings scoped **per user**, not per project — хранятся в VocabularyService; Aggregator stateless.
-
-**Метафора:**
-
-Представьте **пульт настроек профиля в личном кабинете**. Пользователь крутит переключатели в UI; Aggregator передаёт изменения в VocabularyService, где settings привязаны к user id.
-
-Связь с Reader: настройка page-turn bulk-known влияет на [[06 - Reader и термины (Reader)#SR-AGG-READER-01|SR-AGG-READER-01]] — enforcement в VocabularyService.
 
 ---
 
@@ -20,7 +16,7 @@ Settings scoped **per user**, not per project — хранятся в Vocabulary
 
 | Код | Название и Описание |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **SR-AGG-SETTINGS-01** | **Глобальные настройки пользователя:** Чтение и обновление Reader preferences и study defaults; scope per user, не per project. |
+| **SR-AGG-SETTINGS-01** | **Глобальные настройки пользователя:** Goals, rollover, language, streaks; без server-side page-turn flag. |
 
 ---
 
@@ -28,7 +24,7 @@ Settings scoped **per user**, not per project — хранятся в Vocabulary
 
 ## SR-AGG-SETTINGS-01: Глобальные настройки пользователя {#SR-AGG-SETTINGS-01}
 
-Чтение и обновление user-level preferences (Reader, study defaults). Scope — один пользователь из JWT; project-specific settings не входят в этот SR.
+Чтение и обновление user-level study/UI defaults. Scope — один пользователь из JWT. Page-turn behaviour не хранится в settings DTO.
 
 ### 1. Цель и ключевые принципы
 
@@ -45,8 +41,8 @@ Settings scoped **per user**, not per project — хранятся в Vocabulary
 
 Представим settings как **preferences file в облаке**.
 
-1. **App load:** frontend GET settings — applies Reader page-turn behavior, UI toggles, study defaults (DailyGoalNew, DailyGoalReview, RolloverHour).
-2. **User change:** PUT partial/full `UpdateUserSettingsDto` from settings page.
+1. **App load:** frontend GET settings — goals, rollover, language, streaks.
+2. **User change:** PUT `UpdateUserSettingsDto` from settings page.
 3. **Vocabulary** persists authoritative state; Aggregator returns mapped `UserSettingsResponseDto`.
 4. **Reader bulk-known:** when enabled, page turn triggers bulk-known term ids (domain reads same settings).
 5. **Rollover Hour & Goals:** `RolloverHour` defines when the study day rolls over for daily streak calculations, and `DailyGoalNew`/`DailyGoalReview` set daily spaced repetition targets.

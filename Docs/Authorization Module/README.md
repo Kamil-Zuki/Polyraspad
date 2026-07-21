@@ -22,11 +22,11 @@
 
 Реализация: `authorization-module/` (submodule, .NET 10, gRPC порт `5027`, БД `auth-module`).
 
-## Отличия от STEOS Authorization Service
+## Отличия от эталонного `(Done) Authorization Service` (только layout-образец)
 
-| Polyraspad authorization-module | STEOS `(Done) Authorization Service` |
+| Polyraspad authorization-module | Эталон `(Done) Authorization Service` (другой продукт) |
 | :--- | :--- |
 | JWT access + refresh в PostgreSQL | Phantom Token + Redis sessions |
-| Локальный Identity (email/password) | OIDC / STEOS ID |
+| Локальный Identity (email/password) | OIDC / внешний IdP |
 | gRPC primary, REST legacy | REST + WebSocket + RabbitMQ |
-| Нет guest sessions, audit WORM, workspace routing | Полный enterprise gatekeeper |
+| Нет guest sessions, audit WORM, workspace routing | Расширенный enterprise gatekeeper |

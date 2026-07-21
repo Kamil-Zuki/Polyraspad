@@ -16,11 +16,11 @@
 
 1. **Стабильный billing subject** — все подписки и инвойсы ссылаются на `Customer`, не на сырой `user_id` в каждой таблице.
 2. **Provider binding (v1)** — один активный `Provider` на customer; смена провайдера = новая customer record (documented limitation).
-3. **Soft delete** — `DeletedAt` для будущего GDPR/offboarding без каскадного удаления истории платежей.
+3. **Soft delete column** — `DeletedAt` зарезервирован под GDPR/offboarding; **global query filter / RPC soft-delete filter в коде не реализован** (`EnsureCustomer` ищет только по `UserId`).
 
 ## 2. Атрибуты (поля) сущности
 
-**Таблица:** `billing.customers`
+**Таблица:** `billing.Customers`
 
 | Название | Тип данных | Огр-ния | Описание |
 | :--- | :--- | :--- | :--- |
@@ -30,7 +30,7 @@
 | `Provider` | `enum` | NOT NULL | `Mock`, `YooKassa`, `Stripe` — активный платёжный провайдер customer. |
 | `ProviderCustomerId` | `text` | NULL | ID customer в системе провайдера (merchant customer id). |
 | `CreatedAt` | `timestamp` | NOT NULL | UTC создания записи. |
-| `DeletedAt` | `timestamp` | NULL | Soft delete; активные RPC не должны выбирать удалённые записи. |
+| `DeletedAt` | `timestamp` | NULL | Soft-delete marker; **не фильтруется** в текущих RPC (колонка есть, filter нет). |
 
 *Индексы:* UNIQUE (`UserId`).
 
@@ -38,8 +38,8 @@
 
 | Сущность | Тип связи |
 | :--- | :--- |
-| `subscriptions` | Один-ко-многим — история и текущие SaaS-подписки. |
-| `payment_methods` | Один-ко-многим — сохранённые методы оплаты для renewal. |
+| `Subscriptions` | Один-ко-многим — история и текущие SaaS-подписки. |
+| `PaymentMethods` | Один-ко-многим — сохранённые методы оплаты для renewal. |
 | **authorization-module** | Source of truth для identity; Billing только хранит `UserId`. |
 | **AggregatorService** | REST BFF передаёт `user_id` из JWT в gRPC. |
 
@@ -61,7 +61,7 @@ PCI: хранятся только `ProviderPaymentMethodId`, `Brand`, `Last4`, 
 
 ## 2. Атрибуты (поля) сущности
 
-**Таблица:** `billing.payment_methods`
+**Таблица:** `billing.PaymentMethods`
 
 | Название | Тип данных | Огр-ния | Описание |
 | :--- | :--- | :--- | :--- |

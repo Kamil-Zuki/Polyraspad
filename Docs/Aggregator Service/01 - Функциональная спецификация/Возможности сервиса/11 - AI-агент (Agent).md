@@ -101,4 +101,25 @@ Aggregator stateless между runs — каждый execute run = fresh gRPC r
 
 ---
 
+## SR-AGG-AGENT-02: Persist run {#SR-AGG-AGENT-02}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| Persist without full execute | `POST /api/agent/threads/{id}/runs/persist` |
+| Thin BFF | Тело проксируется в AgentService PersistRun |
+
+### 2. Высокоуровневое описание
+Клиент может сохранить уже собранный результат run (messages/tool calls/domain decision) без повторного ExecuteRun.
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Happy Path
+1. POST persist с payload run.
+2. AgentService сохраняет AgentRun + связанные записи.
+3. HTTP 200/201.
+
+---
+
 *Следующая группа: [[12 - AI-прокси (AI Proxy)]].*

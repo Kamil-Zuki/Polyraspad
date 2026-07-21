@@ -15,7 +15,7 @@
 | Код | Название и Описание |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **SR-AGENT-RUN-01** | **CreateRun (persist):** Transaction: messages + run + domain + tool_calls; auto title derive. |
-| **SR-AGENT-RUN-02** | **ExecuteRun (orchestrate):** Classify → route → execute tool → CreateRun. |
+| **SR-AGENT-RUN-02** | **ExecuteRun (LLM tool loop):** Prompt + history → LLM tools → ExecuteToolCore → CreateRun. |
 
 ---
 
@@ -54,44 +54,46 @@
 
 ---
 
-## SR-AGENT-RUN-02: ExecuteRun (orchestrate) {#SR-AGENT-RUN-02}
+## SR-AGENT-RUN-02: ExecuteRun (LLM tool loop) {#SR-AGENT-RUN-02}
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
-| **Pipeline** | EnsureProjectAccess → Route → Domain gate for LLM tools → ExecuteTool → CreateRun. |
-| **System Prompt** | Использует стандартный промпт (Study Copilot) или подставляет `SystemPromptOverride` из БД треда, если он был задан при создании. |
+| **Primary path** | EnsureProjectAccess → load history → build system prompt → LLM `CompleteChatAsync` с `AvailableTools` (до 5 loops) → `ExecuteToolCoreAsync` → CreateRun. |
+| **System Prompt** | `SystemPromptOverride` из треда **или** `AgentSystemPromptBuilder.Build(agent_id, project, langs)`. |
+| **Intent hint (limited)** | `AgentIntentRouter.Route` вызывается; **только** `GeneratePractice` дополняет system prompt learning terms. `IsInitialGreeting` (не placement) injects daily plan summary. |
+| **Domain persist** | Текущий ExecuteRun всегда пишет `AgentDomainDecision` как `allowed=true`, `language_learning` (не результат Classify). |
 | **Lang context** | `source_lang` / `target_lang` override или из ProjectResponse. |
-| **Error softening** | Tool exception → assistant error text, tool status failed, run persisted. |
+| **Error softening** | Tool exception → JSON `{ error }` в tool message, status `failed`; loop продолжается; run persist. |
 | **Model tag** | `Ai:Model` если `Ai:Enabled`. |
+| **Not classic pipeline** | Server-side handlers `explain_word` / `navigate` / `grammar_help` **не** вызываются из ExecuteRun (см. ISSUE-003). |
 
 ### 2. Высокоуровневое описание
 
-Представим ExecuteRun как **полный цикл «вопрос → маршрут → инструмент → запись» в одном gRPC-вызове**.
+Представим ExecuteRun как **цикл «вопрос → LLM с toolbox → вызовы Vocabulary → запись»**.
 
-1. **Access & context:** `EnsureProjectAccessAsync` через Vocabulary; `source_lang`/`target_lang` из override или ProjectResponse; archived thread блокируется.
-2. **Context Build:** оркестратор считывает `SystemPromptOverride` из треда (если есть) и использует его вместо стандартного промпта Study Copilot, что позволяет менять поведение ИИ (например, для Placement Test).
-3. **Route & domain gate:** `AgentIntentRouter` выбирает tool по priority; для LLM-tools domain policy должна разрешить категорию, иначе force OutOfScope.
-4. **Tool execution:** orchestrator вызывает handler (`explain_word`, `navigate`, …); исключение tool → assistant error text, tool status `failed`, run всё равно persist.
-5. **Persist & tag:** результат упаковывается в CreateRun payload; при `Ai:Enabled` run помечается model tag из `Ai:Model`.
+1. **Access & context:** `EnsureProjectAccessAsync`; history последних user/assistant messages; prompt из override или builder по `agent_id`.
+2. **Hints:** при intent `GeneratePractice` — список learning terms в system prompt; при `IsInitialGreeting` — daily plan summary (кроме `placement-copilot`).
+3. **LLM tool loop:** `CompleteChatAsync(systemPrompt, messages, AvailableTools)`; при tool_calls — `ExecuteToolCore` (`create_deck`, `create_card`, `get_daily_plan`, …) и append tool messages; max 5 итераций; `set_cefr_placement` success может оборвать loop.
+4. **UI actions:** строки `NAVIGATE|…` / `OPEN_EDITOR_DRAFT|…` в ответе LLM парсятся в `AgentActionCard` metadata.
+5. **Persist:** CreateRun с tool_call records и hardcoded domain `language_learning`.
 
-Таким образом, PolyGuide chat получает один primary UX path — пользователь пишет текст, сервис сам решает инструмент и сохраняет полный audit trail.
+Таким образом, primary UX path — LLM function calling, а не regex→classic tool dispatch.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
-#### Сценарий А: Explain word (Happy Path)
+#### Сценарий А: Create card via LLM tool (Happy Path)
 
-1. User: «Explain the word "slept"».
-2. Intent → explain_word; domain allowed.
-3. LLM completion + editor draft action in metadata.
-4. Persist run; UI показывает explanation + action card.
+1. User: «Create a card for slept / спал».
+2. LLM вызывает `create_card` → Vocabulary CreateCard.
+3. Persist run с tool_call `create_card`; assistant summary.
 
-#### Сценарий Б: Out of scope (Negative Path)
+#### Сценарий Б: Placement completion (Happy Path)
 
-1. User: «Write a C# sorting algorithm».
-2. Domain disallowed → out_of_scope tool.
-3. Refusal message + suggested prompts; run persisted.
+1. Placement agent вызывает `set_cefr_placement` с `cefr_level=B1`.
+2. Orchestrator → `SetPlacementLevelAsync`; loop break.
+3. Run persisted; UI показывает completion copy.
 
 ---
 

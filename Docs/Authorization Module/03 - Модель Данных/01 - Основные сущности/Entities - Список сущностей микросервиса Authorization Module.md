@@ -20,7 +20,7 @@ Authorization Module хранит **учётные записи пользова
 ## Связи (кратко)
 
 ```
-ApplicationUser 1 ── * RefreshToken
+ApplicationUser 1 ── * RefreshToken   (логическая связь; DB FK на RefreshTokens.UserId отсутствует)
      │
      └── Identity tables (AspNetUserClaims, AspNetUserLogins, …) — стандарт Identity
 ```

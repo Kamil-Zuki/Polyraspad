@@ -123,4 +123,24 @@ Feature flags / A/B без внешнего experiment platform — stable `cont
 
 ---
 
+## SR-AGG-AUTO-03: Automation jobs {#SR-AGG-AUTO-03}
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| In-memory | `InMemoryAutomationJobOrchestrator` — не Postgres |
+| REST | POST/GET `/api/automation/jobs` |
+
+### 2. Высокоуровневое описание
+Клиент создаёт job и опрашивает статус; состояние живёт в процессе Aggregator (теряется при рестарте).
+
+### 3. Примеры взаимодействия (логические сценарии)
+
+#### Сценарий А: Create + poll
+1. POST job → jobId.
+2. GET job → status/result.
+
+---
+
 *Следующая группа: [[14 - Внешние интеграции (Integrations)]].*

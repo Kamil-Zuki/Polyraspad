@@ -59,7 +59,7 @@
 
 Подборка книг в Reader Library (reading list, course unit). Владелец — пользователь с индексом в `reader-collections/`.
 
-## 2. Атрибуты
+## 2. Атрибуты (персистятся в JSON)
 
 | Название | Тип | Огр-ния | Описание |
 | :--- | :--- | :--- | :--- |
@@ -74,16 +74,46 @@
 | `owner_email` | `string` | | Email. |
 | `collaborators` | `array` | | Список [[#Reader Collection Collaborator]]. |
 
+## 2.1. gRPC projection fields (не в JSON-индексе)
+
+Поля proto `ReaderCollection`, вычисляемые при map в `MediaGrpcService` — **не персистятся**:
+
+| Поле proto | Источник | Описание |
+| :--- | :--- | :--- |
+| `book_count` | `mappedBooks.Count` | Число книг коллекции в ответе. |
+| `is_shared_with_me` | `access != null` | true если caller — collaborator (shared inbox / access record). |
+| `can_edit` | `access?.CanEdit ?? true` | Для owner list без access → `true`; для shared — из collaborator. |
+| `books[].url` | `GetMediaUrlForServerFetchAsync(document_id)` | Server-fetch URL документа книги; не хранится в index. |
+
 ## 3. Связи
 
 | Сущность | Описание |
 | :--- | :--- |
 | **Reader Library Book** | Книги с `collection_id = collection.id` включаются в gRPC response. |
 | **Collaborators** | 1:N вложенный массив в JSON. |
+| **ReaderSharedCollectionRecord** | In-memory composite для shared inbox (не отдельный JSON файл). |
 
 ## 4. Жизненный цикл
 
 CRUD через `SaveReaderCollection` / `DeleteReaderCollection`. При delete — книги в проекте теряют `collection_id`.
+
+---
+
+# Reader Shared Collection (`ReaderSharedCollectionRecord`)
+
+## 1. Общее описание
+
+**Не персистентная** composite-модель в коде (`MediaService.Models.ReaderSharedCollectionRecord`): результат scan shared inbox для `ListSharedReaderCollections`.
+
+## 2. Атрибуты (in-memory)
+
+| Название | Тип | Описание |
+| :--- | :--- | :--- |
+| `Collection` | `ReaderCollectionRecord` | Owner collection из чужого index.json. |
+| `Books` | `IReadOnlyList<ReaderLibraryBookRecord>` | Книги этой коллекции из owner library index. |
+| `Access` | `ReaderCollectionCollaboratorRecord?` | Запись collaborator текущего user (для `can_edit` / `is_shared_with_me`). |
+
+Маппится в proto `ReaderCollection` с projection fields (`book_count`, `is_shared_with_me`, `can_edit`, book `url`).
 
 ---
 

@@ -28,7 +28,7 @@
 | :--- | :--- | :---: | :--- |
 | `id` | `uuid` | да | PK |
 | `run_id` | `uuid` | да | FK → `agent_runs` |
-| `tool_name` | `text` | да | e.g. `explain_word`, `navigate`, `out_of_scope` |
+| `tool_name` | `text` | да | Имя tool из LLM loop (e.g. `create_deck`, `get_daily_plan`, `set_cefr_placement`) или client CreateRun payload |
 | `input_json` | `jsonb` | да | Вход tool (user text, params) |
 | `output_json` | `jsonb` | да | Результат / summary |
 | `status` | `varchar(16)` | да | `completed` \| `failed` |
@@ -47,7 +47,7 @@
 | `id` | `uuid` | да | PK |
 | `run_id` | `uuid` | да | FK UNIQUE → `agent_runs` |
 | `allowed` | `boolean` | да | Разрешён ли LLM-tool path |
-| `category` | `varchar(32)` | да | `language_learning` \| `product_navigation` \| `progress` \| `out_of_scope` |
+| `category` | `varchar(32)` | да | `language_learning` \| `product_navigation` \| `progress` \| `out_of_scope` \| `automation` (validator `CreateRun` принимает `automation`; `AgentDomainPolicy.Classify` enum пока без этой категории) |
 | `reason` | `text` | нет | Код причины (e.g. `not_language_learning`) |
 | `user_text_preview` | `text` | нет | Усечённый preview user message |
 | `created_at` | `timestamptz` | да | |

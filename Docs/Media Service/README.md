@@ -17,7 +17,7 @@
 ## Эталон формата
 
 - Полный образец: `(Done) Authorization Service/` — **layout only**
-- Правила: `Docs/.cursor/rules/steos-docs-*`
+- Правила: `Docs/.cursor/rules/`
 
 ## Код
 

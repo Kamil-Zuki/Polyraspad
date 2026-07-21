@@ -30,25 +30,26 @@
 
 ## SR-BILL-SUB-01: Get subscription {#SR-BILL-SUB-01}
 
-UI billing dashboard и `SubscriptionBadge` читают актуальный subscription snapshot.
+UI billing dashboard и `SubscriptionBadge` читают subscription snapshot через `GetActiveSubscriptionAsync`.
 
 ### 1. Цель и ключевые принципы
 
 | Принцип | Описание |
 | :--- | :--- |
 | **User-scoped** | Запрос по `user_id` из caller; не по subscription id из клиента. |
-| **Effective row** | Возвращается последняя релевантная подписка customer или empty. |
-| **Proto Subscription** | Поля mirror entity: status, periods, trial, cancel_at_period_end. |
+| **Active/Trialing only** | Код: status ∈ {`Active`, `Trialing`} и `CurrentPeriodEnd > now`; order by period end DESC; first or empty. |
+| **Not FindEffective** | `PastDue` + grace **не** включаются (в отличие от CheckAccess / GetEntitlements). См. ISSUE-004. |
+| **Proto Subscription** | Поля mirror entity: status, periods, trial, cancel_at_period_end, canceled_at. |
 
 ### 2. Высокоуровневое описание
 
-Представим текущую подписку как **штамп в абонементе спортзала**.
+Представим текущую подписку как **штамп «активный абонемент»** — не полный access-check.
 
-1. **Запрос после login:** Aggregator вызывает `GetSubscription(user_id)` — клиент не передаёт subscription id.
-2. **Выбор effective row:** Billing находит последнюю релевантную `BillingSubscription` customer или возвращает empty snapshot.
-3. **Отображение в UI:** `SubscriptionBadge` показывает Pro до `current_period_end` или Free, если paid row отсутствует или canceled.
+1. **Запрос после login:** Aggregator вызывает `GetSubscription(user_id)`.
+2. **Выбор row:** `GetActiveSubscriptionAsync` — только Active/Trialing с period в будущем; иначе empty.
+3. **UI:** badge Pro при наличии row; иначе Free. PastDue в grace может всё ещё давать access через CheckAccess, но snapshot пустой/без PastDue.
 
-Таким образом, `GetSubscription` — read-only снимок жизненного цикла подписки для dashboard и badge без side effects.
+Таким образом, `GetSubscription` — узкий UI snapshot, уже projection access/entitlements.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
@@ -57,9 +58,10 @@ UI billing dashboard и `SubscriptionBadge` читают актуальный su
 1. **gRPC:** `GetSubscription(user_id)`.
 2. **Ответ:** `status=active`, `plan_code=pro`, `current_period_end` в будущем.
 
-#### Сценарий Б: Free user без paid subscription (Happy Path)
+#### Сценарий Б: Free / no Active-Trialing row (Happy Path)
 
-1. **Ответ:** пустой `subscription` или canceled row; UI fallback на free badge.
+1. Нет Active/Trialing с будущим period (в т.ч. только PastDue или Canceled).
+2. **Ответ:** empty subscription; UI Free badge (access может отличаться — ISSUE-004).
 
 ---
 
@@ -111,28 +113,26 @@ Upgrade flow: пользователь выбирает `pro` → redirect на 
 
 | Принцип | Описание |
 | :--- | :--- |
-| **cancel_at_period_end** | Default UX — доступ до `current_period_end`. |
-| **Immediate cancel** | `cancel_at_period_end=false` — status Canceled сразу. |
-| **Renewal skip** | Worker не продлевает если `CancelAtPeriodEnd` или Canceled. |
+| **cancel_at_period_end=true** | `CancelAtPeriodEnd=true`, **`CanceledAt=UtcNow`**, status остаётся Active/Trialing. |
+| **Immediate (false)** | `CancelAtPeriodEnd=false`, **`CanceledAt=null`**, `Status=Canceled`. |
+| **Renewal skip** | Worker не продлевает если `CancelAtPeriodEnd`. |
 
 ### 2. Высокоуровневое описание
 
-Представим отмену подписки как **заявку «не продлевать абонемент» у администратора зала**.
+Представим отмену подписки как **заявку «не продлевать абонемент»**.
 
-1. **Запрос пользователя:** UI вызывает `CancelSubscription` с `cancel_at_period_end=true` (default) или immediate cancel.
-2. **Обновление flags:** Billing выставляет `CancelAtPeriodEnd` или переводит status в `Canceled` сразу.
-3. **Renewal skip:** `RenewalWorker` не продлевает подписку при `CancelAtPeriodEnd` или уже canceled status.
-4. **Провайдер v1:** для ЮKassa cancel может быть локальным only — без вызова provider API cancel.
-
-Таким образом, пользователь сохраняет Pro-доступ до конца оплаченного period при soft cancel; immediate cancel прекращает paid snapshot сразу.
+1. **Period-end cancel:** flags `CancelAtPeriodEnd` + timestamp в `CanceledAt` (код ставит now при soft cancel); status не меняется до конца period / webhook.
+2. **Immediate cancel:** status → `Canceled`, `CanceledAt` очищается (`null`).
+3. **Renewal skip:** `RenewalWorker` фильтрует `!CancelAtPeriodEnd`.
+4. **Провайдер v1:** ЮKassa cancel может быть локальным only.
 
 ### 3. Примеры взаимодействия (логические сценарии)
 
 #### Сценарий А: Cancel at period end (Happy Path)
 
 1. **gRPC:** `CancelSubscription(cancel_at_period_end=true)`.
-2. **DB:** `CancelAtPeriodEnd=true`; status остаётся Active до period end.
-3. **UI:** «Pro до 15 июля».
+2. **DB:** `CancelAtPeriodEnd=true`, `CanceledAt=now`, status Active/Trialing.
+3. **UI:** «Pro до {current_period_end}».
 
 ---
 

@@ -11,7 +11,12 @@
 | :--- | :--- |
 | **SR-VOC-MKT-01** | **Публикация колоды (Marketplace Listing):** Превращение локальной колоды в товар (`Product`) в каталоге с метаданными, обложкой и ценой. |
 | **SR-VOC-MKT-02** | **Синхронизация подписок (Subscription Sync):** Подписка пользователя на колоду, отслеживание версий и скачивание обновлений при публикации новых версий автором. |
-| **SR-VOC-MKT-03** | **Контрибуции сообщества (Community Contributions):** Возможность для подписчиков предлагать правки к карточкам (опечатки, лучшие переводы) и workflow модерации автором колоды. |
+| **SR-VOC-MKT-03** | **Контрибуции сообщества:** типы `EDIT` / `ADD` / `DELETE` + workflow PENDING/APPROVED/REJECTED. |
+| **SR-VOC-MKT-04** | **ForkDeck:** форк публичной колоды (`ForkedFromId`). |
+| **SR-VOC-MKT-05** | **Product + Reviews + Stats:** CRUD продукта, отзывы, статистика. |
+| **SR-VOC-MKT-06** | **AuthorProfile:** публичный профиль автора. |
+| **SR-VOC-MKT-07** | **CheckEntitlement:** проверка доступа к колоде через `UserEntitlement`. |
+| **SR-VOC-MKT-08** | **Subscriptions API:** List / Subscribe / Unsubscribe. |
 
 ---
 
@@ -33,5 +38,35 @@
 
 ## SR-VOC-MKT-03: Контрибуции сообщества {#SR-VOC-MKT-03}
 ### 1. Цель и ключевые принципы
-- **Crowdsourced Correction:** Подписчики колоды могут отправить предложение изменений через сущность `Contribution`.
-- **Модерация:** Автор колоды в своем личном кабинете видит список контрибуций (`PENDING`) и может одобрить (`APPROVED`) или отклонить (`REJECTED`) предложение. При одобрении изменения автоматически применяются к оригинальной колоде и выпускается новая `DeckVersion`.
+- **Типы:** `Contribution.Type` ∈ {`EDIT`, `ADD`, `DELETE`}.
+- **Модерация:** статусы `PENDING` / `APPROVED` / `REJECTED`; при одобрении изменения применяются к колоде и может создаваться `DeckVersion`.
+
+---
+
+## SR-VOC-MKT-04: ForkDeck {#SR-VOC-MKT-04}
+### 1. Цель и ключевые принципы
+- Форк копирует колоду пользователю с `ForkedFromId` на исходник.
+
+---
+
+## SR-VOC-MKT-05: Product + Reviews + Stats {#SR-VOC-MKT-05}
+### 1. Цель и ключевые принципы
+- Управление `Product`, `ProductReview`, агрегаты рейтинга/продаж.
+
+---
+
+## SR-VOC-MKT-06: AuthorProfile {#SR-VOC-MKT-06}
+### 1. Цель и ключевые принципы
+- Публичный профиль автора: bio, social links, badges, stats cache.
+
+---
+
+## SR-VOC-MKT-07: CheckEntitlement {#SR-VOC-MKT-07}
+### 1. Цель и ключевые принципы
+- Проверка активного `UserEntitlement` на `DeckId` перед доступом к контенту колоды.
+
+---
+
+## SR-VOC-MKT-08: Subscriptions API {#SR-VOC-MKT-08}
+### 1. Цель и ключевые принципы
+- List / Subscribe / Unsubscribe через `DeckSubscription` и Subscription gRPC.
