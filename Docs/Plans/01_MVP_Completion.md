@@ -1,87 +1,83 @@
 # План реализации Этапа 1 (MVP)
 
-**Цель:** Выпуск первой стабильной версии Polyraspad в РФ. Запуск основного цикла обучения (LingQ-reader + FSRS повторение + расширение Chrome) с приемом платежей через ЮKassa и скрытием функционала будущих этапов.
+**Цель:** Выпуск первой стабильной версии Polyraspad в РФ. Запуск основного цикла обучения (LingQ-reader + FSRS повторение) с приемом платежей через ЮKassa и скрытием функционала будущих этапов.
 
-**Продуктовый контекст:** См. спецификацию [01Feature_Map.md](../Product/01Feature_Map.md).
+**Продуктовый контекст:** [01Feature_Map.md](../Product/01Feature_Map.md) (Stage 1).  
+**OCR:** код Phase 1 — [02_OCR_Phase1_Status.md](02_OCR_Phase1_Status.md) (manual QA отдельно).  
+**Freemium limits / paywall (после checkout):** [03_Freemium_Limits_Paywall.md](03_Freemium_Limits_Paywall.md).
 
----
+**Scope RF MVP (2026-07-22):** web-app only — Library/Reader + FSRS + click-to-translate + YooKassa + feature gating.  
+**Chrome Capture Extension (Шаг 4) — Deferred:** не блокирует RF launch; backend `POST /api/Cards/capture` остаётся для in-app mining.
 
-## 🛠️ Шаги реализации
-
-### Шаг 1. Настройка Feature Flags (Скрытие AI и сложных модулей)
-Необходимо полностью скрыть недоделанные AI-инструменты и не-MVP разделы, оставив только перевод по клику.
-
-* **[ ] Frontend:**
-  * Файл: `polyraspad-frontend/.env.example` и локальный `.env`.
-  * Добавить флаги:
-    * `NEXT_PUBLIC_FF_AI_AGENTS=false` — отключает ИИ-функции:
-      * **Inspector** при чтении книг (панель объяснения грамматики и разбора текста через LLM).
-      * Панель **Ассистента** (AI Assistant).
-      * **Автозаполнение** полей карточки при создании (AI mining drafts).
-      * **Генерацию аудио** озвучки с использованием LLM-ключей (mistral/openai).
-    * `NEXT_PUBLIC_FF_ADVANCED_MODULES=false` — скрывает не-MVP разделы:
-      * **Lessons** (Уроки).
-      * **Marketplace** (Маркетплейс).
-      * **Shadowing** (Техника теневого повтора в плеере/читалке).
-  * В коде фронтенда скрыть ссылки в сайдбаре, кнопки вызова данных панелей и блокировку генерации аудио на основе этих флагов.
-* **[ ] Backend:**
-  * Файл: `AggregatorService/appsettings.json` и `appsettings.Development.json`.
-  * Добавить секцию:
-    ```json
-    "Features": {
-      "EnableAIAgents": false,
-      "EnableAdvancedModules": false
-    }
-    ```
-  * Внедрить проверки во все смежные API-эндпоинты в `AggregatorService`, возвращая `404 Not Found` или `503 Service Unavailable`, если соответствующие модули отключены флагами.
+> **Shadowing:** UI `/shadowing` удалён из frontend (2026-07-22); будущая реализация будет отдельным дизайном. Исторический UX-набросок: [reader-library-shadowing-mvp.md](../Product/reader-library-shadowing-mvp.md) (не авторитетен для RF Stage 1).
 
 ---
 
-### Шаг 2. Интеграция ЮKassa в РФ
-Обеспечить возможность принимать первые рубли от пользователей.
+## Status
 
-* **[ ] Настройка провайдера в бэкенде:**
-  * Проверить конфигурацию `BillingService/appsettings.json` на поддержку провайдера `yookassa` (по умолчанию в dev используется `mock`).
-  * Файл: `AggregatorService/Program.cs` — убедиться, что webhook-прокси для платежей корректно маршрутизирует вебхуки ЮKassa в `BillingService`.
-* **[ ] Frontend-интеграция:**
-  * `polyraspad-frontend/src/components/billing/` — создать/обновить виджет выбора тарифа (Free / Premium).
-  * Реализовать отправку запроса на создание сессии оплаты -> перенаправление пользователя на форму ЮKassa -> обработка редиректа возврата (`/billing/success`).
-
----
-
-### Шаг 3. Финализация ядра читалки (Reader & Vocabulary)
-Обеспечить стабильное сохранение слов и применение статусов.
-
-* **[ ] Проверка регрессии статусов:**
-  * Убедиться, что при клике на слово в читалке отправляется запрос в `VocabularyService` для создания/обновления `ProjectTerm` со статусом `SAVED` (желтый).
-  * Проверить корректность обработки форм: слова `sleep` и `slept` должны иметь разные карточки (не лемматизироваться принудительно в одну), как требует регламент `AGENTS.md`.
-* **[ ] Синхронизация FSRS с читалкой:**
-  * Убедиться, что когда карточка в тренажере переходит в статус `KNOWN`, её цвет на читающей панели мгновенно меняется на стандартный белый.
+| Область | Статус | Примечание |
+|---------|--------|------------|
+| Feature flags (env + nav) | Done | `NEXT_PUBLIC_FF_*`, nav/omnibar hide |
+| Feature flags (reader mining / TTS API) | Done | mining gated; soft-redirects; GenerateAudio gated |
+| Features config + filter Agent/AI/Lessons/Community | Done | `Features` в appsettings; `FeatureFlagFilter` |
+| Public/Downloaded deck UI | Done | Gated via Advanced Modules; fork/download not in Stage 1; Decks Create/Update clamps `IsPublic` |
+| YooKassa provider + webhook + checkout | Done | Free / **Pro** (не Premium) |
+| Billing success refresh | Done | `/billing/success` invalidates + shows plan/pending |
+| Reader save → SAVED + exact forms | Done | LingQ regression tests |
+| FSRS study trainer | Done | `/study` + inclusive |
+| FSRS → reader KNOWN (white) | Done | Good/Easy + Review → `KNOWN` + termStatusEpoch |
+| OCR Phase 1 (code) | Done | manual QA checklist open |
+| Capture Extension client | **Deferred** | Anki-only; out of RF MVP |
 
 ---
 
-### Шаг 4. Chrome-расширение (Capture Extension)
-* **[ ] Настройка эндпоинта отправки:**
-  * Убедиться, что расширение отправляет захваченные фразы на эндпоинт `AggregatorService` с валидным JWT-токеном пользователя.
-  * Проверить обработку дубликатов: точное совпадение фразы (без учета регистра и пробелов) должно отклоняться или обновлять существующую карточку в Inbox, а не плодить дубли.
+## Remaining tasks
+
+### Шаг 1. Feature Flags
+
+* **[x]** Frontend: mining drafts / inspector AI gated; soft-redirect `/agents`, `/lessons`, `/marketplace`; Shadowing route removed.
+* **[x]** Backend: `GenerateAudio` gated; `FeaturesOptions` defaults `false`.
+* **[x]** Public/Downloaded: filters, Make public, contribution policy, Public/Purchased badges hidden when Advanced off; Aggregator clamps `IsPublic` / ignores `ContributionPolicy` on Decks Create/Update.
+* Browser TTS + click-to-translate при выключенном AI — **оставить**.
+
+### Шаг 2. ЮKassa
+
+* **[x]** Backend: provider `yookassa`, Aggregator webhook proxy.
+* **[x]** Frontend: `/billing` Free/Pro, checkout redirect.
+* **[x]** `/billing/success`: refetch access/subscription (или явный pending webhook).
+
+### Шаг 3. Reader & Vocabulary
+
+* **[x]** Save → `SAVED`; sleep/slept раздельно.
+* **[x]** `SubmitReview` Good/Easy + FSRS state Review → `UserTermStatus.Status = KNOWN`; invalidate reader queries.
+
+### Шаг 4. Chrome-расширение — Deferred
+
+* Backend capture + duplicate update — готовы для web mining.
+* Extension → JWT + Aggregator — **не в RF MVP**.
 
 ---
 
-## 🧪 План верификации
+## План верификации
 
 ### Автоматические тесты
-Перед коммитом этапа запустить регрессионные тесты бэкенда:
-```powershell
-# Тесты Vocabulary (FSRS, Decks, Terms)
-cd VocabularyService
-dotnet test ../VocabularyService.Tests/VocabularyService.Tests.csproj
 
-# Тесты Billing (Логика подписок и лимитов)
-cd ../BillingService
-dotnet test ../BillingService.Tests/BillingService.Tests.csproj
+```powershell
+dotnet test AggregatorService.Tests/AggregatorService.Tests.csproj -c Release
+dotnet test VocabularyService.Tests/VocabularyService.Tests.csproj -c Release
+dotnet test BillingService.Tests/BillingService.Tests.csproj -c Release
+cd polyraspad-frontend; npm test -- --watchAll=false
 ```
 
-### Ручная проверка
-1. Проверить, что в сайдбаре пропала вкладка "Агенты" при выключенном фича-флаге.
-2. Провести тестовый платеж в тестовом режиме ЮKassa.
-3. Проверить добавление слова из расширения Chrome -> появление слова в Inbox читалки -> тренировка этого слова в FSRS -> изменение цвета в читалке.
+### Ручной smoke (без extension)
+
+1. Флаги `false`: нет Agents/Lessons/Marketplace в nav; `/shadowing` отсутствует; reader mining AI не стреляет; `generate-audio` → 404; browser TTS + translate работают.
+2. Save слово → жёлтый; Good до Review в study → в reader белый (KNOWN) после повторного analyze / возврата в reader.
+3. Sandbox YooKassa → `/billing/success` → access обновляется или явный pending.
+4. OCR checklist из [02_OCR_Phase1_Status.md](02_OCR_Phase1_Status.md).
+
+### Автопроверка (2026-07-22)
+
+- AggregatorService.Tests: 57 passed (incl. FeatureFlagFilter + GenerateAudio 404)
+- VocabularyService.Tests Study/Term/AnkiFsrs + KnownStatusSync: passed
+- polyraspad-frontend `reader/page.test.tsx`: 18 passed

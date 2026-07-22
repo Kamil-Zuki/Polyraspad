@@ -11,16 +11,24 @@ using Xunit;
 
 namespace AggregatorService.Tests;
 
-public class AgentControllerTests : IClassFixture<AggregatorWebApplicationFactory>
+public class AgentControllerTests : IClassFixture<AgentControllerTests.AgentEnabledFactory>
 {
     private readonly AggregatorWebApplicationFactory _factory;
     private static readonly Guid TestUserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly string TestProjectId = "550e8400-e29b-41d4-a716-446655440000";
     private static readonly string TestThreadId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
-    public AgentControllerTests(AggregatorWebApplicationFactory factory)
+    public AgentControllerTests(AgentEnabledFactory factory)
     {
         _factory = factory;
+    }
+
+    public sealed class AgentEnabledFactory : AggregatorWebApplicationFactory
+    {
+        public AgentEnabledFactory()
+        {
+            EnableAiAgentsForTests = true;
+        }
     }
 
     private HttpClient CreateAuthenticatedClient()

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -15,8 +16,28 @@ public class AggregatorWebApplicationFactory : WebApplicationFactory<Program>
     public AgentClientMockHolder AgentClientMockHolder { get; } = new AgentClientMockHolder();
     public BillingClientMockHolder BillingClientMockHolder { get; } = new BillingClientMockHolder();
 
+    /// <summary>
+    /// When true, enables AI/advanced feature flags for tests that exercise those controllers.
+    /// Production defaults remain false (fail-closed).
+    /// </summary>
+    public bool EnableAiAgentsForTests { get; set; }
+
+    public bool EnableAdvancedModulesForTests { get; set; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            if (!EnableAiAgentsForTests && !EnableAdvancedModulesForTests)
+                return;
+
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Features:EnableAIAgents"] = EnableAiAgentsForTests ? "true" : "false",
+                ["Features:EnableAdvancedModules"] = EnableAdvancedModulesForTests ? "true" : "false",
+            });
+        });
+
         builder.ConfigureTestServices(services =>
         {
             var vocabularyDescriptors = services.Where(d => d.ServiceType == typeof(IVocabularyServiceClient)).ToList();

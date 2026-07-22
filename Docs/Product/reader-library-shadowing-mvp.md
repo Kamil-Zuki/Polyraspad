@@ -4,7 +4,10 @@
 **Scope:** Frontend (Next.js), Aggregator + Vocabulary + Media backend support  
 **Languages:** en, ru, ko  
 **Target materials:** books (.epub, .pdf, .txt) and plain-text articles  
-**Last updated:** 2026-07-01
+**Last updated:** 2026-07-22
+
+> **Obsolete for Shadowing:** The `/shadowing` frontend (page, components, local storage) was **removed** on 2026-07-22. Pronunciation practice will be redesigned later — do not restore this UI as-is.  
+> **RF Stage 1 authority:** [01Feature_Map.md](01Feature_Map.md) Stage 1 and [Docs/Plans/01_MVP_Completion.md](../Plans/01_MVP_Completion.md). This file remains a historical UX note for Reader/Library only; Billing is in RF MVP scope; Chrome Capture Extension is deferred.
 
 ---
 
@@ -71,7 +74,7 @@ Also reachable from reader via sentence context menu: "Shadow this sentence".
 | 5 | `/study/[deckId]` | P1 | Frontend | SRS; add link to shadowing |
 | 6 | `/dashboard` | P2 | Frontend | Motivation / streak |
 
-**Out of MVP scope:** Marketplace, Billing, Author profiles, AI agent chat, automatic pronunciation scoring, new languages.
+**Out of this UX doc’s focus (not RF Stage 1 blockers):** Marketplace, Author profiles, AI agent chat, automatic pronunciation scoring, new languages. Billing and feature gating are covered by Feature Map Stage 1 / `01_MVP_Completion.md`. Shadowing here is aspirational UX, not RF P0.
 
 ---
 
