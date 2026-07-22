@@ -1,10 +1,8 @@
 import json
 import logging
 import os
-import sys
 import threading
 from concurrent import futures
-from io import BytesIO
 from typing import Dict
 
 import grpc
@@ -18,7 +16,10 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-DEFAULT_CONFIG = {"server_port": 50052, "default_language": "en"}
+DEFAULT_CONFIG = {"server_port": 50052, "default_language": "en", "max_pages": 40}
+
+# EasyOCR language codes we ship for Polyraspad MVP.
+SUPPORTED_LANGUAGES = {"en", "ru", "ko"}
 
 
 def load_config():
@@ -32,18 +33,25 @@ def load_config():
     return DEFAULT_CONFIG
 
 
+def map_language(language: str, default_language: str) -> str:
+    lang = (language or default_language).strip().lower() or default_language
+    primary = lang.split(",")[0].strip().split("-")[0]
+    if primary in SUPPORTED_LANGUAGES:
+        return primary
+    logging.warning("Unsupported OCR language '%s', falling back to '%s'", language, default_language)
+    return default_language if default_language in SUPPORTED_LANGUAGES else "en"
+
+
 class OcrServiceServicer(proto.ocr_pb2_grpc.OcrServiceServicer):
-    def __init__(self, default_language="en"):
+    def __init__(self, default_language="en", max_pages=40):
         self.logger = logging.getLogger(__name__)
         self._default_language = default_language
+        self._max_pages = max(1, int(max_pages))
         self._readers: Dict[str, object] = {}
         self._lock = threading.Lock()
 
     def _get_reader(self, language: str):
-        lang = (language or self._default_language).strip() or self._default_language
-        # EasyOCR uses language codes like "en", "ch_sim", etc.
-        # Support a simple comma-separated list by taking the first code.
-        primary = lang.split(",")[0].strip()
+        primary = map_language(language, self._default_language)
         with self._lock:
             reader = self._readers.get(primary)
             if reader is None:
@@ -98,13 +106,24 @@ class OcrServiceServicer(proto.ocr_pb2_grpc.OcrServiceServicer):
             context.set_details(f"Could not initialize OCR reader: {e}")
             return proto.ocr_pb2.RecognizeDocumentResponse()
 
+        total_pages = len(images)
+        images_to_ocr = images[: self._max_pages]
+        truncated = total_pages > self._max_pages
+
         response = proto.ocr_pb2.RecognizeDocumentResponse()
-        response.page_count = len(images)
+        response.page_count = total_pages
+        if truncated:
+            response.warning = "OCR_PAGE_LIMIT"
+            self.logger.warning(
+                "OCR page limit: processing %d of %d pages",
+                self._max_pages,
+                total_pages,
+            )
+
         full_parts = []
 
-        for idx, image in enumerate(images, start=1):
+        for idx, image in enumerate(images_to_ocr, start=1):
             try:
-                # EasyOCR expects a numpy array in BGR or RGB; RGB works with opencv under the hood.
                 array = np.array(image)
                 lines = reader.readtext(array, detail=0, paragraph=True)
                 page_text = "\n".join(lines)
@@ -122,9 +141,11 @@ class OcrServiceServicer(proto.ocr_pb2_grpc.OcrServiceServicer):
 
         response.text = "\n\n".join(full_parts)
         self.logger.info(
-            "OCR completed: %d pages, %d characters extracted",
-            response.page_count,
+            "OCR completed: %d/%d pages OCR'd, %d characters extracted, warning=%s",
+            len(images_to_ocr),
+            total_pages,
             len(response.text),
+            response.warning or "",
         )
         return response
 
@@ -133,14 +154,15 @@ def serve():
     config = load_config()
     port = int(config.get("server_port", DEFAULT_CONFIG["server_port"]))
     default_language = config.get("default_language", DEFAULT_CONFIG["default_language"])
+    max_pages = int(config.get("max_pages", DEFAULT_CONFIG["max_pages"]))
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     proto.ocr_pb2_grpc.add_OcrServiceServicer_to_server(
-        OcrServiceServicer(default_language=default_language), server
+        OcrServiceServicer(default_language=default_language, max_pages=max_pages), server
     )
     server.add_insecure_port(f"[::]:{port}")
     server.start()
-    logging.info("OCR service started on port %d", port)
+    logging.info("OCR service started on port %d (max_pages=%d)", port, max_pages)
     server.wait_for_termination()
 
 

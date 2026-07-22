@@ -21,8 +21,10 @@ message PageResult {
 message RecognizeDocumentResponse {
   // Concatenated text from all pages separated by newlines.
   string text = 1;
-  // Number of pages that were processed.
+  // Number of pages in the source PDF (may exceed pages OCR'd when limited).
   int32 page_count = 2;
-  // Per-page results.
+  // Per-page results (only OCR'd pages).
   repeated PageResult pages = 3;
+  // Optional machine-readable warning, e.g. OCR_PAGE_LIMIT.
+  string warning = 4;
 }

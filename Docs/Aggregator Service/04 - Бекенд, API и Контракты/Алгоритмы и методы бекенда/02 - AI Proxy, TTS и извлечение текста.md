@@ -43,18 +43,23 @@ Invalid voice placeholder → **400** с явным message.
 
 ## Контекст
 
-PDF/EPUB/TXT upload → plain text для Reader import.
+PDF/EPUB/TXT upload → plain text для Reader import. Scanned PDF без text layer → fallback на gRPC `ocr-service` (`RecognizeDocument`).
 
 ## Логика
 
-1. Validate mime/size limits на BFF
-2. Parse: iText/pdfium или delegate gRPC `ExtractDocumentText` на MediaService
-3. Normalize whitespace, detect encoding (TXT)
-4. Return `ExtractDocumentTextResponseDto`
+1. Validate mime/size limits на BFF (`POST /api/Media/extract-document-text`, optional form `language`)
+2. Local parse via `IDocumentTextExtractor` (PdfPig / EPUB / TXT) на Aggregator
+3. Если PDF text layer пустой → gRPC OCR (`Ocr:GrpcAddress`), язык `en|ru|ko` (иначе fallback `en`)
+4. Normalize whitespace **внутри страницы**; разделители страниц сохраняются
+5. Return `ExtractDocumentTextResponseDto` (`text`, `pages[]`, `usedOcr`, `warning`, `sourceFormat`)
+
+## Sidecar (Reader Library)
+
+После OCR UI сохраняет JSON через `PUT /api/Media/documents/{documentId}/extract` (MediaService MinIO key `documents/{id}/extracted.json`). Книга помечается `readingMode=extracted`, `hasExtractedText=true`.
 
 ## Ограничения
 
-Max file size из config. Scanned PDF без OCR → partial empty text + warning flag.
+Max file size 50 MB. OCR max **40** страниц за запрос → `warning=OCR_PAGE_LIMIT` при truncation (partial success, не 422). Deadline gRPC OCR ~15 минут.
 
 ---
 

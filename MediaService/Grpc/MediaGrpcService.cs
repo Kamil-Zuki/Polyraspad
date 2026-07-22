@@ -164,6 +164,86 @@ public class MediaGrpcService : MediaServiceBase
         return new GetDocumentUrlResponse { Url = url };
     }
 
+    public override async Task<PutDocumentExtractResponse> PutDocumentExtract(PutDocumentExtractRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrWhiteSpace(request.DocumentId) || !Guid.TryParse(request.DocumentId, out var documentId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid document_id (UUID) is required"));
+        }
+
+        if (request.ExtractJson == null || request.ExtractJson.Length == 0)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "extract_json is required"));
+        }
+
+        if (request.ExtractJson.Length > MaxDocumentSizeBytes)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Extract payload must not exceed 50 MB"));
+        }
+
+        try
+        {
+            await using var stream = new MemoryStream(request.ExtractJson.ToByteArray());
+            await _mediaStorage.PutDocumentExtractAsync(documentId, stream, context.CancellationToken).ConfigureAwait(false);
+            return new PutDocumentExtractResponse();
+        }
+        catch (AmazonS3Exception ex)
+        {
+            _logger.LogError(ex, "S3 error putting document extract {DocumentId}", documentId);
+            throw new RpcException(new Status(StatusCode.Unavailable, $"Media storage error: {ex.Message}"));
+        }
+    }
+
+    public override async Task<GetDocumentExtractResponse> GetDocumentExtract(GetDocumentExtractRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrWhiteSpace(request.DocumentId) || !Guid.TryParse(request.DocumentId, out var documentId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid document_id (UUID) is required"));
+        }
+
+        try
+        {
+            var bytes = await _mediaStorage.GetDocumentExtractAsync(documentId, context.CancellationToken).ConfigureAwait(false);
+            if (bytes == null || bytes.Length == 0)
+            {
+                throw new RpcException(new Status(StatusCode.NotFound, "Document extract not found"));
+            }
+
+            return new GetDocumentExtractResponse
+            {
+                ExtractJson = Google.Protobuf.ByteString.CopyFrom(bytes)
+            };
+        }
+        catch (RpcException)
+        {
+            throw;
+        }
+        catch (AmazonS3Exception ex)
+        {
+            _logger.LogError(ex, "S3 error getting document extract {DocumentId}", documentId);
+            throw new RpcException(new Status(StatusCode.Unavailable, $"Media storage error: {ex.Message}"));
+        }
+    }
+
+    public override async Task<DeleteDocumentExtractResponse> DeleteDocumentExtract(DeleteDocumentExtractRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrWhiteSpace(request.DocumentId) || !Guid.TryParse(request.DocumentId, out var documentId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid document_id (UUID) is required"));
+        }
+
+        try
+        {
+            await _mediaStorage.DeleteDocumentExtractAsync(documentId, context.CancellationToken).ConfigureAwait(false);
+            return new DeleteDocumentExtractResponse();
+        }
+        catch (AmazonS3Exception ex)
+        {
+            _logger.LogError(ex, "S3 error deleting document extract {DocumentId}", documentId);
+            throw new RpcException(new Status(StatusCode.Unavailable, $"Media storage error: {ex.Message}"));
+        }
+    }
+
     public override async Task<GetAudioUrlResponse> GetAudioUrl(GetAudioUrlRequest request, ServerCallContext context)
     {
         if (string.IsNullOrWhiteSpace(request.AudioId) || !Guid.TryParse(request.AudioId, out var audioId))
@@ -385,6 +465,14 @@ public class MediaGrpcService : MediaServiceBase
             throw new RpcException(new Status(StatusCode.InvalidArgument, "book.file_name is required"));
         }
 
+        var readingMode = string.IsNullOrWhiteSpace(book.ReadingMode)
+            ? "pdf"
+            : book.ReadingMode.Trim().ToLowerInvariant();
+        if (readingMode is not ("pdf" or "extracted"))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "book.reading_mode must be 'pdf' or 'extracted'"));
+        }
+
         return new ReaderLibraryBookRecord
         {
             Id = bookId,
@@ -399,7 +487,9 @@ public class MediaGrpcService : MediaServiceBase
             CollectionName = string.IsNullOrWhiteSpace(book.CollectionName) ? null : book.CollectionName.Trim(),
             OwnerUserId = Guid.TryParse(book.OwnerUserId, out var ownerUserId) ? ownerUserId : Guid.Empty,
             OwnerUserName = book.OwnerUserName ?? string.Empty,
-            OwnerEmail = book.OwnerEmail ?? string.Empty
+            OwnerEmail = book.OwnerEmail ?? string.Empty,
+            ReadingMode = readingMode,
+            HasExtractedText = book.HasExtractedText
         };
     }
 
@@ -438,7 +528,9 @@ public class MediaGrpcService : MediaServiceBase
             IsShared = book.IsShared,
             OwnerUserId = book.OwnerUserId == Guid.Empty ? string.Empty : book.OwnerUserId.ToString(),
             OwnerUserName = book.OwnerUserName,
-            OwnerEmail = book.OwnerEmail
+            OwnerEmail = book.OwnerEmail,
+            ReadingMode = string.IsNullOrWhiteSpace(book.ReadingMode) ? "pdf" : book.ReadingMode,
+            HasExtractedText = book.HasExtractedText
         };
     }
 

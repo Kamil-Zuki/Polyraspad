@@ -235,11 +235,13 @@ public class MediaControllerTests
             ContentType = "text/plain"
         };
 
-        var actionResult = await controller.ExtractDocumentText(file, CancellationToken.None);
+        var actionResult = await controller.ExtractDocumentText(file, language: "en", CancellationToken.None);
         var ok = actionResult.Result.Should().BeOfType<OkObjectResult>().Subject;
         var dto = ok.Value.Should().BeOfType<ExtractDocumentTextResponseDto>().Subject;
         dto.Text.Should().Be("Hello reader pipeline.");
         dto.SourceFormat.Should().Be("txt");
+        dto.UsedOcr.Should().BeFalse();
+        dto.Pages.Should().ContainSingle(p => p.PageNumber == 1 && p.Text == "Hello reader pipeline.");
     }
 
     [Fact]
@@ -251,11 +253,12 @@ public class MediaControllerTests
                 It.IsAny<Stream>(),
                 It.IsAny<string>(),
                 It.IsAny<string>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new NoExtractableDocumentTextException(
                 "pdf",
                 "PDF_NO_TEXT_LAYER",
-                "This PDF has no selectable text layer (common for scanned pages). OCR is not supported in this release."));
+                "This PDF has no selectable text layer and OCR produced no readable text."));
 
         var controller = new MediaController(
             Mock.Of<IMediaServiceClient>(),
@@ -276,7 +279,7 @@ public class MediaControllerTests
             ContentType = "application/pdf"
         };
 
-        var actionResult = await controller.ExtractDocumentText(file, CancellationToken.None);
+        var actionResult = await controller.ExtractDocumentText(file, language: "ru", CancellationToken.None);
         var obj = actionResult.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
         obj.StatusCode.Should().Be(422);
     }

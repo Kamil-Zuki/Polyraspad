@@ -16,4 +16,7 @@ public sealed class ReaderLibraryBookRecord
     public string OwnerUserName { get; set; } = string.Empty;
     public string OwnerEmail { get; set; } = string.Empty;
     public bool IsShared { get; set; }
+    /// <summary>pdf | extracted</summary>
+    public string ReadingMode { get; set; } = "pdf";
+    public bool HasExtractedText { get; set; }
 }

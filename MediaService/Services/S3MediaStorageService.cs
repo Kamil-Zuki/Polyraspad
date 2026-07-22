@@ -49,6 +49,41 @@ public class S3MediaStorageService : IMediaStorageService
         return id;
     }
 
+    public async Task PutDocumentExtractAsync(Guid documentId, Stream data, CancellationToken cancellationToken = default)
+    {
+        await EnsureBucketExistsAsync(cancellationToken).ConfigureAwait(false);
+        await UploadAsync(GetDocumentExtractKey(documentId), data, "application/json", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<byte[]?> GetDocumentExtractAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        await EnsureBucketExistsAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var response = await _s3.GetObjectAsync(_options.Bucket, GetDocumentExtractKey(documentId), cancellationToken)
+                .ConfigureAwait(false);
+            await using var ms = new MemoryStream();
+            await response.ResponseStream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+            return ms.ToArray();
+        }
+        catch (AmazonS3Exception ex) when (IsMissingObject(ex))
+        {
+            return null;
+        }
+    }
+
+    public async Task DeleteDocumentExtractAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        await EnsureBucketExistsAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _s3.DeleteObjectAsync(_options.Bucket, GetDocumentExtractKey(documentId), cancellationToken).ConfigureAwait(false);
+        }
+        catch (AmazonS3Exception ex) when (IsMissingObject(ex))
+        {
+        }
+    }
+
     public async Task<Guid> UploadAudioAsync(Stream data, string contentType, CancellationToken cancellationToken = default)
     {
         await EnsureBucketExistsAsync(cancellationToken).ConfigureAwait(false);
@@ -130,10 +165,14 @@ public class S3MediaStorageService : IMediaStorageService
     {
         await EnsureBucketExistsAsync(cancellationToken).ConfigureAwait(false);
 
-        var books = (await LoadReaderLibraryBooksAsync(userId, projectId, cancellationToken).ConfigureAwait(false))
-            .Where(item => item.Id != bookId)
-            .ToList();
+        var existingBooks = await LoadReaderLibraryBooksAsync(userId, projectId, cancellationToken).ConfigureAwait(false);
+        var removed = existingBooks.FirstOrDefault(item => item.Id == bookId);
+        if (removed?.DocumentId is Guid documentId && removed.HasExtractedText)
+        {
+            await DeleteDocumentExtractAsync(documentId, cancellationToken).ConfigureAwait(false);
+        }
 
+        var books = existingBooks.Where(item => item.Id != bookId).ToList();
         await SaveReaderLibraryBooksAsync(userId, projectId, books, cancellationToken).ConfigureAwait(false);
     }
 
@@ -195,7 +234,9 @@ public class S3MediaStorageService : IMediaStorageService
                     OwnerUserId = book.OwnerUserId,
                     OwnerUserName = book.OwnerUserName,
                     OwnerEmail = book.OwnerEmail,
-                    IsShared = book.IsShared
+                    IsShared = book.IsShared,
+                    ReadingMode = book.ReadingMode,
+                    HasExtractedText = book.HasExtractedText
                 }
                 : book)
             .ToList();
@@ -276,7 +317,9 @@ public class S3MediaStorageService : IMediaStorageService
                         OwnerUserId = book.OwnerUserId,
                         OwnerUserName = book.OwnerUserName,
                         OwnerEmail = book.OwnerEmail,
-                        IsShared = true
+                        IsShared = true,
+                        ReadingMode = book.ReadingMode,
+                        HasExtractedText = book.HasExtractedText
                     })
                     .ToList();
 
@@ -364,6 +407,9 @@ public class S3MediaStorageService : IMediaStorageService
             || string.Equals(ex.ErrorCode, "NoSuchKey", StringComparison.OrdinalIgnoreCase)
             || string.Equals(ex.ErrorCode, "NotFound", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string GetDocumentExtractKey(Guid documentId)
+        => $"{DocumentsPrefix}/{documentId:D}/extracted.json";
 
     private static string GetReaderLibraryKey(Guid userId, string projectId)
     {

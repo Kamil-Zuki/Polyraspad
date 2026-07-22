@@ -7,6 +7,9 @@ public interface IMediaStorageService
     Task<Guid> UploadImageAsync(Stream data, string contentType, CancellationToken cancellationToken = default);
     Task<Guid> UploadAudioAsync(Stream data, string contentType, CancellationToken cancellationToken = default);
     Task<Guid> UploadDocumentAsync(Stream data, string contentType, CancellationToken cancellationToken = default);
+    Task PutDocumentExtractAsync(Guid documentId, Stream data, CancellationToken cancellationToken = default);
+    Task<byte[]?> GetDocumentExtractAsync(Guid documentId, CancellationToken cancellationToken = default);
+    Task DeleteDocumentExtractAsync(Guid documentId, CancellationToken cancellationToken = default);
     Task<string> GetMediaUrlAsync(Guid mediaId, string prefix, CancellationToken cancellationToken = default);
     Task<string> GetMediaUrlForServerFetchAsync(Guid mediaId, string prefix, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReaderLibraryBookRecord>> ListReaderLibraryBooksAsync(Guid userId, string projectId, CancellationToken cancellationToken = default);
