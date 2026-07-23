@@ -54,7 +54,6 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
     languageLabel: "RU",
     navItems: [
       { href: "#features", label: "Методика" },
-      { href: "#pricing", label: "MVP" },
     ],
     loginLabel: "Войти",
     startFreeLabel: "Начать бесплатно",
@@ -69,7 +68,7 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
     problemTitle: "Словарь, ридер и повторения часто существуют в разных приложениях.",
     problemDescription:
       "Обычно вы читаете в одном месте, ищете перевод в другом, а повторяете карточки в Anki. Polyraspad объединяет эти процессы: от чтения текста и захвата субтитров до генерации аудио и повторений.",
-    problemAccent: "Главная идея проекта — строгая инфраструктура для sentence mining.",
+    problemAccent: "Глобальная цель проекта — комплексное развитие 4 навыков языка (чтение, аудирование, письмо, речь). Текущая MVP-версия закладывает для этого фундамент — строгую инфраструктуру для sentence mining.",
     featuresTitle: "Архитектура платформы",
     featuresSubtitle: "Набор инструментов для эффективного погружения в язык.",
     features: [
@@ -118,18 +117,11 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
         title: "Продукт",
         links: [
           { href: "#features", label: "Возможности" },
-          { href: "#pricing", label: "Хостинг" },
         ],
       },
       {
         title: "Ресурсы",
         links: [
-          { href: "https://github.com/Kamil-Zuki/Polyraspad#readme", label: "README проекта", external: true },
-          {
-            href: "https://github.com/Kamil-Zuki/Polyraspad/tree/main/Docs",
-            label: "Архитектура",
-            external: true,
-          },
           { href: "/import", label: "Импорт из Anki" },
           {
             href: "https://github.com/open-spaced-repetition/fsrs4anki",
@@ -150,7 +142,6 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
     languageLabel: "EN",
     navItems: [
       { href: "#features", label: "Features" },
-      { href: "#pricing", label: "MVP" },
     ],
     loginLabel: "Log in",
     startFreeLabel: "Start for free",
@@ -165,7 +156,7 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
     problemTitle: "Reading, mining, and reviewing often happen in different apps.",
     problemDescription:
       "Usually, you read in one place, look up translations in another, and review cards in Anki. Polyraspad connects these flows: from reading and capturing subtitles to generating audio and reviewing.",
-    problemAccent: "The main goal is a strict infrastructure for sentence mining without unnecessary gamification.",
+    problemAccent: "The global vision is the comprehensive development of 4 language skills (reading, listening, writing, speaking). The current MVP lays the foundation: a strict infrastructure for sentence mining.",
     featuresTitle: "Platform Architecture",
     featuresSubtitle: "A set of tools for effective language immersion.",
     features: [
@@ -214,18 +205,11 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
         title: "Product",
         links: [
           { href: "#features", label: "Features" },
-          { href: "#pricing", label: "Hosting" },
         ],
       },
       {
         title: "Resources",
         links: [
-          { href: "https://github.com/Kamil-Zuki/Polyraspad#readme", label: "Project README", external: true },
-          {
-            href: "https://github.com/Kamil-Zuki/Polyraspad/tree/main/Docs",
-            label: "Architecture",
-            external: true,
-          },
           { href: "/import", label: "Import from Anki" },
           {
             href: "https://github.com/open-spaced-repetition/fsrs4anki",
@@ -246,7 +230,6 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
     languageLabel: "KO",
     navItems: [
       { href: "#features", label: "학습 방식" },
-      { href: "#pricing", label: "MVP" },
     ],
     loginLabel: "로그인",
     startFreeLabel: "무료로 시작하기",
@@ -261,7 +244,7 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
     problemTitle: "읽기, 어휘 수집, 복습은 종종 다른 앱에서 일어납니다.",
     problemDescription:
       "보통 한 곳에서 읽고, 다른 곳에서 번역을 찾고, Anki에서 카드를 복습합니다. Polyraspad는 텍스트 읽기와 자막 캡처부터 오디오 생성 및 복습까지 이 흐름을 하나로 연결합니다.",
-    problemAccent: "핵심 목표는 불필요한 게임화 없이 문장 마이닝을 위한 엄격한 인프라를 제공하는 것입니다.",
+    problemAccent: "글로벌 비전은 4가지 언어 능력(읽기, 듣기, 쓰기, 말하기)의 종합적인 개발입니다. 현재 MVP는 그 토대인 문장 마이닝을 위한 엄격한 인프라를 제공합니다.",
     featuresTitle: "플랫폼 아키텍처",
     featuresSubtitle: "효과적인 언어 몰입을 위한 도구 세트.",
     features: [
@@ -310,18 +293,11 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
         title: "제품",
         links: [
           { href: "#features", label: "기능" },
-          { href: "#pricing", label: "호스팅" },
         ],
       },
       {
         title: "리소스",
         links: [
-          { href: "https://github.com/Kamil-Zuki/Polyraspad#readme", label: "프로젝트 README", external: true },
-          {
-            href: "https://github.com/Kamil-Zuki/Polyraspad/tree/main/Docs",
-            label: "아키텍처",
-            external: true,
-          },
           { href: "/import", label: "Anki에서 가져오기" },
           {
             href: "https://github.com/open-spaced-repetition/fsrs4anki",

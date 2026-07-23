@@ -5,7 +5,6 @@ import {
   ArrowRight,
   BookOpen,
   Brain,
-  Bug,
   Check,
   CirclePlay,
   Globe,
@@ -241,54 +240,6 @@ export default async function LocalizedHomePage({
         </section>
 
 
-
-        <section id="pricing" className="landing-section px-6 py-16 md:py-20">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-12 text-center">
-              <h2 className="mb-3 text-2xl font-bold text-white md:text-4xl">{content.pricingTitle}</h2>
-              <p className="text-base text-gray-400 md:text-lg">{content.pricingSubtitle}</p>
-            </div>
-
-            <div className="mx-auto flex max-w-md flex-col gap-6">
-              {content.pricingPlans.map((plan) => (
-                <article
-                  key={plan.name}
-                  className="glass-panel relative flex flex-col rounded-2xl p-6"
-                >
-                  {plan.name === "Pro" ? (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-                      {content.pricingFeaturedBadge}
-                    </div>
-                  ) : null}
-
-                  <h3 className="mb-2 text-lg font-bold text-white md:text-xl">{plan.name}</h3>
-                  <div className="mb-1 text-2xl font-bold text-white md:text-3xl">
-                    {plan.price}
-                    {plan.suffix ? <span className="text-sm font-normal text-gray-400"> {plan.suffix}</span> : null}
-                  </div>
-                  {plan.note ? <p className="mb-6 text-xs text-gray-400">{plan.note}</p> : <div className="mb-5" />}
-
-                  <ul className={`mb-6 flex-1 space-y-3 text-sm ${plan.name === "Pro" ? "text-gray-300" : "text-gray-400"}`}>
-                    {plan.items.map((item) => (
-                      <li key={item} className="flex items-start gap-2">
-                        <Check className={`mt-0.5 h-4 w-4 ${plan.name === "Pro" ? "text-[#EC4899]" : "text-[#8B5CF6]"}`} />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <a
-                    href={plan.name === "Creator" ? `${APP_URL}/dashboard` : `${APP_URL}/auth`}
-                    className="block w-full rounded-xl border border-white/20 py-3 text-center font-bold text-white transition hover:bg-white/10"
-                  >
-                    {plan.cta}
-                  </a>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
         <section className="landing-section px-6 py-16 md:py-20">
           <div className="mx-auto max-w-4xl rounded-3xl border border-white/10 bg-white/5 p-8 text-center md:p-10">
             <h2 className="mb-4 text-2xl font-bold text-white md:text-4xl">{content.finalTitle}</h2>
@@ -320,35 +271,6 @@ export default async function LocalizedHomePage({
               <span className="font-bold text-white">Polyraspad</span>
             </div>
             <p className="mb-4">{content.footerDescription}</p>
-            <div className="flex gap-4">
-              <a
-                href="https://github.com/Kamil-Zuki/Polyraspad"
-                target="_blank"
-                rel="noreferrer"
-                className="transition hover:text-white"
-                aria-label="GitHub repository"
-              >
-                <BookOpen className="h-5 w-5" />
-              </a>
-              <a
-                href="https://github.com/Kamil-Zuki/Polyraspad/issues"
-                target="_blank"
-                rel="noreferrer"
-                className="transition hover:text-white"
-                aria-label="GitHub issues"
-              >
-                <Bug className="h-5 w-5" />
-              </a>
-              <a
-                href="https://github.com/Kamil-Zuki/Polyraspad#readme"
-                target="_blank"
-                rel="noreferrer"
-                className="transition hover:text-white"
-                aria-label="Project README"
-              >
-                <BookOpen className="h-5 w-5" />
-              </a>
-            </div>
           </div>
 
           {content.footerGroups.map((group) => (
