@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next"
-import { Inter, Noto_Sans_KR } from "next/font/google"
+import { Golos_Text, Noto_Sans_KR } from "next/font/google"
 import "./globals.css"
 
-const inter = Inter({
+const golosText = Golos_Text({
   subsets: ["latin", "cyrillic"],
   weight: ["400", "500", "600", "700", "800"],
   display: "swap",
@@ -20,18 +20,18 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://polyraspad.online"
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "PVS.ai",
-    template: "%s | PVS.ai",
+    default: "Polyraspad",
+    template: "%s | Polyraspad",
   },
   description:
-    "Выучи язык через контекст, FSRS и AI-ассистента. Платформа для изучения языков, маркетплейса колод и Creator Studio.",
+    "Выучи язык через контекст, чтение, sentence mining и FSRS-интервальные повторения.",
   openGraph: {
     type: "website",
     locale: "ru_RU",
-    siteName: "PVS.ai",
-    title: "PVS.ai",
+    siteName: "Polyraspad",
+    title: "Polyraspad",
     description:
-      "Выучи язык через контекст, FSRS и AI-ассистента. Платформа для изучения языков, маркетплейса колод и Creator Studio.",
+      "Выучи язык через контекст, чтение, sentence mining и FSRS-интервальные повторения.",
     url: siteUrl,
   },
 }
@@ -49,7 +49,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body className={`${inter.className} ${notoSansKr.variable} antialiased`}>{children}</body>
+      <body className={`${golosText.className} ${notoSansKr.variable} antialiased`}>{children}</body>
     </html>
   )
 }
