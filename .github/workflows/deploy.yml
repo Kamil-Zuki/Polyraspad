@@ -18,8 +18,11 @@ jobs:
             set -e
             cd ${{ secrets.VPS_DEPLOY_PATH }}
             git config --global --add safe.directory "*"
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
             if [ -n "${{ secrets.SUBMODULES_PAT }}" ]; then
               git config --global url."https://x-access-token:${{ secrets.SUBMODULES_PAT }}@github.com/".insteadOf "https://github.com/"
+              git config --global url."https://x-access-token:${{ secrets.SUBMODULES_PAT }}@github.com/".insteadOf "git@github.com:"
             fi
             git fetch origin master
             git reset --hard origin/master
