@@ -21,16 +21,18 @@ jobs:
             mkdir -p ~/.ssh && chmod 700 ~/.ssh
             ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
             if [ -n "${{ secrets.SUBMODULES_PAT }}" ]; then
-              git config --global url."https://x-access-token:${{ secrets.SUBMODULES_PAT }}@github.com/".insteadOf "https://github.com/"
-              git config --global url."https://x-access-token:${{ secrets.SUBMODULES_PAT }}@github.com/".insteadOf "git@github.com:"
+              echo "machine github.com login x-access-token password ${{ secrets.SUBMODULES_PAT }}" > ~/.netrc
+              chmod 600 ~/.netrc
+              git config --global url."https://github.com/".insteadOf "git@github.com:"
+              git config --global credential.helper store
             fi
             git fetch origin master
             git reset --hard origin/master
             git submodule sync --recursive
-            git submodule update --init --recursive
-            docker compose pull
+            git submodule update --init --recursive --force
+            rm -f ~/.netrc
             docker compose build --no-cache
             docker compose up -d
             docker compose ps
-            sleep 5
-            curl -fsS --retry 5 --retry-delay 3 --retry-all-errors http://127.0.0.1:5000/healthz
+            sleep 10
+            curl -fsS --retry 8 --retry-delay 5 --retry-all-errors http://127.0.0.1:5000/healthz
