@@ -17,8 +17,12 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.VPS_DEPLOY_PATH }}
+            if [ -n "${{ secrets.SUBMODULES_PAT }}" ]; then
+              git config --global url."https://x-access-token:${{ secrets.SUBMODULES_PAT }}@github.com/".insteadOf "https://github.com/"
+            fi
             git fetch origin master
             git reset --hard origin/master
+            git submodule sync --recursive
             git submodule update --init --recursive
             docker compose pull
             docker compose build --no-cache
