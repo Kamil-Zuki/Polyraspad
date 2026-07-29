@@ -32,4 +32,5 @@ jobs:
             docker compose build --no-cache
             docker compose up -d
             docker compose ps
-            curl -fsS http://127.0.0.1:5000/healthz
+            sleep 5
+            curl -fsS --retry 5 --retry-delay 3 --retry-all-errors http://127.0.0.1:5000/healthz
