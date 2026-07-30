@@ -56,8 +56,9 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        working-directory: AggregatorService
-        run: dotnet restore
+        run: |
+          dotnet restore AggregatorService/AggregatorService.csproj
+          dotnet restore AggregatorService.Tests/AggregatorService.Tests.csproj
 
       - name: Build
         working-directory: AggregatorService
@@ -103,8 +104,9 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        working-directory: AgentService
-        run: dotnet restore
+        run: |
+          dotnet restore AgentService/AgentService.csproj
+          dotnet restore AgentService.Tests/AgentService.Tests.csproj
 
       - name: Build
         working-directory: AgentService
