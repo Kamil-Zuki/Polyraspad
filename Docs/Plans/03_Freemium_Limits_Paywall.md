@@ -44,10 +44,31 @@
 
 ---
 
+## Аудит (2026-07-31) — текущее состояние
+
+**Архитектура:** ✅ Корректная. Лимиты реально применяются.
+
+| Компонент | Статус |
+|-----------|--------|
+| BillingService: планы Free/Pro, seed | ✅ Готово |
+| BillingLimitService (VocabularyService) | ✅ Готово |
+| AI-лимиты через Redis | ✅ Готово |
+| Fail-open при недоступности Billing | ✅ Готово |
+| Webhook idempotency (SHA-256) | ✅ Готово |
+| Frontend `/billing` страница | ✅ Готово |
+| **Mock checkout не активирует подписку** | 🔴 Блокер |
+| `/billing/success` не инвалидирует кэш | 🟡 Проблема |
+| `BILLING_WEBHOOK_API_KEY` пустой в .env | 🔴 Prod |
+| UI не показывает блокировку при лимите | 🟡 Проблема |
+| Capture / BulkCreate не проверяют maxCards | 🔴 Дыра |
+
+---
+
 ## Status
 
 | Шаг | Статус |
 |-----|--------|
+| 0. Исправить Mock-провайдер (блокер тестирования) | **Pending** |
 | 1. Vocabulary: закрыть обходы maxCards | Pending |
 | 2. Aggregator: единый 402 + error body | Pending |
 | 3. Frontend: paywall UX + Billing в nav | Pending |
@@ -57,6 +78,29 @@
 ---
 
 ## Шаги реализации
+
+### Шаг 0. Исправить MockPaymentProvider — активация подписки через webhook (БЛОКЕР)
+
+**Проблема:** `MockPaymentProvider.HandleWebhookAsync` логирует и возвращает `WebhookHandleResult.Empty` — никакие события не создаются, подписка остаётся `Incomplete` после checkout.
+
+* **[ ]** В `MockPaymentProvider.HandleWebhookAsync` парсить тело payload (`paymentId`, `status`) и возвращать `PaymentSucceededEvent` при `status == "succeeded"`.
+* **[ ]** В `/billing/success/page.tsx` добавить `queryClient.invalidateQueries` после загрузки (useEffect) — план обновится без F5.
+* **[ ]** Установить `BILLING_WEBHOOK_API_KEY` в `.env` (любая случайная строка).
+
+**Как проверить после исправления:**
+```powershell
+$r = Invoke-RestMethod -Uri "http://localhost:5000/api/auth/login" `
+  -Method POST -ContentType "application/json" -Body '{"email":"you@email.com","password":"pass"}'
+$token = $r.token
+$c = Invoke-RestMethod -Uri "http://localhost:5000/api/billing/checkout" `
+  -Method POST -ContentType "application/json" `
+  -Headers @{Authorization="Bearer $token"} -Body '{"planCode":"pro"}'
+Invoke-RestMethod -Uri "http://localhost:5000/api/billing/webhooks/mock" `
+  -Method POST -ContentType "application/json" `
+  -Body (@{paymentId=$c.providerPaymentId; status="succeeded"} | ConvertTo-Json)
+# Ожидается planCode="pro":
+Invoke-RestMethod -Uri "http://localhost:5000/api/billing/access" -Headers @{Authorization="Bearer $token"}
+```
 
 ### Шаг 1. Vocabulary — enforcement на всех путях создания карточек
 
