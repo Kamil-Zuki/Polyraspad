@@ -9,6 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.79.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Agents.Core" Version="1.79.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.79.0" />
     <Protobuf Include="Protos\agent.proto" GrpcServices="Server" />
     <Protobuf Include="Protos\vocabulary-client.proto" GrpcServices="Client" />
     <Protobuf Include="Protos\Inclusive\vocab.proto" GrpcServices="Client" />

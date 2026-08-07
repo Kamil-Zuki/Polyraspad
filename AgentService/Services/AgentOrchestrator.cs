@@ -5,6 +5,11 @@ using Microsoft.Extensions.Options;
 using Pvs.Content.Grpc;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.ChatCompletion;
+using AgentService.Infrastructure;
+using System.Runtime.CompilerServices;
 
 namespace AgentService.Services;
 
@@ -17,6 +22,22 @@ public interface IAgentOrchestrator
         ExecuteAgentRunDto request,
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default);
+
+    IAsyncEnumerable<ExecuteRunStreamEvent> ExecuteRunStreamAsync(
+        Guid userId,
+        Guid threadId,
+        Guid projectId,
+        ExecuteAgentRunDto request,
+        IEnumerable<string> roles,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default);
+}
+
+public record ExecuteRunStreamEvent
+{
+    public string? ContentChunk { get; init; }
+    public AgentToolCallRecord? ToolCall { get; init; }
+    public CreateAgentRunResultDto? FinalResult { get; init; }
+    public string? Error { get; init; }
 }
 
 public class AgentOrchestrator : IAgentOrchestrator
@@ -24,104 +45,22 @@ public class AgentOrchestrator : IAgentOrchestrator
     private readonly IAgentThreadService _threadService;
     private readonly IVocabularyProjectAccessValidator _projectAccessValidator;
     private readonly IVocabularyGrpcClient _vocabularyClient;
-    private readonly IAgentLlmProvider _llmProvider;
+    private readonly AgentKernelFactory _kernelFactory;
     private readonly AiOptions _aiOptions;
     private readonly ILogger<AgentOrchestrator> _logger;
-
-    private static readonly AgentToolDefinition[] AvailableTools = new[]
-    {
-        new AgentToolDefinition(
-            "create_deck",
-            "Create a new deck for organizing vocabulary cards.",
-            new {
-                type = "object",
-                properties = new {
-                    title = new { type = "string", description = "Title of the deck" },
-                    description = new { type = "string", description = "Optional description" }
-                },
-                required = new[] { "title" }
-            }),
-        new AgentToolDefinition(
-            "create_card",
-            "Create a new flashcard.",
-            new {
-                type = "object",
-                properties = new {
-                    deck_id = new { type = "string", description = "ID of the deck to add the card to. Ask the user if unknown." },
-                    word = new { type = "string", description = "The exact word or phrase" },
-                    translation = new { type = "string", description = "Translation in target language" },
-                    expression = new { type = "string", description = "Optional example sentence using the word" }
-                },
-                required = new[] { "deck_id", "word", "translation" }
-            }),
-        new AgentToolDefinition(
-            "get_user_vocabulary_stats",
-            "Get the user's progress and vocabulary statistics.",
-            new { type = "object", properties = new Dictionary<string, object>() }),
-        new AgentToolDefinition(
-            "get_recent_leeches",
-            "Get a list of problematic (leech) cards the user struggles with.",
-            new { type = "object", properties = new Dictionary<string, object>() }),
-        new AgentToolDefinition(
-            "mark_lesson_completed",
-            "Mark the current lesson as completed. ONLY call this when the user has fully finished the lesson activities according to your assessment.",
-            new {
-                type = "object",
-                properties = new {
-                    lesson_id = new { type = "string", description = "ID of the lesson to mark as completed" }
-                },
-                required = new[] { "lesson_id" }
-            }),
-        new AgentToolDefinition(
-            "submit_knowledge_check",
-            "Submit the results of an exam or knowledge check to update the user's skill levels. Use this tool ONLY at the end of a Knowledge Check lesson.",
-            new {
-                type = "object",
-                properties = new {
-                    term_ids = new { type = "array", items = new { type = "string" }, description = "List of term IDs that were evaluated" },
-                    reading_score = new { type = "integer", description = "Score for Reading (0-100), 0 if not evaluated" },
-                    listening_score = new { type = "integer", description = "Score for Listening (0-100), 0 if not evaluated" },
-                    writing_score = new { type = "integer", description = "Score for Writing (0-100), 0 if not evaluated" },
-                    speaking_score = new { type = "integer", description = "Score for Speaking (0-100), 0 if not evaluated" }
-                },
-                required = new[] { "term_ids" }
-            }),
-        new AgentToolDefinition(
-            "set_cefr_placement",
-            "Set the user's CEFR level after a placement test. This unlocks curriculum lessons for them.",
-            new {
-                type = "object",
-                properties = new {
-                    cefr_level = new { type = "string", description = "The CEFR level determined by the test: A1, A2, B1, B2, C1, or C2" }
-                },
-                required = new[] { "cefr_level" }
-            }),
-        new AgentToolDefinition(
-            "get_daily_plan",
-            "Get the user's personalized daily learning plan: due flashcard count, weakest skill, next curriculum lesson, and skill CEFR levels. Call this at the start of any conversation if you need context about the user's current state.",
-            new { type = "object", properties = new Dictionary<string, object>() }),
-        new AgentToolDefinition(
-            "generate_writing_task",
-            "Get a list of words the user is currently learning to generate a writing or translation task for them.",
-            new { type = "object", properties = new Dictionary<string, object>() }),
-        new AgentToolDefinition(
-            "get_skill_assessment_history",
-            "Get the history of the user's skill assessments (reading, listening, writing, speaking scores) to analyze trends and suggest focused practice.",
-            new { type = "object", properties = new Dictionary<string, object>() })
-    };
 
     public AgentOrchestrator(
         IAgentThreadService threadService,
         IVocabularyProjectAccessValidator projectAccessValidator,
         IVocabularyGrpcClient vocabularyClient,
-        IAgentLlmProvider llmProvider,
+        AgentKernelFactory kernelFactory,
         IOptions<AiOptions> aiOptions,
         ILogger<AgentOrchestrator> logger)
     {
         _threadService = threadService;
         _projectAccessValidator = projectAccessValidator;
         _vocabularyClient = vocabularyClient;
-        _llmProvider = llmProvider;
+        _kernelFactory = kernelFactory;
         _aiOptions = aiOptions.Value;
         _logger = logger;
     }
@@ -134,6 +73,28 @@ public class AgentOrchestrator : IAgentOrchestrator
         IEnumerable<string> roles,
         CancellationToken cancellationToken = default)
     {
+        var stream = ExecuteRunStreamAsync(userId, threadId, projectId, request, roles, cancellationToken);
+        CreateAgentRunResultDto? finalResult = null;
+        
+        await foreach (var evt in stream)
+        {
+            if (evt.FinalResult != null)
+            {
+                finalResult = evt.FinalResult;
+            }
+        }
+
+        return finalResult;
+    }
+
+    public async IAsyncEnumerable<ExecuteRunStreamEvent> ExecuteRunStreamAsync(
+        Guid userId,
+        Guid threadId,
+        Guid projectId,
+        ExecuteAgentRunDto request,
+        IEnumerable<string> roles,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
         if (string.IsNullOrWhiteSpace(request.UserText))
             throw new ArgumentException("User text is required");
 
@@ -143,148 +104,153 @@ public class AgentOrchestrator : IAgentOrchestrator
         var sourceLang = request.SourceLang ?? project.SourceLang;
         var targetLang = request.TargetLang ?? project.TargetLang;
         
-        var history = await LoadHistoryAsync(userId, threadId, cancellationToken);
-        var messages = new List<AgentChatMessageDto>(history)
-        {
-            new AgentChatMessageDto("user", request.UserText)
-        };
-
         var thread = await _threadService.GetThreadAsync(userId, threadId, cancellationToken);
+        var agentId = thread?.AgentId ?? "study-copilot";
 
         var systemPrompt = !string.IsNullOrWhiteSpace(thread?.SystemPromptOverride) 
             ? thread.SystemPromptOverride 
-            : AgentSystemPromptBuilder.Build(thread?.AgentId ?? "study-copilot", project.Title, sourceLang, targetLang);
+            : AgentSystemPromptBuilder.Build(agentId, project.Title, sourceLang, targetLang);
 
         var intent = AgentIntentRouter.Route(request.UserText);
-        if (intent.ToolId == AgentToolId.GeneratePractice)
+        
+        if (!intent.Allowed)
         {
-            var terms = await _vocabularyClient.GetLearningTermsAsync(userId, projectId, 5, roles, cancellationToken);
-            if (terms.Any())
+            var finalResult = await _threadService.CreateRunAsync(userId, threadId, projectId, new CreateAgentRunDto
             {
-                var termList = string.Join(", ", terms.Select(t => t.Text));
-                systemPrompt += $"\n\n[SYSTEM INSTRUCTION]\nThe user wants to practice. Here are some words they are currently learning: {termList}. Generate a short creative writing exercise, translation task, or roleplay scenario where they must use these words. Do not give them the answers yet, encourage them to respond.";
-            }
+                UserMessage = new AgentMessageInputDto { Role = "user", Content = request.UserText.Trim() },
+                AssistantMessage = new AgentMessageInputDto
+                {
+                    Role = "assistant",
+                    Content = intent.RefusalMessage ?? "I'm sorry, I can only help with language learning tasks.",
+                    MetadataJson = AgentMessageMetadataBuilder.Build(new AgentExecutionResult(
+                        intent.RefusalMessage ?? "Refused",
+                        intent,
+                        [],
+                        intent.CategoryName,
+                        null,
+                        true
+                    ))
+                },
+                DomainDecision = new AgentDomainDecisionInputDto
+                {
+                    Allowed = intent.Allowed,
+                    Category = intent.CategoryName,
+                    Reason = intent.Reason
+                },
+                ToolCalls = [],
+                Model = null
+            }, cancellationToken);
+
+            yield return new ExecuteRunStreamEvent { ContentChunk = intent.RefusalMessage };
+            yield return new ExecuteRunStreamEvent { FinalResult = finalResult };
+            yield break;
+        }
+        
+        // Setup Kernel & Agent
+        var kernel = _kernelFactory.CreateKernel(_vocabularyClient, userId, projectId, roles);
+        var agent = new ChatCompletionAgent
+        {
+            Name = agentId,
+            Instructions = systemPrompt,
+            Kernel = kernel,
+            Arguments = new KernelArguments(
+                new OpenAIPromptExecutionSettings 
+                { 
+                    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() 
+                })
+        };
+
+        // Load History
+        var historyMessages = await LoadHistoryAsync(userId, threadId, cancellationToken);
+        var chatHistory = new ChatHistory();
+        foreach (var m in historyMessages)
+        {
+            chatHistory.AddMessage(m.Role == "user" ? AuthorRole.User : AuthorRole.Assistant, m.Content);
         }
 
-        // If this is a greeting / init run, inject daily plan context into system prompt
-        if (request.IsInitialGreeting && thread?.AgentId != "placement-copilot")
-        {
-            try
-            {
-                var plan = await _vocabularyClient.GetDailyPlanAsync(userId, projectId, roles, cancellationToken);
-                var planSummary = BuildPlanSummary(plan);
-                systemPrompt += $"\n\n[LEARNER CONTEXT — {DateTime.UtcNow:yyyy-MM-dd}]\n{planSummary}\n\nYour task: greet the learner warmly, summarize their plan in 2-3 sentences, and suggest the single most important thing to do right now based on the weakest skill. Be concise and motivating. Do NOT list all tasks in bullet points — just guide them naturally.";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not fetch daily plan for init greeting");
-            }
-        }
-
+        var agentThread = new ChatHistoryAgentThread(chatHistory);
+        var userMessage = new ChatMessageContent(AuthorRole.User, request.UserText);
+        
         var executedTools = new List<AgentToolCallRecord>();
-        
-        string assistantContent = string.Empty;
-        int loops = 0;
-        const int maxLoops = 5;
-        
-        while (loops < maxLoops)
+        var assistantContentBuilder = new System.Text.StringBuilder();
+
+        await foreach (var responseMessage in agent.InvokeStreamingAsync(userMessage, agentThread, cancellationToken: cancellationToken))
         {
-            loops++;
-            var completion = await _llmProvider.CompleteChatAsync(systemPrompt, messages, AvailableTools, cancellationToken);
-            
-            if (completion.ToolCalls.Count == 0)
+            if (responseMessage.Content != null)
             {
-                assistantContent = completion.Content;
-                break;
+                assistantContentBuilder.Append(responseMessage.Content);
+                yield return new ExecuteRunStreamEvent { ContentChunk = responseMessage.Content };
             }
             
-            // Append assistant's tool calls to context (so LLM knows what it asked to do)
-            var contentToAppend = string.IsNullOrWhiteSpace(completion.Content) ? "Executing tool..." : completion.Content;
-            messages.Add(new AgentChatMessageDto("assistant", contentToAppend));
-
-            bool shouldBreak = false;
-            foreach (var tc in completion.ToolCalls)
-            {
-                string outputJson;
-                string status = "completed";
-                
-                try
-                {
-                    outputJson = await ExecuteToolCoreAsync(tc.Name, tc.Arguments, userId, projectId, roles, cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Tool execution failed: {Tool}", tc.Name);
-                    outputJson = JsonSerializer.Serialize(new { error = ex.Message });
-                    status = "failed";
-                }
-                
-                executedTools.Add(new AgentToolCallRecord(tc.Name, tc.Arguments, outputJson, status));
-                messages.Add(new AgentChatMessageDto("tool", outputJson));
-
-                if (tc.Name == "set_cefr_placement" && status == "completed")
-                {
-                    shouldBreak = true;
-                }
-            }
-
-            if (shouldBreak)
-            {
-                assistantContent = string.IsNullOrWhiteSpace(completion.Content) 
-                    ? "Placement test completed. Your level has been updated." 
-                    : completion.Content;
-                break;
-            }
+            // Note: In InvokeStreamingAsync, tool calls might be reported in different chunks depending on the provider.
+            // Semantic Kernel currently wraps tool calls execution seamlessly in Auto mode,
+            // but we want to capture the executed tools for our persistence layer.
+            // The actual tool calls are executed synchronously/asynchronously inside SK's pipeline when Auto is set.
+            // We can retrieve them from the final response items or we might need to rely on agent.InvokeAsync if we want full manual interception,
+            // but SK handles it via hooks/filters.
         }
+
+        var fullHistory = await agentThread.GetMessagesAsync(cancellationToken).ToArrayAsync();
+        // Extract tool calls from the history to persist them
+        // In Semantic Kernel, tool calls are recorded as ToolCall messages in the history.
         var actions = new List<AgentActionCard>();
-        var cleanLines = new List<string>();
-        foreach (var line in assistantContent.Split('\n'))
+        foreach (var msg in fullHistory)
         {
-            var tLine = line.Trim();
-            if (tLine.StartsWith("ACTION: ", StringComparison.OrdinalIgnoreCase))
+            // msg.Items contains text content, function calls, function results
+            foreach (var item in msg.Items)
             {
-                tLine = tLine.Substring(8).Trim();
-            }
-
-            if (tLine.StartsWith("NAVIGATE|"))
-            {
-                var parts = tLine.Split('|');
-                if (parts.Length >= 3)
+                if (item is FunctionCallContent fcc)
                 {
-                    actions.Add(new AgentActionCard(
-                        Guid.NewGuid().ToString(),
-                        parts[2],
-                        "navigate",
-                        "/" + parts[1].TrimStart('/'),
-                        "Open",
-                        parts.Length >= 4 ? parts[3] : null));
-                    continue;
+                    // This is a function call request
+                }
+                else if (item is FunctionResultContent frc)
+                {
+                    // This is a function result
+                    var resultStr = frc.Result?.ToString() ?? "{}";
+                    executedTools.Add(new AgentToolCallRecord(frc.PluginName + "-" + frc.FunctionName, "", resultStr, "completed"));
+
+                    // Extract UI actions
+                    try
+                    {
+                        var jDoc = JsonDocument.Parse(resultStr);
+                        if (jDoc.RootElement.TryGetProperty("actionType", out var actionTypeProp))
+                        {
+                            var actionType = actionTypeProp.GetString();
+                            if (actionType == "navigate")
+                            {
+                                actions.Add(new AgentActionCard(
+                                    Guid.NewGuid().ToString(),
+                                    jDoc.RootElement.GetProperty("label").GetString() ?? "Navigate",
+                                    "navigate",
+                                    jDoc.RootElement.GetProperty("destination").GetString() ?? "/",
+                                    "Open",
+                                    jDoc.RootElement.TryGetProperty("description", out var descProp) ? descProp.GetString() : null));
+                            }
+                            else if (actionType == "open_editor_draft")
+                            {
+                                var payload = jDoc.RootElement.GetProperty("payload");
+                                var draft = new Dictionary<string, string>();
+                                if (payload.TryGetProperty("word", out var wordProp)) draft["word"] = wordProp.GetString() ?? "";
+                                if (payload.TryGetProperty("expression", out var exprProp)) draft["expression"] = exprProp.GetString() ?? "";
+                                if (payload.TryGetProperty("translation", out var transProp)) draft["translation"] = transProp.GetString() ?? "";
+
+                                actions.Add(new AgentActionCard(
+                                    Guid.NewGuid().ToString(),
+                                    jDoc.RootElement.GetProperty("label").GetString() ?? "Draft Card",
+                                    "open_editor_draft",
+                                    jDoc.RootElement.GetProperty("destination").GetString() ?? "/editor",
+                                    "Open Editor",
+                                    jDoc.RootElement.TryGetProperty("description", out var dProp) ? dProp.GetString() : null,
+                                    draft));
+                            }
+                        }
+                    }
+                    catch { } // Ignore JSON parse errors for non-action results
                 }
             }
-            else if (tLine.StartsWith("OPEN_EDITOR_DRAFT|"))
-            {
-                var parts = tLine.Split('|');
-                var draft = new Dictionary<string, string>();
-                if (parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1])) draft["word"] = parts[1].Trim();
-                if (parts.Length > 2 && !string.IsNullOrWhiteSpace(parts[2])) draft["expression"] = parts[2].Trim();
-                if (parts.Length > 3 && !string.IsNullOrWhiteSpace(parts[3])) draft["translation"] = parts[3].Trim();
-                if (parts.Length > 4 && !string.IsNullOrWhiteSpace(parts[4])) draft["label"] = parts[4].Trim();
-                if (parts.Length > 5 && !string.IsNullOrWhiteSpace(parts[5])) draft["description"] = parts[5].Trim();
-
-                actions.Add(new AgentActionCard(
-                    Guid.NewGuid().ToString(),
-                    "Draft Card",
-                    "open_editor_draft",
-                    "/editor",
-                    "Open Editor",
-                    "Draft a new card in the editor",
-                    draft));
-                continue;
-            }
-            cleanLines.Add(line);
         }
-        assistantContent = string.Join("\n", cleanLines).Trim();
 
+        var assistantContent = assistantContentBuilder.ToString();
         if (string.IsNullOrWhiteSpace(assistantContent) && executedTools.Count > 0)
         {
             assistantContent = "Я успешно выполнил запрошенные действия.";
@@ -297,9 +263,9 @@ public class AgentOrchestrator : IAgentOrchestrator
             IntentCategory: "language_learning",
             Actions: actions.Count > 0 ? actions : null);
 
-        var effectiveDomain = new AgentDomainDecision(true, AgentDomainCategory.LanguageLearning);
+        var effectiveDomain = intent;
 
-        return await _threadService.CreateRunAsync(userId, threadId, projectId, new CreateAgentRunDto
+        var finalResult = await _threadService.CreateRunAsync(userId, threadId, projectId, new CreateAgentRunDto
         {
             UserMessage = new AgentMessageInputDto { Role = "user", Content = request.UserText.Trim() },
             AssistantMessage = new AgentMessageInputDto
@@ -323,141 +289,8 @@ public class AgentOrchestrator : IAgentOrchestrator
             }).ToList(),
             Model = _aiOptions.Enabled ? _aiOptions.Model : null
         }, cancellationToken);
-    }
 
-    private async Task<string> ExecuteToolCoreAsync(
-        string name, 
-        string arguments, 
-        Guid userId, 
-        Guid projectId, 
-        IEnumerable<string> roles,
-        CancellationToken cancellationToken)
-    {
-        var args = JsonNode.Parse(arguments);
-        
-        switch (name)
-        {
-            case "create_deck":
-                var title = args?["title"]?.GetValue<string>() ?? "New Deck";
-                var desc = args?["description"]?.GetValue<string>();
-                var deck = await _vocabularyClient.CreateDeckAsync(userId, projectId, title, desc, roles, cancellationToken);
-                return JsonSerializer.Serialize(new { deck.Id, deck.Title });
-                
-            case "create_card":
-                var deckIdStr = args?["deck_id"]?.GetValue<string>();
-                if (!Guid.TryParse(deckIdStr, out var deckId) || deckId == Guid.Empty)
-                {
-                    var tree = await _vocabularyClient.GetDeckTreeAsync(userId, projectId, roles, cancellationToken);
-                    var firstDeck = tree.RootDecks.FirstOrDefault();
-                    if (firstDeck == null)
-                        return JsonSerializer.Serialize(new { error = "No decks available in this project." });
-                    deckId = Guid.Parse(firstDeck.Id);
-                }
-                    
-                var word = args?["word"]?.GetValue<string>() ?? "";
-                var translation = args?["translation"]?.GetValue<string>() ?? "";
-                var expression = args?["expression"]?.GetValue<string>();
-                var card = await _vocabularyClient.CreateCardAsync(userId, deckId, word, translation, expression, roles, cancellationToken);
-                return JsonSerializer.Serialize(new { card.Id });
-                
-            case "get_user_vocabulary_stats":
-                var vocab = await _vocabularyClient.GetVocabularyStatsAsync(userId, projectId, roles, cancellationToken);
-                return JsonSerializer.Serialize(new { vocab.TotalLemmas, vocab.MatureCount, vocab.LearningCount, vocab.NewCount });
-                
-            case "get_recent_leeches":
-                var leeches = await _vocabularyClient.GetLeechCardsAsync(userId, projectId, roles, cancellationToken);
-                var mapped = leeches.Items.Select(c => new {
-                    c.Id,
-                    c.SrsStatus,
-                    Word = c.Note?.FieldValues?.GetValueOrDefault("Word")?.StringValue ?? "Unknown",
-                    Translation = c.Note?.FieldValues?.GetValueOrDefault("Translation")?.StringValue ?? "Unknown"
-                });
-                return JsonSerializer.Serialize(new { total = leeches.TotalCount, cards = mapped });
-                
-            case "mark_lesson_completed":
-                var lessonIdStr = args?["lesson_id"]?.GetValue<string>();
-                if (!Guid.TryParse(lessonIdStr, out var compLessonId))
-                    return JsonSerializer.Serialize(new { error = "Invalid lesson_id format" });
-                await _vocabularyClient.CompleteLessonAsync(userId, compLessonId, roles, cancellationToken);
-                return JsonSerializer.Serialize(new { status = "success", message = "Lesson marked as completed successfully." });
-                
-            case "submit_knowledge_check":
-                var termIdsNode = args?["term_ids"] as JsonArray;
-                var termIds = termIdsNode?.Select(n => n?.GetValue<string>()).Where(s => !string.IsNullOrEmpty(s)).Select(s => s!).ToList() ?? new List<string>();
-                var rScore = args?["reading_score"]?.GetValue<int>() ?? 0;
-                var lScore = args?["listening_score"]?.GetValue<int>() ?? 0;
-                var wScore = args?["writing_score"]?.GetValue<int>() ?? 0;
-                var sScore = args?["speaking_score"]?.GetValue<int>() ?? 0;
-
-                await _vocabularyClient.SubmitKnowledgeCheckResultAsync(userId, projectId, termIds!, rScore, lScore, wScore, sScore, roles, cancellationToken);
-                return JsonSerializer.Serialize(new { status = "success", message = "Knowledge check results submitted successfully." });
-                
-            case "set_cefr_placement":
-                var cefrLevel = args?["cefr_level"]?.GetValue<string>();
-                if (string.IsNullOrWhiteSpace(cefrLevel))
-                    return JsonSerializer.Serialize(new { error = "cefr_level is required" });
-                
-                await _vocabularyClient.SetPlacementLevelAsync(userId, cefrLevel, roles, cancellationToken);
-                return JsonSerializer.Serialize(new { status = "success", message = $"CEFR level set to {cefrLevel} successfully. All previous levels are unlocked." });
-
-            case "get_daily_plan":
-                var plan = await _vocabularyClient.GetDailyPlanAsync(userId, projectId, roles, cancellationToken);
-                var summary = BuildPlanSummary(plan);
-                return JsonSerializer.Serialize(new
-                {
-                    summary,
-                    tasks = plan.Tasks.Select(t => new
-                    {
-                        t.TaskType,
-                        t.Title,
-                        t.Description,
-                        t.DurationMinutes,
-                        t.ActionUrl
-                    })
-                });
-
-            case "generate_writing_task":
-                var practiceTerms = await _vocabularyClient.GetLearningTermsAsync(userId, projectId, 7, roles, cancellationToken);
-                return JsonSerializer.Serialize(new
-                {
-                    instruction = "Generate a short writing task (e.g. write a 3-sentence story, or translate a specific phrase) that requires the user to use the following words. Do not give them the answer. When they reply, evaluate their use of these words and their grammar, then call submit_knowledge_check to record their writing score (0-100) for these specific term_ids.",
-                    terms = practiceTerms.Select(t => new { term_id = t.Id, text = t.Text })
-                });
-
-            case "get_skill_assessment_history":
-                var history = await _vocabularyClient.GetSkillAssessmentHistoryAsync(userId, projectId, 20, roles, cancellationToken);
-                return JsonSerializer.Serialize(new
-                {
-                    logs = history.Logs.Select(l => new
-                    {
-                        l.Skill,
-                        l.Score,
-                        Date = l.CreatedAt
-                    })
-                });
-
-            default:
-                throw new InvalidOperationException($"Unknown tool {name}");
-        }
-    }
-
-    private static string BuildPlanSummary(GetDailyAutopilotPlanResponse plan)
-    {
-        var lines = new List<string>();
-        var fsrsTask = plan.Tasks.FirstOrDefault(t => t.TaskType == "fsrs");
-        var lessonTask = plan.Tasks.FirstOrDefault(t => t.TaskType == "lesson");
-        var checkTask = plan.Tasks.FirstOrDefault(t => t.TaskType == "knowledge_check");
-
-        if (fsrsTask != null)
-            lines.Add($"Due flashcards: {fsrsTask.Title} ({fsrsTask.DurationMinutes} min)");
-        if (lessonTask != null)
-            lines.Add($"Next lesson: {lessonTask.Title} ({lessonTask.DurationMinutes} min)");
-        if (checkTask != null)
-            lines.Add($"Skill focus: {checkTask.Title} — {checkTask.Description}");
-
-        return lines.Count > 0
-            ? string.Join("\n", lines)
-            : "No specific tasks for today. Encourage the learner to read or review vocabulary.";
+        yield return new ExecuteRunStreamEvent { FinalResult = finalResult };
     }
 
     private async Task<IReadOnlyList<AgentChatMessageDto>> LoadHistoryAsync(

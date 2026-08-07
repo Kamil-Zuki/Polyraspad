@@ -18,6 +18,7 @@ service AgentService {
   rpc ArchiveThread (ArchiveAgentThreadRequest) returns (google.protobuf.Empty);
   rpc CreateArtifact (CreateAgentArtifactRequest) returns (AgentArtifactItem);
   rpc ListArtifacts (ListAgentArtifactsRequest) returns (ListAgentArtifactsResponse);
+  rpc ExecuteRunStream (ExecuteAgentRunRequest) returns (stream ExecuteAgentRunStreamResponse);
 }
 
 message ListAgentThreadsRequest {
@@ -168,4 +169,13 @@ message ListAgentArtifactsRequest {
 
 message ListAgentArtifactsResponse {
   repeated AgentArtifactItem items = 1;
+}
+
+message ExecuteAgentRunStreamResponse {
+  oneof event {
+    string content_chunk = 1;
+    AgentToolCallInput tool_call = 2;
+    CreateAgentRunResponse final_result = 3;
+    string error = 4;
+  }
 }

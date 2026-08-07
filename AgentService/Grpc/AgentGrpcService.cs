@@ -283,6 +283,91 @@ public class AgentGrpcService : AgentServiceBase
         }
     }
 
+    public override async Task ExecuteRunStream(
+        ExecuteAgentRunRequest request,
+        IServerStreamWriter<ExecuteAgentRunStreamResponse> responseStream,
+        ServerCallContext context)
+    {
+        var userId = GrpcContextHelper.GetUserId(context);
+        await ValidateAsync(_executeRunValidator, request, context.CancellationToken);
+
+        if (!Guid.TryParse(request.ThreadId, out var threadId))
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid Thread ID format"));
+
+        if (!Guid.TryParse(request.ProjectId, out var projectId))
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid Project ID format"));
+
+        try
+        {
+            var roles = GrpcContextHelper.GetRoles(context);
+            var stream = _orchestrator.ExecuteRunStreamAsync(
+                userId,
+                threadId,
+                projectId,
+                new ExecuteAgentRunDto
+                {
+                    UserText = request.UserText,
+                    SourceLang = request.SourceLang,
+                    TargetLang = request.TargetLang,
+                    FirstDeckId = request.FirstDeckId,
+                    IsInitialGreeting = request.IsInitialGreeting
+                },
+                roles,
+                context.CancellationToken);
+
+            await foreach (var evt in stream)
+            {
+                var grpcResponse = new ExecuteAgentRunStreamResponse();
+                
+                if (evt.ContentChunk != null)
+                {
+                    grpcResponse.ContentChunk = evt.ContentChunk;
+                }
+                else if (evt.ToolCall != null)
+                {
+                    grpcResponse.ToolCall = new AgentToolCallInput
+                    {
+                        ToolName = evt.ToolCall.ToolName,
+                        InputJson = evt.ToolCall.InputJson,
+                        OutputJson = evt.ToolCall.OutputJson,
+                        Status = evt.ToolCall.Status
+                    };
+                }
+                else if (evt.FinalResult != null)
+                {
+                    grpcResponse.FinalResult = MapRunResponse(evt.FinalResult);
+                }
+                else if (evt.Error != null)
+                {
+                    grpcResponse.Error = evt.Error;
+                }
+
+                await responseStream.WriteAsync(grpcResponse);
+            }
+        }
+        catch (RpcException)
+        {
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing agent run stream");
+            throw new RpcException(new Status(StatusCode.Internal, _env.IsDevelopment() ? ex.Message : "Internal server error"));
+        }
+    }
+
     public override async Task<Empty> ArchiveThread(
         ArchiveAgentThreadRequest request,
         ServerCallContext context)

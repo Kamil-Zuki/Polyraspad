@@ -41,13 +41,7 @@ builder.Services.AddScoped<IVocabularyProjectAccessValidator, VocabularyProjectA
 builder.Services.AddScoped<IVocabularyGrpcClient, VocabularyGrpcClient>();
 builder.Services.AddScoped<IInclusiveGrpcClient, InclusiveGrpcClient>();
 
-builder.Services.AddHttpClient<IAgentLlmProvider, OpenAiCompatibleAgentLlmProvider>((sp, client) =>
-{
-    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
-    var baseUrl = (options.BaseUrl ?? "https://api.openai.com/v1").TrimEnd('/');
-    client.BaseAddress = new Uri(baseUrl + "/");
-    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 600));
-});
+builder.Services.AddScoped<AgentService.Infrastructure.AgentKernelFactory>();
 
 var vocabularyAddress = builder.Configuration.GetValue<string>("Vocabulary:GrpcAddress") ?? "http://localhost:5117";
 builder.Services.AddGrpcClient<ContentServiceClient>(o => o.Address = new Uri(vocabularyAddress))
