@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Product/Core_Methodology_Vision.md",
+                "file": "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-02_StudySystem.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Core_Methodology_Vision"
+              "title": "SR-VOC-02_StudySystem"
             }
           }
         ]
@@ -41,7 +41,9 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -183,8 +185,16 @@
       "bases:Create new base": false
     }
   },
-  "active": "e52d8ff49010c6e0",
+  "active": "b6a1f7b6a73b7599",
   "lastOpenFiles": [
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-01_Curriculum.md",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/00 - Общая информация.md",
+    "Agent Service/01 - Функциональная спецификация/Возможности сервиса/00 - Общая информация.md",
+    "Agent Service/02 - Архитектура/00 - Общая архитектура и структура.md",
+    "Agent Service/01 - Функциональная спецификация/Термины и определения.md",
+    "Agent Service/01 - Функциональная спецификация/Проактивный ИИ-Ментор.md",
+    "Agent Service/01 - Функциональная спецификация/Нефункциональные требования.md",
+    "Product/Core_Methodology_Vision.md",
     "Plans/01_MVP_Completion.md",
     "Plans/README.md",
     "Plans",
@@ -206,14 +216,6 @@
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entities - Список сущностей микросервиса Vocabulary Service.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Документы и Ридер - Documents & Reader.md",
     "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-03_Reader.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Системные Сущности и Настройки - System & Settings.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Магазин Колод и Сообщество - Marketplace & Community.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Активность и Оценка Навыков - Activity & Assessment.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Обучение и Учебный План - Curriculum & Study.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Лингвистическая Модель и NLP - Linguistics & NLP.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Ядро Словаря - Vocabulary Core.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Skill_Tracking.md",
-    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Activity_Assessment.md",
     "Vocabulary Service/03 - Модель Данных/01 - Основные сущности",
     "Vocabulary Service/03 - Модель Данных",
     "Vocabulary Service/02 - Архитектура",
