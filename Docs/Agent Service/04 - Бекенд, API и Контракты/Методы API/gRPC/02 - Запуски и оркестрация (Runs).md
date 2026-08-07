@@ -11,7 +11,7 @@
 | Код требования | gRPC Метод | Тип RPC | Описание |
 | :------------- | :--------- | :-----: | :------- |
 | SR-AGENT-RUN-01 | `CreateRun` | Unary | Persist готового run (messages, domain, tools) |
-| SR-AGENT-RUN-02 | `ExecuteRun` | Unary | Classify → route → tool → CreateRun |
+| SR-AGENT-RUN-02 | `ExecuteRun` | Unary | Classify → route → tool → CreateRun (включая `first_deck_id` и `is_initial_greeting`) |
 
 ---
 
@@ -61,8 +61,8 @@ Server-side turn: domain classify → intent route → tool execution → persis
 
 | Сигнатура | `rpc ExecuteRun(ExecuteAgentRunRequest) returns (CreateAgentRunResponse)` |
 | :--- | :--- |
-| **Сообщение запроса** | `thread_id`, `project_id`, `user_text`, optional langs, `first_deck_id` |
-| **Сообщение ответа** | Same as CreateRun |
+| **Сообщение запроса** | `thread_id`, `project_id`, `user_text`, optional `source_lang`, `target_lang`, `first_deck_id`, `is_initial_greeting` |
+| **Сообщение ответа** | `CreateAgentRunResponse` (run, user_message, assistant_message) |
 
 ## Логика обработки запроса
 

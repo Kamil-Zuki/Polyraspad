@@ -25,6 +25,8 @@ REST API Aggregator Service — единственный публичный HTTP
 | AI | `/api/ai` | SR-AGG-AI-* | X-Ai-Proxy-Key |
 | Automation | `/api/automation` | SR-AGG-AUTO-* | JWT |
 | Integrations | `/api/integrations` | SR-AGG-INT-* | JWT |
+| Lessons | `/api/lessons` | SR-AGG-LESSON-* | JWT |
+| Autopilot | `/api/autopilot` | SR-AGG-AUTOPILOT-* | JWT |
 | Health | `/healthz` | SR-AGG-OPS-01 | Public |
 
 # 2. Общие соглашения
@@ -53,5 +55,5 @@ REST API Aggregator Service — единственный публичный HTTP
 | 14 | [[14 - Внешние интеграции (Integrations)]] | SR-AGG-INT-* |
 | 15 | [[15 - Настройки пользователя (Settings)]] | SR-AGG-SETTINGS-* |
 | 16 | [[16 - Платформенные контракты (Operations)]] | SR-AGG-OPS-* |
-
-Детальные endpoint blocks — в group files выше.
+| 17 | [[17 - Уроки и прогресс (Lessons)]] | SR-AGG-LESSON-* |
+| 18 | [[18 - Автопилот дня (Autopilot)]] | SR-AGG-AUTOPILOT-* |

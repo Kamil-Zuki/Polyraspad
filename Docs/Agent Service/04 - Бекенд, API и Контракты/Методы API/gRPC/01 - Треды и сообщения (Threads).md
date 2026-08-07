@@ -12,8 +12,8 @@
 
 | Код требования | gRPC Метод | Тип RPC | Описание |
 | :------------- | :--------- | :-----: | :------- |
-| SR-AGENT-THREAD-01 | `ListThreads` | Unary | Активные (не archived) треды project |
-| SR-AGENT-THREAD-02 | `CreateThread` | Unary | Новый thread в project |
+| SR-AGENT-THREAD-01 | `ListThreads` | Unary | Активные (не archived) треды project (опциональная фильтрация по `agent_id`) |
+| SR-AGENT-THREAD-02 | `CreateThread` | Unary | Новый thread в project с поддержкой `agent_id` и `system_prompt_override` |
 | SR-AGENT-THREAD-03 | `GetThread` | Unary | Thread по id incl. `archived_at` |
 | SR-AGENT-MSG-01 | `ListMessages` | Unary | Cursor-paginated messages |
 | SR-AGENT-THREAD-04 | `ArchiveThread` | Unary | Soft-archive thread |
@@ -32,14 +32,14 @@ Sidebar списка диалогов в project. Archived threads исключ�
 
 | Сигнатура | `rpc ListThreads(ListAgentThreadsRequest) returns (ListAgentThreadsResponse)` |
 | :--- | :--- |
-| **Сообщение запроса** | `user_id`, `project_id` (UUID strings) |
-| **Сообщение ответа** | `items[]` — `AgentThreadListItem` |
+| **Сообщение запроса** | `user_id`, `project_id`, `agent_id` (опциональный фильтр по персоне агента) |
+| **Сообщение ответа** | `items[]` — `AgentThreadListItem` (включая `agent_id`) |
 
 ## Логика обработки запроса
 
 1. `userId = GrpcContextHelper.GetUserId(context)`; FluentValidation request.
 2. Parse `project_id` → GUID; иначе **INVALID_ARGUMENT**.
-3. `AgentThreadService.ListThreadsAsync(userId, projectId, roles)` — Vocabulary project access gate.
+3. `AgentThreadService.ListThreadsAsync(userId, projectId, agentId, roles)` — Vocabulary project access gate + фильтрация.
 4. Map entities → proto `items`.
 
 ## Статус-коды gRPC при ошибках
@@ -62,13 +62,13 @@ Sidebar списка диалогов в project. Archived threads исключ�
 
 | Сигнатура | `rpc CreateThread(CreateAgentThreadRequest) returns (AgentThreadResponse)` |
 | :--- | :--- |
-| **Сообщение запроса** | `user_id`, `project_id` |
-| **Сообщение ответа** | `AgentThreadResponse` (title auto-derived on first run) |
+| **Сообщение запроса** | `user_id`, `project_id`, `agent_id` (persona ID), `system_prompt_override` (опциональный кастомный промпт) |
+| **Сообщение ответа** | `AgentThreadResponse` (включая `agent_id`, title auto-derived on first run) |
 
 ## Логика обработки запроса
 
 1. Validate + parse UUIDs.
-2. `CreateThreadAsync` — ensure project access; insert thread row.
+2. `CreateThreadAsync` — ensure project access; insert thread row with `AgentId` and `SystemPromptOverride`.
 3. Return mapped `AgentThreadResponse`.
 
 ## Статус-коды gRPC при ошибках
@@ -92,20 +92,13 @@ Sidebar списка диалогов в project. Archived threads исключ�
 | Сигнатура | `rpc GetThread(GetAgentThreadRequest) returns (AgentThreadResponse)` |
 | :--- | :--- |
 | **Сообщение запроса** | `user_id`, `thread_id` |
-| **Сообщение ответа** | Thread incl. optional `archived_at` |
+| **Сообщение ответа** | Thread incl. optional `archived_at` and `agent_id` |
 
 ## Логика обработки запроса
 
 1. Validate; parse `thread_id` UUID.
 2. `GetThreadAsync(userId, threadId)` — owner/access check.
-3. Map → response or **NOT_FOUND**.
-
-## Статус-коды gRPC при ошибках
-
-| Статус-код | Описание |
-| :--- | :--- |
-| **NOT_FOUND** | Thread |
-| **INTERNAL** | Unhandled |
+3. Return `AgentThreadResponse`.
 
 ---
 
@@ -119,21 +112,8 @@ Sidebar списка диалогов в project. Archived threads исключ�
 
 | Сигнатура | `rpc ListMessages(ListAgentMessagesRequest) returns (ListAgentMessagesResponse)` |
 | :--- | :--- |
-| **Сообщение запроса** | `thread_id`, `limit` (1..100, default 100), optional `before` cursor |
-| **Сообщение ответа** | `items[]`, optional `next_before` |
-
-## Логика обработки запроса
-
-1. Validate; clamp `limit` if ≤0 → 100.
-2. `ListMessagesAsync(userId, threadId, limit, before)`.
-3. Return messages + cursor for infinite scroll.
-
-## Статус-коды gRPC при ошибках
-
-| Статус-код | Описание |
-| :--- | :--- |
-| **NOT_FOUND** | Thread |
-| **INTERNAL** | Unhandled |
+| **Сообщение запроса** | `user_id`, `thread_id`, `limit` (max 100), `before` (cursor UUID) |
+| **Сообщение ответа** | `items[]` — `AgentMessageItem`, `next_before` cursor |
 
 ---
 
@@ -148,22 +128,4 @@ Sidebar списка диалогов в project. Archived threads исключ�
 | Сигнатура | `rpc ArchiveThread(ArchiveAgentThreadRequest) returns (google.protobuf.Empty)` |
 | :--- | :--- |
 | **Сообщение запроса** | `user_id`, `thread_id` |
-
-## Логика обработки запроса
-
-1. Validate + parse thread UUID.
-2. `ArchiveThreadAsync` — set `archived_at`; idempotent if already archived.
-3. Return `Empty` or **NOT_FOUND**.
-
-## Статус-коды gRPC при ошибках
-
-| Статус-код | Описание |
-| :--- | :--- |
-| **NOT_FOUND** | Thread |
-| **INTERNAL** | Unhandled |
-
----
-
-CreateRun / ExecuteRun — [[02 - Запуски и оркестрация (Runs)]].
-
-CreateArtifact / ListArtifacts — [[03 - Артефакты (Artifacts)]].
+| **Сообщение ответа** | `google.protobuf.Empty` |
