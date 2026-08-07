@@ -10,6 +10,9 @@ using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using AgentService.Infrastructure;
 using System.Runtime.CompilerServices;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+
+#pragma warning disable SKEXP0110
 
 namespace AgentService.Services;
 
@@ -29,7 +32,7 @@ public interface IAgentOrchestrator
         Guid projectId,
         ExecuteAgentRunDto request,
         IEnumerable<string> roles,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default);
 }
 
 public record ExecuteRunStreamEvent
@@ -113,36 +116,36 @@ public class AgentOrchestrator : IAgentOrchestrator
 
         var intent = AgentIntentRouter.Route(request.UserText);
         
-        if (!intent.Allowed)
+        if (!intent.Domain!.Allowed)
         {
-            var finalResult = await _threadService.CreateRunAsync(userId, threadId, projectId, new CreateAgentRunDto
+            var refusal = AgentDomainPolicy.BuildOutOfScopeRefusal(request.UserText, sourceLang);
+            var refusedRunResult = await _threadService.CreateRunAsync(userId, threadId, projectId, new CreateAgentRunDto
             {
                 UserMessage = new AgentMessageInputDto { Role = "user", Content = request.UserText.Trim() },
                 AssistantMessage = new AgentMessageInputDto
                 {
                     Role = "assistant",
-                    Content = intent.RefusalMessage ?? "I'm sorry, I can only help with language learning tasks.",
+                    Content = refusal,
                     MetadataJson = AgentMessageMetadataBuilder.Build(new AgentExecutionResult(
-                        intent.RefusalMessage ?? "Refused",
-                        intent,
-                        [],
-                        intent.CategoryName,
-                        null,
-                        true
+                        AssistantContent: refusal,
+                        DomainDecision: intent.Domain,
+                        ToolCalls: [],
+                        IntentCategory: intent.Domain.CategoryName,
+                        Refusal: true
                     ))
                 },
                 DomainDecision = new AgentDomainDecisionInputDto
                 {
-                    Allowed = intent.Allowed,
-                    Category = intent.CategoryName,
-                    Reason = intent.Reason
+                    Allowed = intent.Domain.Allowed,
+                    Category = intent.Domain.CategoryName,
+                    Reason = intent.Domain.Reason
                 },
                 ToolCalls = [],
                 Model = null
             }, cancellationToken);
 
-            yield return new ExecuteRunStreamEvent { ContentChunk = intent.RefusalMessage };
-            yield return new ExecuteRunStreamEvent { FinalResult = finalResult };
+            yield return new ExecuteRunStreamEvent { ContentChunk = refusal };
+            yield return new ExecuteRunStreamEvent { FinalResult = refusedRunResult };
             yield break;
         }
         
@@ -174,12 +177,23 @@ public class AgentOrchestrator : IAgentOrchestrator
         var executedTools = new List<AgentToolCallRecord>();
         var assistantContentBuilder = new System.Text.StringBuilder();
 
-        await foreach (var responseMessage in agent.InvokeStreamingAsync(userMessage, agentThread, cancellationToken: cancellationToken))
+        await foreach (var responseItem in agent.InvokeStreamingAsync(userMessage, agentThread, cancellationToken: cancellationToken))
         {
-            if (responseMessage.Content != null)
+            // Extract the StreamingChatMessageContent from AgentResponseItem
+            // For now, we'll try casting or getting a Content property dynamically to avoid property mismatches.
+            dynamic itemDyn = responseItem;
+            string? chunkContent = null;
+            try {
+                // If it's AgentResponseItem<StreamingChatMessageContent> we can get Value.Content
+                chunkContent = itemDyn.Value?.Content;
+            } catch {
+                try { chunkContent = itemDyn.Content; } catch {}
+            }
+
+            if (chunkContent != null)
             {
-                assistantContentBuilder.Append(responseMessage.Content);
-                yield return new ExecuteRunStreamEvent { ContentChunk = responseMessage.Content };
+                assistantContentBuilder.Append(chunkContent);
+                yield return new ExecuteRunStreamEvent { ContentChunk = chunkContent };
             }
             
             // Note: In InvokeStreamingAsync, tool calls might be reported in different chunks depending on the provider.
@@ -276,9 +290,9 @@ public class AgentOrchestrator : IAgentOrchestrator
             },
             DomainDecision = new AgentDomainDecisionInputDto
             {
-                Allowed = effectiveDomain.Allowed,
-                Category = effectiveDomain.CategoryName,
-                Reason = effectiveDomain.Reason
+                Allowed = effectiveDomain.Domain!.Allowed,
+                Category = effectiveDomain.Domain.CategoryName,
+                Reason = effectiveDomain.Domain.Reason
             },
             ToolCalls = executedTools.Select(toolCall => new AgentToolCallInputDto
             {

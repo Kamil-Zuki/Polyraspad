@@ -1,5 +1,6 @@
 using AgentService.Options;
 using AgentService.Plugins;
+using AgentService.Services;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Pvs.Content.Grpc;
