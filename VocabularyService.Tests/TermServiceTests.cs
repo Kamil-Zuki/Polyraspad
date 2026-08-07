@@ -310,6 +310,12 @@ public class TermServiceTests
         public Task<Guid> UploadImageAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
             Task.FromResult(Guid.NewGuid());
 
+        public Task<Guid> UploadAudioAsync(Stream data, string contentType, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Guid.NewGuid());
+
+        public Task<string> GetDocumentUrlAsync(Guid documentId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Empty);
+
         public Task FillCardMediaUrlsAsync(CardMedia? media, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }

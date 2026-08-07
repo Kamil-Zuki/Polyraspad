@@ -45,6 +45,7 @@ public class StudyServiceStartSessionMissingStatusColumnTests
                     source_lang TEXT NOT NULL,
                     target_lang TEXT NOT NULL,
                     fsrs_settings TEXT NOT NULL,
+                    tts_settings TEXT NULL,
                     stats TEXT NOT NULL,
                     is_archived INTEGER NOT NULL,
                     created_at TEXT NOT NULL,
