@@ -2,7 +2,7 @@
 
 ## Введение
 
-В этом разделе описывается **onboarding** пользователя Polyraspad: создание учётной записи через email/password и **обязательное подтверждение email** перед первым login.
+В этом разделе описывается **onboarding** пользователя Polyraspad: создание учётной записи через email/password, повторная отправка писем и **обязательное подтверждение email** перед первым login.
 
 Сервис использует ASP.NET Core Identity (`UserManager.CreateAsync`, `GenerateEmailConfirmationTokenAsync`) и SMTP (`IEmailService`) для отправки ссылки. JWT **не выдаётся** на этапе регистрации.
 
@@ -10,7 +10,7 @@
 
 Представьте **регистрацию в библиотеке с пропуском по почте**. Вы заполняете анкету (email, пароль), библиотека заводит карточку читателя, но **читательский билет (JWT) выдадут только после того**, как вы перейдёте по ссылке из письма и подтвердите адрес.
 
-gRPC: `RegisterUser`, `ConfirmEmail`. REST legacy: `POST /api/v1/auth/register`, `GET /api/v1/auth/confirm-email`.
+gRPC: `RegisterUser`, `ConfirmEmail`, `ResendConfirmationEmail`. REST legacy: `POST /api/v1/auth/register`, `GET /api/v1/auth/confirm-email`, `POST /api/v1/auth/resend-confirmation`.
 
 ---
 
@@ -22,6 +22,7 @@ gRPC: `RegisterUser`, `ConfirmEmail`. REST legacy: `POST /api/v1/auth/register`,
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **SR-AUTHMOD-REG-01** | **Регистрация пользователя:** Валидация email/password, создание Identity user с auto username, SMTP confirm link; duplicate confirmed email → ошибка. |
 | **SR-AUTHMOD-REG-02** | **Подтверждение email:** Callback с userId + token; Identity ConfirmEmailAsync; удаление неподтверждённых дубликатов по email. |
+| **SR-AUTHMOD-REG-03** | **Повторная отправка письма:** Генерация нового токена подтверждения и отправка письма для неподтвержденной учетной записи. |
 
 ---
 
@@ -53,28 +54,6 @@ gRPC: `RegisterUser`, `ConfirmEmail`. REST legacy: `POST /api/v1/auth/register`,
 
 Таким образом, регистрация **не выдаёт JWT** — только инициирует confirm flow через Identity token и SMTP; login заблокирован до SR-AUTHMOD-REG-02.
 
-### 3. Примеры взаимодействия (логические сценарии)
-
-**Общие исходные данные:**
-
-* **Инициатор:** Frontend через Aggregator.
-* **gRPC:** `RegisterUser`.
-
-#### Сценарий А: Успешная регистрация (Happy Path)
-
-1. **gRPC:** `RegisterUser` с валидными полями.
-2. **Domain:** user created, email queued.
-3. **Ответ:** `RegisterUserResponse.message = "Confirm your email"`.
-
-#### Сценарий Б: Email уже подтверждён (Negative Path)
-
-1. **Domain:** `FindByEmailAsync` → user with `EmailConfirmed = true`.
-2. **Ответ:** gRPC `InvalidArgument` — «Confirmed user with such email already exists».
-
-#### Сценарий В: Слабый пароль (Negative Path)
-
-1. **Validation:** password без uppercase/special → `InvalidArgument` с текстом FluentValidation.
-
 ---
 
 ## SR-AUTHMOD-REG-02: Подтверждение email {#SR-AUTHMOD-REG-02}
@@ -91,34 +70,27 @@ gRPC: `RegisterUser`, `ConfirmEmail`. REST legacy: `POST /api/v1/auth/register`,
 
 ### 2. Высокоуровневое описание
 
-Представим подтверждение email как **активацию пропуска по ссылке из письма**.
-
 1. **Callback (Переход по ссылке):** Frontend или Aggregator вызывает gRPC `ConfirmEmail`, передавая `userId` и `token` из query string письма; endpoint публичный — JWT не требуется.
 2. **Поиск пользователя (Картотека):** `UserManager.FindByIdAsync` загружает `ApplicationUser`; отсутствие user или невалидный token → `InvalidArgument` с описаниями Identity.
 3. **Подтверждение email (Активация):** `ConfirmEmailAsync(user, token)` — единственный источник валидности; при успехе `EmailConfirmed = true`, token одноразовый по семантике Identity.
 4. **Очистка дубликатов (Уборка картотеки):** после confirm удаляются другие **неподтверждённые** users с тем же email — stale rows не блокируют повторную регистрацию.
 5. **Ответ клиенту (Готовность к login):** возвращается `"Confirmation completed successfully"`; JWT по-прежнему не выдаётся — пользователь переходит к login (SR-AUTHMOD-AUTH-01).
 
-Таким образом, confirm link — **единственный gate** перед первым login; без успешного `ConfirmEmailAsync` password sign-in отклоняется.
-
-### 3. Примеры взаимодействия (логические сценарии)
-
-**Общие исходные данные:**
-
-* **gRPC:** `ConfirmEmail`.
-* **Auth:** public endpoint, JWT не требуется.
-
-#### Сценарий А: Успешное подтверждение (Happy Path)
-
-1. **gRPC:** `ConfirmEmail(user_id, token)`.
-2. **Domain:** `EmailConfirmed = true`; stale unconfirmed rows removed.
-3. **Ответ:** `"Confirmation completed successfully"`.
-
-#### Сценарий Б: Невалидный token (Negative Path)
-
-1. **Identity:** ConfirmEmailAsync fails.
-2. **Ответ:** gRPC `InvalidArgument` с Identity error descriptions.
-
 ---
 
-*Следующая группа: [[02 - Аутентификация и JWT-токены (Authentication)]].*
+## SR-AUTHMOD-REG-03: Повторная отправка письма подтверждения {#SR-AUTHMOD-REG-03}
+
+Пользователь запрашивает повторную отправку письма подтверждения email.
+
+### 1. Цель и ключевые принципы
+
+| Принцип | Описание |
+| :--- | :--- |
+| **Resend logic** | `GenerateEmailConfirmationTokenAsync` генерирует новый токен для неподтвержденной учетной записи. |
+| **No-op for confirmed** | Если email уже подтвержден, отправка пропускается без раскрытия чувствительных данных. |
+
+### 2. Высокоуровневое описание
+
+1. **Запрос:** Frontend через Aggregator отправляет gRPC `ResendConfirmationEmail` с адресом `email`.
+2. **Проверка:** Поиск пользователя по email. Если пользователь найден и `EmailConfirmed = false`, генерируется новый токен и отправляется письмо через SMTP.
+3. **Ответ:** Возвращается `"Confirmation email sent successfully"`.

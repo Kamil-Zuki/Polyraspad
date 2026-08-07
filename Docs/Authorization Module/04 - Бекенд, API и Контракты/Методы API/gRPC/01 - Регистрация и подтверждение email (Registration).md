@@ -1,8 +1,8 @@
 # Введение
 
-Методы группы **Registration** — создание учётной записи ASP.NET Core Identity и подтверждение email через SMTP.
+Методы группы **Registration** — создание учётной записи ASP.NET Core Identity, повторная отправка писем и подтверждение email через SMTP.
 
-**SR группы:** SR-AUTHMOD-REG-01, SR-AUTHMOD-REG-02. Proto: [[authorization.proto]].
+**SR группы:** SR-AUTHMOD-REG-01, SR-AUTHMOD-REG-02, SR-AUTHMOD-REG-03. Proto: [[authorization.proto]].
 
 ---
 
@@ -12,6 +12,7 @@
 | :------------- | :--------- | :-----: | :------- |
 | SR-AUTHMOD-REG-01 | `RegisterUser` | Unary | Регистрация email/password, отправка confirm link. |
 | SR-AUTHMOD-REG-02 | `ConfirmEmail` | Unary | Подтверждение email по user_id + token. |
+| SR-AUTHMOD-REG-03 | `ResendConfirmationEmail` | Unary | Повторная отправка письма подтверждения. |
 
 ---
 
@@ -30,20 +31,6 @@
 | **Сообщение запроса** | `email`, `password`, `confirm_password` |
 | **Сообщение ответа** | `message` — текст для UI |
 
-## Логика обработки запроса
-
-1. Map proto → `UserRegistrationRequest`; FluentValidation.
-2. `AuthService.RegisterUserAsync` — создать пользователя в Identity, хеш пароля, `EmailConfirmed = false`.
-3. Отправить SMTP confirm link ([[../Интеграции со сторонними сервисами/01 - SMTP Email (Confirm)]]).
-4. Map результат → `RegisterUserResponse`.
-
-## Статус-коды gRPC при ошибках
-
-| Статус-код | Описание |
-| :--- | :--- |
-| **INVALID_ARGUMENT** | Validation fail, duplicate confirmed email, SMTP misconfiguration |
-| **INTERNAL** | Необработанное исключение |
-
 ---
 
 <span id="grpc-ConfirmEmail"></span>
@@ -61,18 +48,28 @@
 | **Сообщение запроса** | `user_id` (UUID string), `token` |
 | **Сообщение ответа** | `message` |
 
+---
+
+<span id="grpc-ResendConfirmationEmail"></span>
+
+# SR-AUTHMOD-REG-03: Resend confirmation: ResendConfirmationEmail
+
+## Общая информация
+
+**Источник требования:** [[01 - Функциональная спецификация/Возможности сервиса/01 - Регистрация и подтверждение email (Registration)#SR-AUTHMOD-REG-03]]
+
+**REST-паритет:** `POST /api/v1/auth/resend-confirmation`; Aggregator `POST /api/auth/resend-confirmation`.
+
+| Сигнатура | `rpc ResendConfirmationEmail (ResendConfirmationEmailRequest) returns (MessageResponse)` |
+| :--- | :--- |
+| **Сообщение запроса** | `email` |
+| **Сообщение ответа** | `message` |
+
 ## Логика обработки запроса
 
-1. Map → `ConfirmEmailRequest` DTO; parse `user_id` как Guid.
-2. `AuthService.ConfirmEmailAsync` — Identity `ConfirmEmailAsync` с token provider.
-3. При успехе — `EmailConfirmed = true`; вернуть `MessageResponse`.
-
-## Статус-коды gRPC при ошибках
-
-| Статус-код | Описание |
-| :--- | :--- |
-| **INVALID_ARGUMENT** | Invalid token, user not found, expired token |
-| **INTERNAL** | Необработанное исключение |
+1. Map → `ResendConfirmationEmailRequest` DTO.
+2. `AuthService.ResendConfirmationEmailAsync` — у неактивированного пользователя генерируется новый token и отправляется письмо через SMTP.
+3. Вернуть `MessageResponse`.
 
 ---
 

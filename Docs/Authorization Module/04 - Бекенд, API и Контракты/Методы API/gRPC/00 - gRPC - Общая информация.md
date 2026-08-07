@@ -12,7 +12,7 @@ Aggregator вызывает RPC по h2c (`authorization-module:5027`). Protecte
 
 | Группа `01` | Файл `04` | RPC |
 | :--- | :--- | :---: |
-| Регистрация и подтверждение email | [[01 - Регистрация и подтверждение email (Registration)]] | 2 |
+| Регистрация и подтверждение email | [[01 - Регистрация и подтверждение email (Registration)]] | 3 |
 | Аутентификация и JWT-токены | [[02 - Аутентификация и JWT-токены (Authentication)]] | 3 |
 | Управление профилем | [[03 - Управление профилем (Profile Management)]] | 5 |
 | Платформенные контракты | [[../Алгоритмы и методы бекенда/04 - Platform Operations]] | 0 RPC |
@@ -25,6 +25,7 @@ Aggregator вызывает RPC по h2c (`authorization-module:5027`). Protecte
 | :--- | :--- | :--- | :--- |
 | SR-AUTHMOD-REG-01 | `RegisterUser` | unary | Регистрация → SMTP confirm |
 | SR-AUTHMOD-REG-02 | `ConfirmEmail` | unary | Подтверждение email |
+| SR-AUTHMOD-REG-03 | `ResendConfirmationEmail` | unary | Повторная отправка письма подтверждения |
 | SR-AUTHMOD-AUTH-01 | `LoginUser` | unary | Login → TokenResponse |
 | SR-AUTHMOD-AUTH-02 | `RefreshToken` | unary | Refresh token rotation |
 | SR-AUTHMOD-AUTH-03 | `LogoutUser` | unary | Logout + revoke refresh |

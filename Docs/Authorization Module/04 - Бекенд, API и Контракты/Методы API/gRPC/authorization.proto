@@ -11,6 +11,7 @@ service AuthService {
   rpc LoginUser (LoginUserRequest) returns (TokenResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (TokenResponse);
   rpc ConfirmEmail (ConfirmEmailRequest) returns (MessageResponse);
+  rpc ResendConfirmationEmail (ResendConfirmationEmailRequest) returns (MessageResponse);
   rpc GetUserInfo (GetUserInfoRequest) returns (UserInfoResponse);
   rpc FindUserByEmail (FindUserByEmailRequest) returns (UserInfoResponse);
   rpc LogoutUser (LogoutUserRequest) returns (MessageResponse);
@@ -46,6 +47,10 @@ message RefreshTokenRequest {
 message ConfirmEmailRequest {
   string user_id = 1;
   string token = 2;
+}
+
+message ResendConfirmationEmailRequest {
+  string email = 1;
 }
 
 message GetUserInfoRequest {
