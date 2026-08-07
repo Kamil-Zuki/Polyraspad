@@ -1,48 +1,82 @@
-# Введение
+# gRPC Методы: Study, Lesson, Sync, AI, Text & Marketplace Services
 
-Методы данной группы обеспечивают динамическое управление жизненным циклом сессий, позволяя администраторам, системным процессам и самим пользователям управлять состоянием авторизации в реальном времени. Здесь собраны методы для отзыва сессий (Logout), переключения рабочих пространств, фонового обновления прав пользователя (без разлогина) и инициализации/завершения режима бесшовной имперсонации (God Mode).
-
-Эти методы являются мутирующими (меняют состояние в Redis/PostgreSQL) и строго логируются в WORM-журнал аудита для соответствия Enterprise-стандартам безопасности.
-
-Важно: любые упоминаемые ниже `Workspace Service`, `Billing Service`, `Helpdesk`, `SIEM` и иные соседние сервисы или системы являются отдельными микросервисами или внешними контурами. Они не реализуются в рамках данной документации `Authorization Service`; здесь описывается только поведение и контракты самого `Authorization Service`.
-
-# 1. Список методов
-
-Перечень процедур, отвечающих за мутации контекста, сессий и режимов работы пользователей.
-
-| Код требования | gRPC Метод               | Тип RPC | Описание                                                                                    |
-| :------------- | :----------------------- | :-----: | :------------------------------------------------------------------------------------------ |
-| SR-AUTH-SM-06  | `RevokeSession`          |  Unary  | Принудительное завершение конкретной сессии по её идентификатору с записью причины в аудит. |
-| SR-AUTH-OI-04  | `RevokeAllUserSessions`  |  Unary  | Глобальный логаут: удаление всех активных сессий пользователя со всех устройств.            |
+Данный документ содержит спецификацию методов gRPC для обучения, синхронизации, AI-инструментов, токенизации и торговой площадки.
 
 ---
 
-<span id="grpc-RevokeSession"></span>
+## 1. StudyService (Интервальные Повторения FSRS)
 
-# SR-AUTH-SM-06: Принудительный отзыв сессии: RevokeSession
+### StartStudySession
+- **Сигнатура:** `rpc StartStudySession (StartStudySessionRequest) returns (StartStudySessionResponse)`
+- **Требование:** SR-LRN-01 / SR-VOC-02
+- **Описание:** Инициализирует новую сессию обучения для заданной колоды и формирует очередь карточек (New, Learning, Review).
 
-## Общая информация
-
-**Источник требования:** [[01 - Функциональная спецификация/Возможности сервиса/01 - Управление Сессиями и Контекстом - Session Management#SR-AUTH-SM-06: API Управления Локальными Сессиями]]
-
-Метод позволяет завершить конкретную сессию по её уникальному идентификатору (`session_id`). Может быть инициирован самим пользователем из раздела "Мои устройства" (разлогинить старый телефон), либо администратором/ИБ-системой при подозрении на взлом.
-
-| Сигнатура | `rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse)` |
-| :--- | :--- |
-| **Сообщение запроса** | `RevokeSessionRequest` (ID сессии, причина отзыва `reasonCode`, комментарий) |
-| **Сообщение ответа** | `RevokeSessionResponse` (флаг успешного отзыва) |
-
-## Логика обработки запроса
-
-1. Проверить, что вызывающий субъект имеет право отзывать указанную сессию (как владелец, администратор или ИБ-оператор).
-2. Найти каноническую запись сессии в `authorized_sessions` и, если она еще жива, извлечь ее hot-state из Redis.
-3. Удалить локальную Phantom-сессию из Redis и обновить связанные индексы активных сессий, чтобы доступ прекратился немедленно.
-4. Отозвать связанную глобальную доверенность этой сессии, если для нее хранились OIDC-артефакты или зашифрованный `refresh_token` (очистить или пометить их недействительными в server-side хранилище).
-5. Пометить запись в `authorized_sessions` как `revoked`, указав время завершения, `reason_code` и инициатора.
-6. Записать событие `SESSION_REVOKED` в `access_audit_logs` с необходимым макроконтекстом для расследования.
-
-## Статус-коды gRPC при ошибках
+### GetNextCard / SubmitReview / UndoReview
+- **Сигнатуры:**
+  - `rpc GetNextCard (GetNextCardRequest) returns (GetNextCardResponse)`
+  - `rpc SubmitReview (SubmitReviewRequest) returns (SubmitReviewResponse)`
+  - `rpc UndoReview (UndoReviewRequest) returns (UndoReviewResponse)`
+- **Требование:** SR-LRN-02 / SR-LRN-03 / SR-LRN-08
+- **Описание:** Выдача очередной карточки, отправка оценки FSRS (Again=1, Hard=2, Good=3, Easy=4) с пересчетом параметров удержания и отмена последнего ответа.
 
 ---
 
-*Укороченный шаблон. Полный эталон: `(Done) Authorization Service/` — тот же относительный путь.*
+## 2. LessonService (Учебный План CEFR)
+
+### GetLessons / GetLesson / StartLesson / CompleteLesson
+- **Сигнатуры:**
+  - `rpc GetLessons (GetLessonsRequest) returns (GetLessonsResponse)`
+  - `rpc GetLesson (GetLessonRequest) returns (GetLessonResponse)`
+  - `rpc StartLesson (StartLessonRequest) returns (StartLessonResponse)`
+  - `rpc CompleteLesson (CompleteLessonRequest) returns (google.protobuf.Empty)`
+- **Требование:** SR-VOC-CUR-01 / SR-VOC-01
+- **Описание:** Управление прохождением уроков глобальной программы с отслеживанием привязанного потока агента (`AgentThreadId`), процента выполнения и времени сессии.
+
+### SetPlacementLevel / SubmitKnowledgeCheckResult
+- **Сигнатуры:**
+  - `rpc SetPlacementLevel (SetPlacementLevelRequest) returns (google.protobuf.Empty)`
+  - `rpc SubmitKnowledgeCheckResult (SubmitKnowledgeCheckResultRequest) returns (google.protobuf.Empty)`
+- **Требование:** SR-VOC-CUR-02 / SR-VOC-CUR-03
+- **Описание:** Корректировка стартового уровня пользователя (Placement Test) и сохранения результатов периодических проверок знаний.
+
+---
+
+## 3. SyncService & AIService & TextService
+
+### SyncData / BatchSubmitReviews
+- **Сигнатуры:**
+  - `rpc SyncData (SyncDataRequest) returns (SyncDataResponse)`
+  - `rpc BatchSubmitReviews (BatchSubmitReviewsRequest) returns (BatchSubmitReviewsResponse)`
+- **Требование:** SR-SNC-01 / SR-SNC-03
+- **Описание:** Получение дельта-изменений по токену синхронизации для оффлайн-клиентов и пакетная отправка сохраненных ответов повторений.
+
+### GenerateContext / ExplainGrammar
+- **Сигнатуры:**
+  - `rpc GenerateContext (GenerateContextRequest) returns (GenerateContextResponse)`
+  - `rpc ExplainGrammar (ExplainGrammarRequest) returns (ExplainGrammarResponse)`
+- **Требование:** SR-AI-01 / SR-AI-02
+- **Описание:** AI-генерация примера использования слова с учетом уровня CEFR и разъяснение грамматических конструкций фразы.
+
+### AnalyzeText
+- **Сигнатура:** `rpc AnalyzeText (AnalyzeTextRequest) returns (AnalyzeTextResponse)`
+- **Требование:** SR-TXT-01 / SR-VOC-05
+- **Описание:** Токенизация текста с сопоставлением сохраненных фраз и определением статусов изученности каждого слова для визуализации в ридере.
+
+---
+
+## 4. AutonomyService & Marketplace (Community & Subscriptions)
+
+### GetDailyAutopilot / GetNextBestActions
+- **Сигнатуры:**
+  - `rpc GetDailyAutopilot (GetDailyAutopilotRequest) returns (GetDailyAutopilotResponse)`
+  - `rpc GetNextBestActions (GetNextBestActionsRequest) returns (GetNextBestActionsResponse)`
+- **Требование:** SR-VOC-06
+- **Описание:** Расчет рекомендаций автопилота на день и формирование списка приоритетных действий (Next Best Actions).
+
+### ListSubscriptions / Subscribe / Unsubscribe / CommunityService
+- **Сигнатуры:**
+  - `rpc ListSubscriptions (ListSubscriptionsRequest) returns (ListSubscriptionsResponse)`
+  - `rpc Subscribe (SubscribeRequest) returns (SubscriptionItemResponse)`
+  - `rpc Unsubscribe (UnsubscribeRequest) returns (google.protobuf.Empty)`
+- **Требование:** SR-VOC-07
+- **Описание:** Управление подписками на колоды из каталога Marketplace и работа с отзывами.

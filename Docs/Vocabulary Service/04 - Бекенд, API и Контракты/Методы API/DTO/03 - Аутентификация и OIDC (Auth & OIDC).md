@@ -1,54 +1,38 @@
-# Введение
+# DTO: Синхронизация и Маркетплейс
 
-Данный документ описывает структуры данных (DTO), применяемые при аутентификации пользователя и взаимодействии по протоколу OIDC (OpenID Connect) с внешним поставщиком идентификации (внешний Identity Provider). 
-
-Эти объекты инкапсулируют процессы обмена авторизационных кодов на токены, генерации URL для перенаправления (Authorization Endpoint), обратных вызовов (Callbacks), настройки MFA (многофакторной аутентификации) и реализации механизма Back-Channel Logout. Использование этих DTO позволяет скрыть сложность протокола OAuth2.0/OIDC от клиентского приложения.
-
-**Трассировка SR-AUTH-xx:** для **локального Step-up MFA** после установления сессии (`POST /auth/mfa/challenge`, `POST /auth/mfa/verify`) действует **SR-AUTH-AC-02** — тот же код, что в REST ([01 - Аутентификация и OIDC (REST)](../REST%20API/01%20-%20Аутентификация%20и%20OIDC.md)) и gRPC (`StartStepUpMfaChallenge`, `VerifyStepUpMfa` в [06 - gRPC Access Control](../gRPC/06%20-%20Управление%20доступом,%20PAT%20и%20политики%20Workspace%20(Access%20Control).md)). Источник истины по смыслу — [[01 - Функциональная спецификация/Возможности сервиса/05 - Локальная Авторизация и Политики Доступа - Access Control#SR-AUTH-AC-02: Step-Up MFA для высокорисковых действий]]. DTO `MfaChallengeDto` и `MfaVerifyRequestDto` могут также участвовать во **флоу входа** (ответ `MFA_REQUIRED` и токен из `LoginResponseDto`); там привязка к требованиям задаётся сценарием OIDC/логина, а не SR-AUTH-AC-02.
-
-# 1. Список DTO
-
-В таблице ниже перечислены DTO, обеспечивающие интеграцию с Identity Provider.
-
-| **Название DTO** | **Назначение** |
-| :--- | :--- |
-| **LoginRequestDto** | Запрос: Первичная аутентификация пользователя (логин/пароль) или начало OIDC Flow. |
-| **LoginResponseDto** | Ответ: Содержит статус аутентификации (успех, редирект на 2FA или OIDC). |
+Данный документ описывает DTO дельта-синхронизации, офлайн-ответов и продуктов каталога Marketplace.
 
 ---
 
-# DTO: LoginRequestDto
+## 1. Synchronization DTOs
 
-## Контекст и назначение
+### `SyncDataRequest` / `SyncDataResponse`
+- `last_sync_token` (`google.protobuf.Timestamp`): Временная метка последней успешной синхронизации.
+- `sync_token` (`Timestamp`): Новый выданный токен синхронизации.
+- `requires_full_sync` (bool): Флаг принудительной полной перезагрузки базы при несогласованности.
+- `changes` (`SyncChanges`): Наборы измененных колод (`decks`), карточек (`cards`) и прогресса (`progress`).
+- `deleted_objects` (repeated `DeletedObjectInfo`): Список удаленных сущностей (Tombstones).
 
-Объект используется для первичной аутентификации в случаях, когда Платформа поддерживает вход не только через внешний OIDC (внешний IdP), но и через локальную форму (например, для системных администраторов, сервисных учетных записей или fallback-сценариев).
-
-**Назначение:** Запрос (Команда на авторизацию).
-**Реализация сущности:** N/A (Аутентификация).
-
-## Структура данных
-
-Классическая структура логин-пароля с опциональными метаданными устройства.
-
-| **Имя поля (JSON)** | **Тип данных** | **Описание** |
-| :--- | :--- | :--- |
-| `username` | `string` | Логин, email или номер телефона. |
-| `password` | `string` | Пароль пользователя (в открытом виде, передается только по TLS). |
-
-## Пример работы (JSON)
-
-Пример запроса на локальный логин администратора.
-
-```json
-{
-  "username": "admin@platform.example.com",
-  "password": "SuperSecretPassword123!",
-  "deviceFingerprint": "hash_8f7d6c_win_chrome"
-}
-```
+### `BatchReviewItem`
+- `card_id` (string): UUID карточки.
+- `rating` (int): Оценка FSRS (1=Again, 2=Hard, 3=Good, 4=Easy).
+- `reviewed_at` (`Timestamp`): Точное время ответа в офлайн-режиме.
+- `duration_ms` (int): Длительность ответа в миллисекундах.
 
 ---
 
----
+## 2. Marketplace & Community DTOs
 
-*Укороченный шаблон. Полный эталон: `(Done) Authorization Service/` — тот же относительный путь.*
+### `ProductDto`
+- `id` (string): UUID товара в каталоге.
+- `deck_id` (string): Исходная опубликованная колода.
+- `author_id` (string): UUID профиля автора.
+- `title` (string), `description_html` (string).
+- `price` (double), `currency` (string).
+- `average_rating` (double), `review_count` (int), `sales_count` (int).
+
+### `SubscriptionItemResponse`
+- `deck_id` (string): UUID колоды.
+- `project_id` (string): Проект пользователя.
+- `subscribed_at` (`Timestamp`).
+- `last_synced_version` (int): Версия скачанной колоды.

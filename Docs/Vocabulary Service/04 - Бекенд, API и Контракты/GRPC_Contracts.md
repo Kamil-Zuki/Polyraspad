@@ -1,33 +1,31 @@
 # Контракты gRPC (Vocabulary Service)
 
-`VocabularyService` предоставляет gRPC API для `AggregatorService` и `AgentService`.
-Все контракты описаны в файле `vocabulary.proto`.
+`VocabularyService` предоставляет gRPC API на порту **5117** (`h2c` HTTP/2) для клиентов `AggregatorService` (BFF) и `AgentService`.
+Основной контракт сервиса описан в `.proto`-файле `vocabulary.proto` (package `pvs.content.v1`, C# namespace `Pvs.Content.Grpc`).
 
-## 1. VocabularyService (Core)
-Сервис для управления карточками, колодами и словарем.
+---
 
-- `CreateDeck`, `UpdateDeck`, `DeleteDeck`
-- `CreateCard`, `UpdateCard`, `DeleteCard`
-- `GetVocabularyStats`, `GetLeechCards`
-- И другие CRUD-операции.
+## 1. Обзор gRPC Сервисов
 
-## 2. StudyService
-Сервис для управления сессиями интервального повторения.
+| Сервис | Описание и Основные RPC | Требования |
+| :--- | :--- | :--- |
+| **ContentService** | Проекты (`CreateProject`, `GetProjects`, `GetProjectDetails`, `UpdateProject`), настройки (`GetUserSettings`, `UpdateUserSettings`), колоды (`GetDeckTree`, `GetDeckDetail`, `CreateDeck`, `UpdateDeck`, `DeleteDeck`). | SR-VOC-04, SR-SETT-01 |
+| **CardService** | Создание и редактирование карточек (`CreateCard`, `UpdateCard`, `DeleteCard`, `GetCard`), поиск (`SearchCards`), забор из расширения (`CaptureCard`), проверка дубликатов (`CheckCardDuplicates`), редактирование заметок, загрузка медиа (`UploadImage`, `UploadDocument`). | SR-VOC-01, SR-VOC-04 |
+| **TermService** | Управление терминами проекта (`CreateOrUpdateTerm`, `MarkTermKnown`, `IgnoreTerm`, `BulkMarkKnown`, `GetTermDetails`, `SearchTermDuplicates`, `ListProjectTerms`, `PurgeDemoImport`). | SR-VOC-05 |
+| **StudyService** | Управление сессиями FSRS повторений (`StartStudySession`, `GetNextCard`, `SubmitReview`, `UndoReview`). | SR-VOC-02 |
+| **LessonService** | Управление CEFR уроками (`GetLessons`, `GetLesson`, `StartLesson`, `CompleteLesson`, `SetPlacementLevel`, `SubmitKnowledgeCheckResult`). | SR-VOC-01 |
+| **SyncService** | Офлайн-синхронизация (`SyncData`, `BatchSubmitReviews`). | SR-VOC-08 |
+| **AIService** | AI-инструменты (`GenerateContext`, `ExplainGrammar`). | SR-VOC-06 |
+| **TextService** | NLP-анализ и токенизация текста (`AnalyzeText`). | SR-VOC-05 |
+| **AutonomyService** | Автопилот и рекомендации (`GetDailyAutopilot`, `GetNextBestActions`). | SR-VOC-06 |
+| **SubscriptionService** | Подписки на публичные колоды (`ListSubscriptions`, `Subscribe`, `Unsubscribe`). | SR-VOC-07 |
+| **AnalyticsService** | Статистика и аналитика (`GetDashboardStats`, `GetStudyAnalytics`, `GetSkillRadar`). | SR-VOC-06 |
+| **CommunityService** | Публикация колод и отзывы (`PublishDeck`, `GetMarketplaceCatalog`, `GetProductDetails`, `CreateReview`). | SR-VOC-07 |
 
-- `StartSession(StartSessionRequest)` — инициализация очереди карточек на сегодня.
-- `ReviewCard(ReviewCardRequest)` — отправка ответа (рейтинга) и пересчет FSRS-статуса.
-- `UndoReview(UndoReviewRequest)` — отмена последнего ответа.
+---
 
-## 3. LessonService
-Сервис для управления программой обучения (Curriculum) и CEFR.
+## 2. Зависимости (Исходящие gRPC вызовы)
 
-- `GetLessons(GetLessonsRequest)` — получить список всех уроков и текущий прогресс пользователя (включая `CefrProgress`).
-- `GetLesson(GetLessonRequest)` — получить один урок с прогрессом.
-- `StartLesson(StartLessonRequest)` — начать урок, переводит статус в `InProgress`, сохраняет `AgentThreadId`.
-- `CompleteLesson(CompleteLessonRequest)` — завершить урок.
-- `SetPlacementLevel(SetPlacementLevelRequest)` — **Placement Test**: проставляет статус `Completed` (score = 100%) всем урокам ниже указанного уровня CEFR и пересчитывает `UserCefrProgress`.
-- `SubmitKnowledgeCheckResult(SubmitKnowledgeCheckResultRequest)` — отправляет результаты теста навыков (R/L/W/S) по определенным карточкам.
-
-## 4. Зависимости (Исходящие вызовы)
-- Вызывает микросервис `inclusive` (Python) через `vocab.proto` для токенизации текста и расчета интервалов FSRS.
-- Вызывает `MediaService` для получения presigned-ссылок на аудио и изображения.
+- **`inclusive` (Python gRPC, порт 40051):** Вызов `vocab.proto` (`ReviewCard` для FSRS расчетов, `Tokenize`/`Lemmatize` для NLTK токенизации).
+- **`MediaService` (gRPC, порт 5121):** Получение presigned-ссылок на аудио и изображения.
+- **`BillingService` (gRPC, порт 5127):** Проверка прав и лимитов подписок на платные колоды (`UserEntitlement`).

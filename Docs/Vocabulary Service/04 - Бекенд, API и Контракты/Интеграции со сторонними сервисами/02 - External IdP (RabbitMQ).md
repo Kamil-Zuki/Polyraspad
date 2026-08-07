@@ -1,12 +1,18 @@
-# Введение
+# Интеграции: MediaService и BillingService
 
-**Vocabulary Service не потребляет события внешнего IdP из RabbitMQ.** Сессии и back-channel logout — зона `authorization-module` / Aggregator, не Vocabulary.
+Данный документ описывает gRPC-интеграцию `VocabularyService` с `MediaService` и `BillingService`.
 
-Файл сохранён как placeholder имени в дереве `04/Интеграции` (исторически копировал Auth layout).
+---
 
-# Статус
+## 1. Интеграция с MediaService (gRPC порт 5121)
 
-| Поле | Значение |
-| :--- | :--- |
-| **Применимо к Vocabulary** | Нет (out of scope) |
-| **Актуальные асинхронные темы Vocab** | Redis study/cache (см. `Работа с Redis/`); события marketplace — по мере появления в коде |
+`VocabularyService` использует `MediaService` (`media.proto`) для:
+1. Загрузки изображений и аудиофайлов карточек (`UploadImage`, `UploadDocument`).
+2. Получения публичных presigned-ссылок (`GetImageUrl`, `GetAudioUrl`) для отдачи клиентам.
+
+---
+
+## 2. Интеграция с BillingService (gRPC порт 5127)
+
+`VocabularyService` проверяет права пользователя при подписке и покупке платных колод через `BillingService` (`billing.proto`):
+- Вызов RPC `CheckEntitlement` для сверки наличия активной подписки или приобретенной лицензии на колоду (`UserEntitlement`).

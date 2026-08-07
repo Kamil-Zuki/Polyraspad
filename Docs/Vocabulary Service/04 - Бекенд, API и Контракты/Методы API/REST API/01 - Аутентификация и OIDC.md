@@ -1,54 +1,50 @@
-# Введение
+# REST API Aggregator BFF: Проекты, Колоды, Карточки и Термины
 
-В данном документе описаны эндпоинты группы «Аутентификация и OIDC» — **контракт публичной поверхности** (как правило реализуемой **API Gateway — агрегатором** с проксированием в Auth по gRPC). Эта группа — точка входа для начала пользовательской сессии. **Authorization Service** выступает в роли OIDC Relying Party (Клиента): редирект на внешний IdP, обработка кода авторизации, установка Phantom Cookie — в доменной логике AUTH; наружу то же поведение отдаёт **периметр (Gateway)**.
-
-# 1. Список эндпоинтов
-
-Ниже приведен список методов REST API, отвечающих за авторизацию, обмен токенов и завершение сеанса.
-
-| Код требования | Метод | Эндпоинт                 | Назначение                                          |
-| :------------- | :---: | :----------------------- | :-------------------------------------------------- |
-| SR-AUTH-OI-01  |  GET  | `/auth/oidc/login`       | Инициализация OIDC-протокола (PKCE).                |
-| SR-AUTH-OI-01  |  GET  | `/auth/oidc/callback`    | Обработка `code` и `state`, получение токенов.      |
+Данный документ описывает REST-эндпоинты **AggregatorService**, проксирующие операции управления проектами, колодами, карточками и терминами в **VocabularyService**.
 
 ---
 
-# SR-AUTH-OI-01: Инициализация OIDC: Login
+## 1. Управление Проектами (`/api/v1/projects`)
 
-## Общая информация
-
-Метод начинает Authorization Code Flow с PKCE. **BFF** (периметр) генерирует криптографические `state`, `code_verifier` и `code_challenge`, сохраняет связку во временном хранилище (например Redis) и перенаправляет браузер на страницу логина провайдера (внешний IdP).
-
-| Тип метода | GET |
-| :--- | :--- |
-| **DTO запроса** | N/A |
-| **DTO успешного ответа** | N/A (HTTP 302 Redirect) |
-
-## Параметры URL
-
-| Название | Тип | Описание |
-| :--- | :--- | :--- |
-| `redirect_uri` | `string` | Опциональный локальный URL (внутри SPA) для возврата после успешного логина. |
-| `prompt` | `string` | Опционально `login` для принудительного ввода пароля или `none` для SSO-проверки. |
-
-## Логика обработки запроса
-
-*   BFF проверяет `redirect_uri` на соответствие whitelist платформы.
-*   BFF генерирует PKCE (`state`, `code_verifier`, `code_challenge`) и сохраняет связку во временном хранилище (например Redis), чтобы на callback сопоставить `state` и обменять `code` на токены с тем же `code_verifier`.
-*   BFF формирует URL авторизации внешнего IdP и отвечает **302** с заголовком `Location` (отдельного unary gRPC под этот шаг нет — это чистый HTTP-периметр).
-*   После успешного callback создаётся локальная сессия в Authorization Service — доменные шаги см. в gRPC [`GetSessionContext`](../gRPC/01%20-%20Ядро%20валидации%20и%20инъекции%20(Validation%20Core).md#grpc-GetSessionContext) (контекст сессии после установки).
-
-## Успешный ответ
-
-Сервер не возвращает JSON, он возвращает HTTP-заголовок редиректа.
-
-```http
-HTTP/1.1 302 Found
-Location: https://id.example.com/authorize?client_id=auth-svc&response_type=code&scope=openid+profile...
-```
-
-## Ошибки
+| Метод | Эндпоинт | gRPC метод | Описание |
+| :---: | :--- | :--- | :--- |
+| `GET` | `/api/v1/projects` | `ContentService.GetProjects` | Список проектов текущего пользователя |
+| `POST` | `/api/v1/projects` | `ContentService.CreateProject` | Создание нового языкового проекта |
+| `GET` | `/api/v1/projects/{id}` | `ContentService.GetProjectDetails` | Детали проекта и параметры FSRS |
+| `PUT` | `/api/v1/projects/{id}` | `ContentService.UpdateProject` | Обновление настроек проекта |
 
 ---
 
-*Укороченный шаблон. Полный эталон: `(Done) Authorization Service/` — тот же относительный путь.*
+## 2. Управление Колодами (`/api/v1/decks`)
+
+| Метод | Эндпоинт | gRPC метод | Описание |
+| :---: | :--- | :--- | :--- |
+| `GET` | `/api/v1/decks/tree` | `ContentService.GetDeckTree` | Дерево колод с подсчетом карточек |
+| `GET` | `/api/v1/decks/{id}` | `ContentService.GetDeckDetail` | Подробная статистика и настройки колоды |
+| `POST` | `/api/v1/decks` | `ContentService.CreateDeck` | Создание пользовательской колоды |
+| `PUT` | `/api/v1/decks/{id}` | `ContentService.UpdateDeck` | Редактирование колоды |
+| `DELETE` | `/api/v1/decks/{id}` | `ContentService.DeleteDeck` | Удаление колоды |
+
+---
+
+## 3. Управление Карточками (`/api/v1/cards`)
+
+| Метод | Эндпоинт | gRPC метод | Описание |
+| :---: | :--- | :--- | :--- |
+| `POST` | `/api/v1/cards` | `CardService.CreateCard` | Создание карточки с заметкой |
+| `POST` | `/api/v1/cards/capture` | `CardService.CaptureCard` | Захваченная карточка из расширения |
+| `GET` | `/api/v1/cards/search` | `CardService.SearchCards` | Полнотекстовый поиск карточек |
+| `POST` | `/api/v1/cards/check-duplicates` | `CardService.CheckCardDuplicates` | Проверка существующих карточек по термину |
+| `PUT` | `/api/v1/cards/{id}` | `CardService.UpdateCard` | Обновление карточки |
+| `DELETE` | `/api/v1/cards/{id}` | `CardService.DeleteCard` | Удаление карточки |
+
+---
+
+## 4. Термины и Статусы (`/api/v1/terms`)
+
+| Метод | Эндпоинт | gRPC метод | Описание |
+| :---: | :--- | :--- | :--- |
+| `POST` | `/api/v1/terms/mark-known` | `TermService.MarkTermKnown` | Пометка точной формы выученной |
+| `POST` | `/api/v1/terms/ignore` | `TermService.IgnoreTerm` | Перевод термина в статус `IGNORED` |
+| `POST` | `/api/v1/terms/bulk-mark-known` | `TermService.BulkMarkKnown` | Пакетная пометка (листание страниц) |
+| `GET` | `/api/v1/terms` | `TermService.ListProjectTerms` | Список терминов проекта с пагинацией |

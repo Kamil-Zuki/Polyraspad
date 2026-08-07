@@ -1,37 +1,34 @@
 # Введение
 
-Настоящий документ содержит полное описание **gRPC** интерфейса микросервиса **Authorization Service**. Это — **основной машинный контракт** сервиса: публичные **REST**-маршруты и **WebSocket**-каналы для браузеров описаны отдельно как контракт **API Gateway (агрегатора)** и по смыслу маппятся на перечисленные ниже RPC, а не дублируют логику контроллеров внутри процесса Auth.
+Настоящий документ содержит полное описание **gRPC** интерфейса микросервиса **Vocabulary Service** (порт **5117**, HTTP/2 `h2c`). 
 
-В соответствии с принятой архитектурой Zero Trust, gRPC является критическим звеном Платформы Enterprise-уровня: его вызывает **API Gateway (Envoy/BFF)** для проверки каждого входящего запроса на наличие прав, а также другие внутренние микросервисы — для безопасной передачи контекста пользователя (Header Routing), межсервисной (M2M) аутентификации, генерации одноразовых билетов и записи логов безопасности.
-
-Цель документа — определить исчерпывающий набор высокопроизводительных процедур (RPC), покрывающих все задачи аутентификации, гранулярной авторизации (ABAC/RBAC), динамического контроля сессий и квот, защиты периметра и иммутабельного аудита (WORM), скрывая при этом сложность работы с Phantom Tokens от остальной системы.
-
-
-# 1. Группы методов gRPC
-
-Ниже представлена сводная таблица всех логических групп методов gRPC, реализуемых сервисом.
-
-| Группа | Описание |
-| :--- | :--- |
-| **Ядро валидации и инъекции (Validation Core)** | Самые высоконагруженные методы, вызываемые API Gateway для каждого запроса. Включают обмен Phantom Token на бизнес-заголовки, гранулярную проверку прав и межсервисную (M2M) аутентификацию. |
-
-# 2. Ядро валидации и инъекции (Validation Core)
-
-Методы данной группы обеспечивают непосредственную защиту периметра Платформы. Они работают в связке с API Gateway (паттерн Token Translation/Header Routing) и отвечают за конвертацию непрозрачных идентификаторов в доверенный бизнес-контекст, а также за выдачу разрешений.
-
-| Код требования | gRPC Метод          | Тип RPC | Описание                                                                                                                                                    |
-| :------------- | :------------------ | :-----: | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SR-AUTH-LA-03  | `ValidateSession`   |  Unary  | Валидирует Phantom Token (`Cookie`) или Personal Access Token (`Authorization: Bearer`), извлекает контекст из Redis/БД и возвращает набор HTTP-заголовков для маршрутизации во внутренние сервисы.                  |
-
-
-# 3. Управление жизненным циклом сессий (Session Lifecycle)
-
-Методы для администраторов и системных процессов (например, Back-Channel Logout), позволяющие принудительно изменять состояние локальных сессий пользователей в реальном времени.
-
-| Код требования | gRPC Метод | Тип RPC | Описание |
-| :--- | :--- | :---: | :--- |
-| SR-AUTH-SM-06 | `RevokeSession` | Unary | Принудительное завершение конкретной сессии по её идентификатору с записью причины в WORM-аудит. |
+gRPC является основным внутренним контрактом сервиса: его вызывают **AggregatorService** (BFF) для обработки внешних REST-запросов и **AgentService** для работы AI-ассистентов с учебными материалами и терминологией пользователя.
 
 ---
 
-*Укороченный шаблон. Полный эталон: `(Done) Authorization Service/` — тот же относительный путь.*
+# 1. Группы сервисов gRPC (`vocabulary.proto`)
+
+Все RPC-методы микросервиса объявлены в пакете `pvs.content.v1` (`vocabulary.proto`) и разделены по 12 логическим службам:
+
+| Сервис | Назначение | Ключевые методы |
+| :--- | :--- | :--- |
+| **ContentService** | Ядро управления проектами, глобальными настройками и структурой колод | `CreateProject`, `GetProjects`, `GetProjectDetails`, `UpdateProject`, `GetUserSettings`, `UpdateUserSettings`, `GetDeckTree`, `GetDeckDetail`, `CreateDeck`, `UpdateDeck`, `DeleteDeck` |
+| **CardService** | Полный жизненный цикл карточек, заметок, поиска и загрузки медиафайлов | `CreateCard`, `UpdateCard`, `DeleteCard`, `GetCard`, `SearchCards`, `CaptureCard`, `CheckCardDuplicates`, `GetCardsByDeck`, `BulkCreateCards`, `SuspendCard`, `UnsuspendCard`, `UploadImage`, `UploadDocument` |
+| **TermService** | Управление точными формами терминов (`ProjectTerm`) и их статусами изученности | `CreateOrUpdateTerm`, `MarkTermKnown`, `IgnoreTerm`, `BulkMarkKnown`, `GetTermDetails`, `SearchTermDuplicates`, `ListProjectTerms`, `PurgeDemoImport` |
+| **StudyService** | Управление сессиями FSRS повторений | `StartStudySession`, `GetNextCard`, `SubmitReview`, `UndoReview` |
+| **LessonService** | Модуль обучения CEFR (уроки, прогресс, placement, knowledge check) | `GetLessons`, `GetLesson`, `StartLesson`, `CompleteLesson`, `SetPlacementLevel`, `SubmitKnowledgeCheckResult` |
+| **SyncService** | Механизм дельта-синхронизации и пакетной отправки ответов | `SyncData`, `BatchSubmitReviews` |
+| **AIService** | Вспомогательные AI-инструменты | `GenerateContext`, `ExplainGrammar` |
+| **TextService** | Анализ и токенизация текстов ридера на точных формах | `AnalyzeText` |
+| **AutonomyService** | Генерация планов автопилота и рекомендаций NBA | `GetDailyAutopilot`, `GetNextBestActions` |
+| **SubscriptionService** | Управление подписками пользователя на публичные колоды | `ListSubscriptions`, `Subscribe`, `Unsubscribe` |
+| **AnalyticsService** | Статистика и аналитические срезы по навыкам и изучению | `GetDashboardStats`, `GetStudyAnalytics`, `GetSkillRadar` |
+| **CommunityService** | Публикация колод в каталог и работа с отзывами | `PublishDeck`, `GetMarketplaceCatalog`, `GetProductDetails`, `CreateReview` |
+
+---
+
+# 2. Архитектура обработки gRPC
+
+1. **Безопасность и контекст:** Входящие gRPC-запросы принимают идентификаторы пользователя (`user_id`) и проекта (`project_id`) в сообщениях запроса или метаданных заголовков.
+2. **Обработка ошибок:** Ошибки возвращаются каноническими статус-кодами gRPC (`INVALID_ARGUMENT`, `NOT_FOUND`, `UNAUTHENTICATED`, `PERMISSION_DENIED`, `INTERNAL`).
+3. **Внешние вызовы:** Для выполнения алгоритмов FSRS и токенизации NLTK `VocabularyService` выполняет вызовы в микросервис `inclusive` (Python gRPC, порт 40051).

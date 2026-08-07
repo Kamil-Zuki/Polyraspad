@@ -1,51 +1,82 @@
-# Введение
+# gRPC Методы: ContentService, CardService и TermService
 
-Методы данной группы образуют высоконагруженное ядро микросервиса Authorization Service, обеспечивающее непосредственную защиту периметра Платформы. Эти RPC-вызовы постоянно используются API Gateway (Envoy/BFF) и внутренними сервисами для прозрачного перевода непрозрачных клиентских идентификаторов (Phantom Tokens, One-Time Tickets) в доверенный, строгий бизнес-контекст.
-
-За счет вынесения всей сложности криптографии, кэширования и проверки прав в эту группу, остальные микросервисы (Task, Integration) могут работать в парадигме Zero Trust, просто доверяя HTTP-заголовкам, которые генерируются результатами работы этих методов.
-
-Важно: любые упоминаемые ниже `Task Service`, `Integration Service`, `Storage Service`, WebSocket-шлюзы и иные downstream-компоненты являются отдельными микросервисами или инфраструктурными узлами. Они не реализуются в рамках данной документации `Authorization Service`; здесь описывается только контракт их взаимодействия с `Authorization Service`.
-
-# 1. Список методов
-
-Перечень процедур, отвечающих за валидацию, инъекцию контекста и гранулярную проверку прав доступа при каждом запросе.
-
-| Код требования | gRPC Метод             | Тип RPC | Описание                                                                                    |
-| :------------- | :--------------------- | :-----: | :------------------------------------------------------------------------------------------ |
-| SR-AUTH-LA-03  | `ValidateSession`      |  Unary  | Обмен Phantom Token (Cookie) или PAT (`Authorization: Bearer`) на HTTP-заголовки контекста. |
-| SR-AUTH-OT-01  | `IssueTicket`          |  Unary  | Выпуск одноразового билета (Intent, Resource ID) для последующего `ValidateTicket`.         |
+Данный документ содержит спецификацию методов управления доменным контентом (проекты, колоды, настройки), карточками заметок и терминами словаря.
 
 ---
 
-<span id="grpc-ValidateSession"></span>
+## 1. ContentService (Проекты, Настройки, Колоды)
 
-# SR-AUTH-LA-03: Валидация сессии: ValidateSession
+### CreateProject
+- **Сигнатура:** `rpc CreateProject (CreateProjectRequest) returns (ProjectResponse)`
+- **Требование:** SR-STR-01 / SR-VOC-04
+- **Описание:** Создает новый языковой проект пользователя (`title`, `source_lang`, `target_lang`, базовые FSRS-настройки).
 
-## Общая информация
+### GetProjects
+- **Сигнатура:** `rpc GetProjects (GetProjectsRequest) returns (GetProjectsResponse)`
+- **Требование:** SR-STR-01
+- **Описание:** Возвращает список всех проектов текущего пользователя (с фильтрацией архивированных).
 
-**Источник требования:** [[01 - Функциональная спецификация/Возможности сервиса/04 - Локальный Аудит Доступа - Local Access Audit#SR-AUTH-LA-03: Инъекция Трассировки в Downstream (Header Routing)]]
+### GetProjectDetails / UpdateProject
+- **Сигнатура:** `rpc GetProjectDetails (GetProjectDetailsRequest) returns (ProjectResponse)`
+- **Сигнатура:** `rpc UpdateProject (UpdateProjectRequest) returns (ProjectResponse)`
+- **Требование:** SR-STR-02
+- **Описание:** Получение подробностей проекта и обновление его параметров (название, архивный статус, FSRS-веса).
 
-Самый вызываемый метод в системе. API Gateway при каждом входящем HTTP-запросе от клиента вызывает `ValidateSession`, передавая либо значение Cookie (`Phantom Token`), либо контекст для **Personal Access Token** в заголовке `Authorization: Bearer` (см. [04 - Управление доступом и API-ключами](../REST%20API/04%20-%20Управление%20доступом%20и%20API-ключами.md)). Метод проверяет кэш сессий в Redis и/или таблицу `api_keys`, убеждается, что устройство не находится в блокировке, сессия или ключ жизнеспособны, и возвращает сформированный набор HTTP-заголовков (например, `X-Global-User-Id`, `X-Workspace-Id`, `X-User-Roles`).
+### GetUserSettings / UpdateUserSettings
+- **Сигнатура:** `rpc GetUserSettings (GetUserSettingsRequest) returns (UserSettingsResponse)`
+- **Сигнатура:** `rpc UpdateUserSettings (UpdateUserSettingsRequest) returns (UserSettingsResponse)`
+- **Требование:** SR-SETT-01
+- **Описание:** Получение и обновление глобальных настроек пользователя (час сброса rollover, дневные цели New/Review, язык интерфейса).
 
-| Сигнатура | `rpc ValidateSession(ValidateSessionRequest) returns (ValidateSessionResponse)` |
-| :--- | :--- |
-| **Сообщение запроса** | `ValidateSessionRequest` (тип предъявления: Phantom Cookie и/или Bearer PAT, метаданные устройства, IP; для PAT — сырая строка токена для сверки хэша) |
-| **Сообщение ответа** | `ValidateSessionResponse` (статус валидации, ID сессии или ключа, мапа HTTP-заголовков) |
-
-## Логика обработки запроса
-
-1. Определить режим аутентификации: **Phantom Cookie** или **Bearer PAT** (должен быть задан ровно один основной механизм на запрос; при отсутствии обоих вернуть `UNAUTHENTICATED`).
-2. **Если режим PAT:** вычислить хэш предъявленного токена (SHA-256 или согласованный алгоритм), найти запись в таблице `api_keys` по хэшу; при отсутствии, истечении `expires_at` или отзыве вернуть `UNAUTHENTICATED`. Проверить соответствие запрошенных операций объявленным `scopes` ключа. Обновить `last_used_at` (асинхронно или в той же транзакции). Построить `SessionContext` для владельца ключа (глобальный пользователь, активный Workspace по политике ключа или дефолту). Перейти к шагу проверки периметра (deny-list) и формированию заголовков.
-3. **Если режим Phantom Cookie:** проверить, что запрос содержит Phantom Token, IP-адрес и `device_fingerprint`, достаточные для server-side валидации.
-4. Найти локальную Phantom-сессию по значению Cookie в Redis (если запись отсутствует, истекла или уже отозвана, вернуть `UNAUTHENTICATED`).
-5. Подтвердить, что текущий запрос соответствует сохраненному контексту устройства и не выглядит как попытка Session Hijacking (сравнить IP и Fingerprint; при критичном mismatch инициировать отзыв сессии).
-6. Проверить, не находится ли IP или Fingerprint в локальном deny-list, чтобы не пропускать заблокированный трафик дальше.
-7. Сформировать канонический server-side контекст из `SessionContext` (включая `global actor`, `active workspace`, роли, признаки гостевого режима или имперсонации и trace-метаданные).
-8. Вернуть набор доверенных внутренних заголовков для downstream-маршрутизации, подразумевая, что gateway-контрагент обязан отбросить все одноименные клиентские `X-Global-*`, `X-Workspace-*` и `X-Impersonator-*` заголовки.
-9. Если TTL локальной сессии подходит к порогу keep-alive или `Silent Refresh`, дополнительно выставить технический признак необходимости фонового обновления (для Cookie-сессий; для PAT не применяется).
-
-## Статус-коды gRPC при ошибках
+### GetDeckTree / GetDeckDetail
+- **Сигнатура:** `rpc GetDeckTree (GetDeckTreeRequest) returns (GetDeckTreeResponse)`
+- **Сигнатура:** `rpc GetDeckDetail (GetDeckDetailRequest) returns (GetDeckDetailResponse)`
+- **Требование:** SR-STR-03
+- **Описание:** Формирование иерархического дерева колод с фильтрами (`MINE`, `DOWNLOADED`, `PUBLIC`) и детальной статистикой карточек (New, Learning, Due).
 
 ---
 
-*Укороченный шаблон. Полный эталон: `(Done) Authorization Service/` — тот же относительный путь.*
+## 2. CardService (Карточки, Заметки и Загрузка Медиа)
+
+### CreateCard / UpdateCard / DeleteCard
+- **Сигнатуры:**
+  - `rpc CreateCard (CreateCardRequest) returns (CardResponse)`
+  - `rpc UpdateCard (UpdateCardRequest) returns (CardResponse)`
+  - `rpc DeleteCard (DeleteCardRequest) returns (google.protobuf.Empty)`
+- **Требование:** SR-VOC-01 / SR-VOC-04
+- **Описание:** CRUD-операции над карточками. Карточка создается на основе заметки (`NotePayload`) и привязанного `NoteType`.
+
+### CheckCardDuplicates
+- **Сигнатура:** `rpc CheckCardDuplicates (CheckCardDuplicatesRequest) returns (CheckCardDuplicatesResponse)`
+- **Требование:** SR-VOC-05
+- **Описание:** Проверка наличия субординированных карточек с аналогичной точной формой/термином в проекте.
+
+### CaptureCard
+- **Сигнатура:** `rpc CaptureCard (CaptureCardRequest) returns (CardResponse)`
+- **Требование:** SR-API-01 / SR-VOC-01
+- **Описание:** Быстрое создание карточки из Chrome-расширения с сохранением контекстного предложения и медиа-ссылок.
+
+### SearchCards / BulkCreateCards
+- **Сигнатура:** `rpc SearchCards (SearchCardsRequest) returns (SearchCardsResponse)`
+- **Сигнатура:** `rpc BulkCreateCards (BulkCreateCardsRequest) returns (BulkCreateCardsResponse)`
+- **Требование:** SR-SRC-01 / SR-VOC-03
+- **Описание:** Полнотекстовый поиск карточек по полям заметки и пакетный импорт (например, из CSV/Anki).
+
+---
+
+## 3. TermService (Управление Терминами)
+
+### CreateOrUpdateTerm / MarkTermKnown / IgnoreTerm
+- **Сигнатуры:**
+  - `rpc CreateOrUpdateTerm (CreateOrUpdateTermRequest) returns (TermDetailsResponse)`
+  - `rpc MarkTermKnown (TermActionRequest) returns (TermDetailsResponse)`
+  - `rpc IgnoreTerm (TermActionRequest) returns (TermDetailsResponse)`
+- **Требование:** SR-VOC-05
+- **Описание:** Создание и перевод статуса термина точной формы (`ProjectTerm`) в состояния `SAVED`, `KNOWN` или `IGNORED`.
+
+### BulkMarkKnown / ListProjectTerms
+- **Сигнатуры:**
+  - `rpc BulkMarkKnown (BulkMarkKnownRequest) returns (BulkMarkKnownResponse)`
+  - `rpc ListProjectTerms (ListProjectTermsRequest) returns (ListProjectTermsResponse)`
+- **Требование:** SR-VOC-05
+- **Описание:** Массовая пометка терминов выученными (например, при перелистывании страницы в ридере) и листинг терминов проекта с пагинацией по курсору.
