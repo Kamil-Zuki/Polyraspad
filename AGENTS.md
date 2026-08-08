@@ -520,10 +520,35 @@ When editing microservice docs under `Docs/`, follow the dependency order **`03`
 - Do not hardcode values.
 - Always record your changes in the `CHANGELOG.md` file at the repository root when completing tasks.
 
+---
+
+## 13. Strict Guardrails & Forbidden Actions
+
+**You MUST NEVER perform the following actions unless explicitly forced by the user with "I know what I'm doing":**
+
+1. **Do not modify `.env` files** or commit actual secrets. Only update `.env.example` when introducing new variables.
+2. **Do not alter `node_modules`, `obj/`, `bin/`, or `.vs/` directories.** These are auto-generated.
+3. **Do not delete or modify EF Core migration files** (`*Service/Data/Migrations/*.cs`). If a database schema needs changing, create a NEW migration. Destructive migrations (dropping columns/tables) are forbidden without an explicit backfill plan.
+4. **Do not modify lock files** (`package-lock.json`). Let npm handle them.
+5. **Do not change running ports** in `docker-compose.yml`, `launchSettings.json`, or config files unless specifically instructed. The infrastructure topology must remain stable.
+6. **Do not delete `.proto` files** or introduce breaking changes to gRPC contracts without first updating all consumer services.
+7. **Do not run random global shell scripts** outside of `/deploy`, `/docker`, or documented `.ps1` files.
 
 ---
 
-## 13. Current Product Direction
+## 14. Observability & Memory
+
+**Before concluding any non-trivial implementation plan (via `/develop`), you MUST:**
+- Verify that the code compiles (e.g. `dotnet build`, `npm run typecheck`).
+- Document all file changes and unhandled edge cases in the `walkthrough.md` artifact.
+- Ensure all relevant `.agents/skills` or Knowledge Items were checked if the task touches their domain.
+
+**Memory & Pattern Recognition:**
+- If you find a new best practice, fix a tricky bug, or resolve a complex architecture decision, prompt the user to run the `/learn` slash command to persist this knowledge into a Skill or Knowledge Item.
+
+---
+
+## 15. Current Product Direction
 
 The active learning direction is the **LingQ-style reader model**:
 
