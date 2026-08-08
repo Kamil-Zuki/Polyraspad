@@ -159,10 +159,10 @@ export default async function LocalizedHomePage({
                 label: localeLabels[item],
               }))}
             />
-            <a href={`${APP_URL}/auth`} className="hidden text-sm font-medium text-gray-300 transition hover:text-white md:block">
+            <a href={`${APP_URL}/auth?mode=login`} className="hidden text-sm font-medium text-gray-300 transition hover:text-white md:block">
               {content.loginLabel}
             </a>
-            <a href={`${APP_URL}/auth`} className="btn-primary rounded-lg px-4 py-2.5 text-sm font-bold text-white md:px-5">
+            <a href={`${APP_URL}/auth?mode=register`} className="btn-primary rounded-lg px-4 py-2.5 text-sm font-bold text-white md:px-5">
               {content.startFreeLabel}
             </a>
           </div>
@@ -189,7 +189,7 @@ export default async function LocalizedHomePage({
 
             <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
               <a
-                href={`${APP_URL}/auth`}
+                href={`${APP_URL}/auth?mode=register`}
                 className="btn-primary flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-base font-bold text-white sm:w-auto md:text-lg"
               >
                 {content.heroPrimaryCta}
@@ -212,13 +212,13 @@ export default async function LocalizedHomePage({
         </section>
 
         <section id="features" className="landing-section px-6 py-16 md:py-20">
-          <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-5xl">
             <div className="mb-12 text-center">
               <h2 className="mb-3 text-2xl font-bold text-white md:text-4xl">{content.featuresTitle}</h2>
               <p className="text-base text-gray-400 md:text-lg">{content.featuresSubtitle}</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {content.features.map((feature, index) => {
                 const iconConfig = featureIcons[index]
                 const Icon = iconConfig.icon
@@ -246,6 +246,7 @@ export default async function LocalizedHomePage({
             <p className="mx-auto mb-6 max-w-2xl text-base text-indigo-200 md:text-lg">{content.finalDescription}</p>
 
             <form action={`${APP_URL}/auth`} method="get" className="mx-auto flex max-w-md flex-col items-center justify-center gap-3 sm:flex-row">
+              <input type="hidden" name="mode" value="register" />
               <input
                 type="email"
                 name="email"

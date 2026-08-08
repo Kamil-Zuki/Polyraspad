@@ -82,11 +82,7 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
         description:
           "В основе расписания повторений лежит современный алгоритм FSRS, обеспечивающий точное вычисление интервалов памяти.",
       },
-      {
-        title: "Browser Capture Extension",
-        description:
-          "Собирайте материал прямо из браузера: захват субтитров, аудио и текста для быстрого создания карточек.",
-      },
+
     ],
     pricingTitle: "Варианты использования (MVP)",
     pricingSubtitle: "Проект находится на стадии MVP.",
@@ -170,11 +166,7 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
         description:
           "Review scheduling is powered by the modern FSRS algorithm, providing accurate memory interval calculations.",
       },
-      {
-        title: "Browser Capture Extension",
-        description:
-          "Collect material directly from your browser: capture subtitles, audio, and text to quickly create flashcards.",
-      },
+
     ],
     pricingTitle: "Usage Options (MVP)",
     pricingSubtitle: "The project is currently in the MVP stage.",
@@ -258,11 +250,7 @@ export const landingContent: Record<LandingLocale, LandingContent> = {
         description:
           "복습 일정은 최신 FSRS 알고리즘으로 구동되어 정확한 기억 간격 계산을 제공합니다.",
       },
-      {
-        title: "브라우저 캡처 확장",
-        description:
-          "브라우저에서 직접 자료를 수집하세요. 자막, 오디오, 텍스트를 캡처하여 플래시카드를 빠르게 만듭니다.",
-      },
+
     ],
     pricingTitle: "사용 옵션 (MVP)",
     pricingSubtitle: "현재 MVP 단계입니다.",
