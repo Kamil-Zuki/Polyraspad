@@ -9,7 +9,7 @@ if (!(Test-Path $changelogPath)) {
     exit 1
 }
 
-$content = Get-Content $changelogPath -Raw
+$content = Get-Content $changelogPath -Raw -Encoding UTF8
 $lines = $content -split "`r?`n"
 
 $unreleasedStartIndex = -1
@@ -100,7 +100,7 @@ for ($i = 0; $i -lt $lines.Length; $i++) {
     }
 }
 
-$newChangelog -join "`r`n" | Set-Content $changelogPath -Encoding UTF8
+[System.IO.File]::WriteAllText((Resolve-Path $changelogPath).Path, ($newChangelog -join "`r`n"), [System.Text.UTF8Encoding]::new($false))
 
 $CommitMsg = "chore(release): v$newVersion"
 
