@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Fixed (Исправлено)
+- **Frontend:** Удалена кодировка UTF-8 BOM из файла `polyraspad-frontend/src/app/auth/confirm/page.tsx`, приводившая к ошибке сборки Turbopack в Next.js 16 (`failed to convert rope into string`).
+
+
 ## [0.1.0] - 2026-07-18 - MVP (Этап 1)
 
 ### Added (Добавлено)
