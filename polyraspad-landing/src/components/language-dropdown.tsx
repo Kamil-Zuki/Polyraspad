@@ -67,7 +67,13 @@ export function LanguageDropdown({
                 key={option.href}
                 href={option.href}
                 role="menuitem"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  const match = option.href.match(/^\/(ru|en)/)
+                  if (match) {
+                    document.cookie = `locale=${match[1]};path=/;max-age=31536000;SameSite=Lax`
+                  }
+                  setOpen(false)
+                }}
                 className="rounded-lg px-3 py-2 text-sm font-medium text-gray-300 transition hover:bg-white/5 hover:text-white"
               >
                 {option.label}
