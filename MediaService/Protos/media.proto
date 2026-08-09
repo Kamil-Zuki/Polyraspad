@@ -99,6 +99,10 @@ message ReaderLibraryBook {
   // pdf | extracted — how the Reader opens the book
   string reading_mode = 16;
   bool has_extracted_text = 17;
+  string cover_image_url = 18;
+  string audio_url = 19;
+  string cefr_level = 20;
+  string summary = 21;
 }
 
 message PutDocumentExtractRequest {

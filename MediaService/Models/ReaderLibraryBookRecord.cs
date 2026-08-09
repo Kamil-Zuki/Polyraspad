@@ -19,4 +19,8 @@ public sealed class ReaderLibraryBookRecord
     /// <summary>pdf | extracted</summary>
     public string ReadingMode { get; set; } = "pdf";
     public bool HasExtractedText { get; set; }
+    public string? CoverImageUrl { get; set; }
+    public string? AudioUrl { get; set; }
+    public string? CefrLevel { get; set; }
+    public string? Summary { get; set; }
 }

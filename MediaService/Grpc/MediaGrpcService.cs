@@ -489,7 +489,11 @@ public class MediaGrpcService : MediaServiceBase
             OwnerUserName = book.OwnerUserName ?? string.Empty,
             OwnerEmail = book.OwnerEmail ?? string.Empty,
             ReadingMode = readingMode,
-            HasExtractedText = book.HasExtractedText
+            HasExtractedText = book.HasExtractedText,
+            CoverImageUrl = book.CoverImageUrl ?? string.Empty,
+            AudioUrl = book.AudioUrl ?? string.Empty,
+            CefrLevel = book.CefrLevel ?? string.Empty,
+            Summary = book.Summary ?? string.Empty
         };
     }
 
@@ -530,7 +534,11 @@ public class MediaGrpcService : MediaServiceBase
             OwnerUserName = book.OwnerUserName,
             OwnerEmail = book.OwnerEmail,
             ReadingMode = string.IsNullOrWhiteSpace(book.ReadingMode) ? "pdf" : book.ReadingMode,
-            HasExtractedText = book.HasExtractedText
+            HasExtractedText = book.HasExtractedText,
+            CoverImageUrl = book.CoverImageUrl ?? string.Empty,
+            AudioUrl = book.AudioUrl ?? string.Empty,
+            CefrLevel = book.CefrLevel ?? string.Empty,
+            Summary = book.Summary ?? string.Empty
         };
     }
 

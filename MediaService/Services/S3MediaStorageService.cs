@@ -236,7 +236,11 @@ public class S3MediaStorageService : IMediaStorageService
                     OwnerEmail = book.OwnerEmail,
                     IsShared = book.IsShared,
                     ReadingMode = book.ReadingMode,
-                    HasExtractedText = book.HasExtractedText
+                    HasExtractedText = book.HasExtractedText,
+                    CoverImageUrl = book.CoverImageUrl,
+                    AudioUrl = book.AudioUrl,
+                    CefrLevel = book.CefrLevel,
+                    Summary = book.Summary
                 }
                 : book)
             .ToList();
