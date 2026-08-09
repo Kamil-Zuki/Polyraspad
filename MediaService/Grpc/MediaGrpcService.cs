@@ -468,9 +468,9 @@ public class MediaGrpcService : MediaServiceBase
         var readingMode = string.IsNullOrWhiteSpace(book.ReadingMode)
             ? "pdf"
             : book.ReadingMode.Trim().ToLowerInvariant();
-        if (readingMode is not ("pdf" or "extracted"))
+        if (readingMode is not ("pdf" or "extracted" or "text" or "epub"))
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "book.reading_mode must be 'pdf' or 'extracted'"));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "book.reading_mode must be 'pdf', 'extracted', 'text', or 'epub'"));
         }
 
         return new ReaderLibraryBookRecord
