@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-10
+
+### Added (Добавлено)
+- **Project Deletion (Full Cascade & Media Cleanup):** Добавлена возможность полного безвозвратного удаления языковых проектов.
+  - **Backend (`VocabularyService`, `MediaService`, `AggregatorService`):** Добавлены gRPC методы `DeleteProject` и `DeleteProjectMedia`, каскадное удаление данных в PostgreSQL (колоды, карточки, слова, термины, леммы, FSRS прогресс, история), запись надгробного камня `DeletedObject` (tombstone) и полная очистка объектов MinIO S3 (индексы книг Ридера, коллекции, выжимки выдержек `extracted.json`). В `AggregatorService` добавлен REST эндпоинт `DELETE /api/Projects/{id}`.
+  - **Frontend (`polyraspad-frontend`):** Реализован `useDeleteProject` мутационный хук, опасный диалог подтверждения `DeleteProjectDialog` с валидацией ввода имени проекта и кнопки удаления на карточках и в настройках проекта.
+
 ## [0.5.0] - 2026-08-09
 
 ### Added (Добавлено)

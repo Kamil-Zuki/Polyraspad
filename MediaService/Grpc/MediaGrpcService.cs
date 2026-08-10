@@ -634,4 +634,28 @@ public class MediaGrpcService : MediaServiceBase
         response.Books.AddRange(mappedBooks);
         return response;
     }
+
+    public override async Task<DeleteProjectMediaResponse> DeleteProjectMedia(DeleteProjectMediaRequest request, ServerCallContext context)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProjectId) || !Guid.TryParse(request.ProjectId, out _))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid project_id is required"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.UserId) || !Guid.TryParse(request.UserId, out var userId))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Valid user_id is required"));
+        }
+
+        try
+        {
+            await _mediaStorage.DeleteProjectMediaAsync(userId, request.ProjectId, context.CancellationToken).ConfigureAwait(false);
+            return new DeleteProjectMediaResponse();
+        }
+        catch (AmazonS3Exception ex)
+        {
+            _logger.LogError(ex, "S3 error deleting project media for project {ProjectId}", request.ProjectId);
+            throw new RpcException(new Status(StatusCode.Unavailable, $"Media storage error: {ex.Message}"));
+        }
+    }
 }

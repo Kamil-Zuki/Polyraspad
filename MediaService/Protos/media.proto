@@ -23,7 +23,15 @@ service MediaService {
   rpc ShareReaderCollection (ShareReaderCollectionRequest) returns (ShareReaderCollectionResponse);
   rpc UnshareReaderCollection (UnshareReaderCollectionRequest) returns (UnshareReaderCollectionResponse);
   rpc ListSharedReaderCollections (ListSharedReaderCollectionsRequest) returns (ListSharedReaderCollectionsResponse);
+  rpc DeleteProjectMedia (DeleteProjectMediaRequest) returns (DeleteProjectMediaResponse);
 }
+
+message DeleteProjectMediaRequest {
+  string project_id = 1;
+  string user_id = 2;
+}
+
+message DeleteProjectMediaResponse {}
 
 message UploadImageRequest {
   bytes image_data = 1;

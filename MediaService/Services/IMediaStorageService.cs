@@ -21,4 +21,5 @@ public interface IMediaStorageService
     Task<ReaderCollectionRecord> ShareReaderCollectionAsync(Guid userId, string projectId, Guid collectionId, ReaderCollectionCollaboratorRecord collaborator, CancellationToken cancellationToken = default);
     Task<ReaderCollectionRecord> UnshareReaderCollectionAsync(Guid userId, string projectId, Guid collectionId, Guid collaboratorUserId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReaderSharedCollectionRecord>> ListSharedReaderCollectionsAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task DeleteProjectMediaAsync(Guid userId, string projectId, CancellationToken cancellationToken = default);
 }

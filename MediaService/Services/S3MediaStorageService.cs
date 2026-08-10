@@ -341,6 +341,42 @@ public class S3MediaStorageService : IMediaStorageService
             .ToList();
     }
 
+    public async Task DeleteProjectMediaAsync(Guid userId, string projectId, CancellationToken cancellationToken = default)
+    {
+        await EnsureBucketExistsAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var books = await LoadReaderLibraryBooksAsync(userId, projectId, cancellationToken).ConfigureAwait(false);
+            foreach (var book in books)
+            {
+                if (book.DocumentId is Guid documentId)
+                {
+                    await DeleteDocumentExtractAsync(documentId, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await _s3.DeleteObjectAsync(_options.Bucket, $"{DocumentsPrefix}/{documentId}", cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (AmazonS3Exception ex) when (IsMissingObject(ex))
+                    {
+                    }
+                }
+            }
+
+            var libraryKey = GetReaderLibraryKey(userId, projectId);
+            var collectionsKey = GetReaderCollectionsKey(userId, projectId);
+
+            await _s3.DeleteObjectAsync(_options.Bucket, libraryKey, cancellationToken).ConfigureAwait(false);
+            await _s3.DeleteObjectAsync(_options.Bucket, collectionsKey, cancellationToken).ConfigureAwait(false);
+
+            _logger.LogInformation("Deleted media and reader data for project {ProjectId} of user {UserId}", projectId, userId);
+        }
+        catch (AmazonS3Exception ex) when (IsMissingObject(ex))
+        {
+            _logger.LogDebug("No S3 objects found to delete for project {ProjectId}", projectId);
+        }
+    }
+
     private async Task UploadAsync(string key, Stream data, string contentType, CancellationToken cancellationToken)
     {
         await _s3.PutObjectAsync(new PutObjectRequest
