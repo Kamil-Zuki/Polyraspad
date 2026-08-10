@@ -664,7 +664,7 @@ message ListProjectTermsRequest {
   string status = 3;
   string type = 4; // WORD | PHRASE, пусто = все
   string q = 5; // подстрока по Text / NormalizedText (без регистра где поддерживается)
-  string cursor = 6; // opaque; пусто = первая страница
+  int32 page_number = 6; // начиная с 1
   int32 page_size = 7; // 0 → 50; макс. 100 на сервере
 }
 
@@ -689,7 +689,7 @@ message ProjectTermListItem {
 
 message ListProjectTermsResponse {
   repeated ProjectTermListItem items = 1;
-  google.protobuf.StringValue next_cursor = 2;
+  int32 total_count = 2;
 }
 
 message PurgeDemoImportRequest {
