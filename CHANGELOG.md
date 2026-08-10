@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-10
+
+### Added (Добавлено)
+- **Vocabulary (Frontend):** Добавлено отображение общего количества карточек и терминов при пагинации в интерфейсе Word Bank и SRS Cards.
+- **Vocabulary (Frontend):** Кликабельный Distribution bar на странице Vocabulary и Dashboard — при клике на сегмент (например, "Known") происходит переход в Word Bank с автоматическим применением фильтра.
+
+### Changed (Изменено)
+- **Vocabulary (Backend/Frontend):** Миграция с курсорной пагинации (`cursor`, `nextCursor`) на смещение (`pageNumber`, `totalCount`) для списка терминов проекта (`ListProjectTerms`).
+- **Vocabulary (Frontend):** Переработан стиль списка фильтров `Quick Lists` во вкладке `SRS Cards` (переведены в единый блок Toggle Group для улучшения интерфейса).
+- **Vocabulary (Frontend):** Глубокий рефакторинг `cards-tab.tsx` (разделение на `CardsTable`, `CardsToolbar`) и вынос логики иерархии колод в общий хук `useFlatDecks(projectId)`.
+- **Vocabulary (Frontend):** Названия вкладок заменены: `Terms` -> `Word Bank`, `Cards` -> `SRS Cards`. Добавлены счетчики элементов в переключатель вкладок.
+- **Vocabulary (Frontend):** Таблица Terms: объединены колонки Term и Meaning, скрыт Type, контекст теперь сворачивается, а Meaning можно редактировать прямо в таблице. Добавлены чекбоксы для массовых операций.
+
 ## [0.6.0] - 2026-08-10
 
 ### Added (Добавлено)
