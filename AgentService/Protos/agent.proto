@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+
+option csharp_namespace = "Pvs.Agent.Grpc";
+
+package pvs.agent.grpc;
+
+service AgentService {
+  rpc ListThreads (ListAgentThreadsRequest) returns (ListAgentThreadsResponse);
+  rpc CreateThread (CreateAgentThreadRequest) returns (AgentThreadResponse);
+  rpc GetThread (GetAgentThreadRequest) returns (AgentThreadResponse);
+  rpc ListMessages (ListAgentMessagesRequest) returns (ListAgentMessagesResponse);
+  rpc CreateRun (CreateAgentRunRequest) returns (CreateAgentRunResponse);
+  rpc ExecuteRun (ExecuteAgentRunRequest) returns (CreateAgentRunResponse);
+  rpc ArchiveThread (ArchiveAgentThreadRequest) returns (google.protobuf.Empty);
+  rpc CreateArtifact (CreateAgentArtifactRequest) returns (AgentArtifactItem);
+  rpc ListArtifacts (ListAgentArtifactsRequest) returns (ListAgentArtifactsResponse);
+  rpc ExecuteRunStream (ExecuteAgentRunRequest) returns (stream ExecuteAgentRunStreamResponse);
+}
+
+message ListAgentThreadsRequest {
+  string user_id = 1;
+  string project_id = 2;
+  string agent_id = 3;
+}
+
+message AgentThreadListItem {
+  string id = 1;
+  string project_id = 2;
+  string title = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  google.protobuf.StringValue agent_id = 6;
+}
+
+message ListAgentThreadsResponse {
+  repeated AgentThreadListItem items = 1;
+}
+
+message CreateAgentThreadRequest {
+  string user_id = 1;
+  string project_id = 2;
+  string agent_id = 3;
+  google.protobuf.StringValue system_prompt_override = 4;
+}
+
+message GetAgentThreadRequest {
+  string user_id = 1;
+  string thread_id = 2;
+}
+
+message AgentThreadResponse {
+  string id = 1;
+  string project_id = 2;
+  string title = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  google.protobuf.Timestamp archived_at = 6;
+  google.protobuf.StringValue agent_id = 7;
+}
+
+message ListAgentMessagesRequest {
+  string user_id = 1;
+  string thread_id = 2;
+  int32 limit = 3;
+  google.protobuf.StringValue before = 4;
+}
+
+message AgentMessageItem {
+  string id = 1;
+  string role = 2;
+  string content = 3;
+  google.protobuf.StringValue metadata_json = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ListAgentMessagesResponse {
+  repeated AgentMessageItem items = 1;
+  google.protobuf.StringValue next_before = 2;
+}
+
+message AgentMessageInput {
+  google.protobuf.StringValue id = 1;
+  string role = 2;
+  string content = 3;
+  google.protobuf.StringValue metadata_json = 4;
+}
+
+message AgentDomainDecisionInput {
+  bool allowed = 1;
+  string category = 2;
+  google.protobuf.StringValue reason = 3;
+}
+
+message AgentToolCallInput {
+  string tool_name = 1;
+  string input_json = 2;
+  string output_json = 3;
+  string status = 4;
+}
+
+message CreateAgentRunRequest {
+  string user_id = 1;
+  string thread_id = 2;
+  string project_id = 3;
+  AgentMessageInput user_message = 4;
+  AgentMessageInput assistant_message = 5;
+  AgentDomainDecisionInput domain_decision = 6;
+  repeated AgentToolCallInput tool_calls = 7;
+  google.protobuf.StringValue model = 8;
+}
+
+message ExecuteAgentRunRequest {
+  string user_id = 1;
+  string thread_id = 2;
+  string project_id = 3;
+  string user_text = 4;
+  google.protobuf.StringValue source_lang = 5;
+  google.protobuf.StringValue target_lang = 6;
+  google.protobuf.StringValue first_deck_id = 7;
+  bool is_initial_greeting = 8;
+}
+
+message AgentRunItem {
+  string id = 1;
+  string thread_id = 2;
+  string status = 3;
+  google.protobuf.StringValue model = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+}
+
+message CreateAgentRunResponse {
+  AgentRunItem run = 1;
+  AgentMessageItem user_message = 2;
+  AgentMessageItem assistant_message = 3;
+}
+
+message ArchiveAgentThreadRequest {
+  string user_id = 1;
+  string thread_id = 2;
+}
+
+message AgentArtifactItem {
+  string id = 1;
+  string run_id = 2;
+  string thread_id = 3;
+  string kind = 4;
+  string payload_json = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message CreateAgentArtifactRequest {
+  string user_id = 1;
+  string thread_id = 2;
+  string run_id = 3;
+  string kind = 4;
+  string payload_json = 5;
+}
+
+message ListAgentArtifactsRequest {
+  string user_id = 1;
+  string thread_id = 2;
+  google.protobuf.StringValue run_id = 3;
+}
+
+message ListAgentArtifactsResponse {
+  repeated AgentArtifactItem items = 1;
+}
+
+message ExecuteAgentRunStreamResponse {
+  oneof event {
+    string content_chunk = 1;
+    AgentToolCallInput tool_call = 2;
+    CreateAgentRunResponse final_result = 3;
+    string error = 4;
+  }
+}

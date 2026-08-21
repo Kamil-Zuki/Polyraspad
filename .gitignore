@@ -1,0 +1,31 @@
+.vs
+.idea/
+.vscode/
+
+# .NET build output (e.g. AggregatorService.Tests)
+**/bin/
+**/obj/
+
+# Python bytecode, caches, virtual environments
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.coverage
+**/htmlcov/
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+
+# Local run artifacts
+.artifacts/
+.dotnet-home/
+.env
+!.env.example
+**.bin/
+
+# Obsidian workspace state (UI layout, not content)
+.obsidian/workspace.json

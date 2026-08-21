@@ -1,0 +1,41 @@
+name: Init private submodules
+description: Configure PAT auth and initialize one or more Git submodules.
+
+inputs:
+  token:
+    description: Classic PAT with repo scope (pass secrets.SUBMODULES_PAT from the workflow).
+    required: true
+  paths:
+    description: Space-separated submodule paths, or "recursive" for all submodules.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure git credentials
+      shell: bash
+      env:
+        PAT: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        if [ -z "$PAT" ]; then
+          echo "::error title=Missing SUBMODULES_PAT::Add repository secret SUBMODULES_PAT — a classic GitHub PAT with repo scope for Kamil-Zuki/* private submodule repositories."
+          exit 1
+        fi
+        git config --global url."https://x-access-token:${PAT}@github.com/".insteadOf "https://github.com/"
+
+    - name: Initialize submodules
+      shell: bash
+      env:
+        PATHS: ${{ inputs.paths }}
+      run: |
+        set -euo pipefail
+        if [ "$PATHS" = "recursive" ]; then
+          git submodule sync --recursive
+          git submodule update --init --depth 1 --recursive
+        else
+          for path in $PATHS; do
+            git submodule sync -- "$path"
+            git submodule update --init --depth 1 "$path"
+          done
+        fi

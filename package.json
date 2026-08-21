@@ -1,0 +1,7 @@
+{
+  "name": "polyraspad",
+  "private": true,
+  "scripts": {
+    "services": "powershell -ExecutionPolicy Bypass -File ./run-bff-with-deps.ps1"
+  }
+}

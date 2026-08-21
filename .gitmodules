@@ -1,0 +1,23 @@
+[submodule "AggregatorService"]
+	path = AggregatorService
+	url = https://github.com/Kamil-Zuki/AggregatorService.git
+    branch = master
+[submodule "VocabularyService"]
+	path = VocabularyService
+	url = https://github.com/Kamil-Zuki/VocabularyService.git
+    branch = master
+[submodule "authorization-module"]
+	path = authorization-module
+	url = https://github.com/Kamil-Zuki/authorization-module.git
+    branch = master
+[submodule "polyraspad-frontend"]
+	path = polyraspad-frontend
+	url = https://github.com/Kamil-Zuki/polyraspad-frontend.git
+[submodule "inclusive"]
+	path = inclusive
+	url = https://github.com/Kamil-Zuki/inclusive.git
+	branch = master
+[submodule "BillingService"]
+	path = BillingService
+	url = https://github.com/Kamil-Zuki/BillingService.git
+	branch = master

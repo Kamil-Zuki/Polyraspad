@@ -1,0 +1,365 @@
+# Запускайте из каталога с этим файлом, чтобы подхватился корневой `.env` (подстановка ${VAR}).
+# После правок `.env`: `docker compose up -d --build --force-recreate polyraspad-frontend aggregator-service`
+# (только `build` без `up` не обновит env в уже запущенных контейнерах.)
+#
+# EF Core миграции применяются автоматически при старте контейнеров (после готовности postgres):
+# - authorization-module → Migrate() для БД auth-module (см. authorization-module.API/Program.cs).
+# - vocabulary-service → Migrate() для БД vocabulary_service (см. VocabularyService/Program.cs).
+# Базы создаёт скрипт docker/postgres/init/01-create-dbs.sql при первом запуске тома Postgres.
+services:
+  postgres:
+    container_name: postgres
+    image: postgres:13
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-postgres-password}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - backend
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    container_name: minio
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+    volumes:
+      - minio-data:/data
+    networks:
+      - backend
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin}; do sleep 1; done;
+      until /usr/bin/mc ready myminio; do sleep 1; done;
+      /usr/bin/mc mb myminio/polyraspad-media 2>/dev/null || true;
+      /usr/bin/mc anonymous set download myminio/polyraspad-media;
+      echo 'Bucket polyraspad-media is now public for read';
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio-password}
+    networks:
+      - backend
+
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  inclusive:
+    container_name: inclusive
+    build:
+      context: ./inclusive
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "40051"
+
+  ocr-service:
+    container_name: ocr-service
+    build:
+      context: ./ocr-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "50052"
+
+  authorization-module:
+    container_name: authorization-module
+    build:
+      context: ./authorization-module
+      dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_10_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_10_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
+    restart: unless-stopped
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "5027"
+    environment:
+      ConnectionStrings__Db: "Server=postgres;Port=5432;Database=auth-module;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-change-me-postgres-password}"
+      ASPNETCORE_ENVIRONMENT: Production
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+      Cors__AllowedOrigins: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000}"
+      Jwt__Secret: "${JWT_SECRET:-change-me-use-at-least-32-characters-long-secret}"
+      Jwt__Issuer: "${JWT_ISSUER:-polyraspad.local}"
+      Jwt__Audience: "${JWT_AUDIENCE:-polyraspad.local}"
+      ConfirmationLink: "${AUTH_CONFIRMATION_LINK:-http://localhost:5000/api/Auth/confirm-email?userId}"
+      Email__Host: "${SMTP_HOST:-smtp.example.com}"
+      Email__Port: "${SMTP_PORT:-587}"
+      Email__UserName: "${SMTP_USERNAME:-change-me@example.com}"
+      Email__Password: "${SMTP_PASSWORD:-change-me-smtp-password}"
+      Email__Address: "${SMTP_ADDRESS:-no-reply@example.com}"
+      Email__DisplayName: "${SMTP_DISPLAY_NAME:-Polyraspad}"
+
+  vocabulary-service:
+    container_name: vocabulary-service
+    build:
+      context: ./VocabularyService
+      dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_8_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:8.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_8_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:8.0}
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "5117"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      inclusive:
+        condition: service_started
+      media-service:
+        condition: service_started
+    environment:
+      APP_UID: "0"
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=vocabulary_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-change-me-postgres-password}"
+      ConnectionStrings__Redis: "redis:6379"
+      Inclusive__GrpcAddress: "http://inclusive:40051"
+      Media__GrpcAddress: "http://media-service:5121"
+      Billing__GrpcAddress: "http://billing-service:5127"
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+
+  agent-service:
+    container_name: agent-service
+    build:
+      context: ./AgentService
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "5131"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vocabulary-service:
+        condition: service_started
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-change-me-postgres-password}@postgres:5432/agent_service"
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=agent_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-change-me-postgres-password}"
+      Vocabulary__GrpcAddress: "http://vocabulary-service:5117"
+      Inclusive__GrpcAddress: "http://inclusive:40051"
+      Ai__BaseUrl: "${AI_COMPLETION_BASE_URL:-https://api.openai.com/v1}"
+      Ai__ApiKey: "${OPENAI_API_KEY:-}"
+      Ai__Model: "${AI_COMPLETION_MODEL:-gpt-4o-mini}"
+      Ai__TimeoutSeconds: "120"
+      Ai__Enabled: "${AI_COMPLETION_ENABLED:-true}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; ch = grpc.insecure_channel('localhost:5131'); stub = grpc.channel_ready_future(ch); stub.result(timeout=5); ch.close()"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+
+  media-service:
+    container_name: media-service
+    build:
+      context: ./MediaService
+      dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_8_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:8.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_8_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:8.0}
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "5121"
+    depends_on:
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      APP_UID: "0"
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+      Storage__Endpoint: "http://minio:9000"
+      Storage__Bucket: "polyraspad-media"
+      Storage__AccessKey: "${MINIO_ROOT_USER:-minioadmin}"
+      Storage__SecretKey: "${MINIO_ROOT_PASSWORD:-change-me-minio-password}"
+      Storage__UsePathStyle: "true"
+      Storage__PublicBaseUrl: "${MINIO_PUBLIC_BASE_URL:-http://localhost:9000/polyraspad-media}"
+      Storage__ServerFetchBaseUrl: "${MINIO_SERVER_FETCH_BASE_URL:-http://minio:9000/polyraspad-media}"
+
+  billing-service:
+    container_name: billing-service
+    build:
+      context: ./BillingService
+      dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_8_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:8.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_8_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:8.0}
+    restart: unless-stopped
+    networks:
+      - backend
+    expose:
+      - "5127"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_UID: "0"
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+      ASPNETCORE_URLS: "http://0.0.0.0:5127"
+      ConnectionStrings__DefaultConnection: "Server=postgres;Port=5432;Database=billing_service;User Id=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-change-me-postgres-password}"
+      Billing__DefaultProvider: "${BILLING_DEFAULT_PROVIDER:-mock}"
+      Billing__GracePeriodDays: "${BILLING_GRACE_PERIOD_DAYS:-3}"
+      Billing__RenewalPollIntervalMinutes: "${BILLING_RENEWAL_POLL_INTERVAL_MINUTES:-15}"
+      Billing__WebhookApiKey: "${BILLING_WEBHOOK_API_KEY:-}"
+      PaymentProviders__YooKassa__ShopId: "${YOOKASSA_SHOP_ID:-}"
+      PaymentProviders__YooKassa__SecretKey: "${YOOKASSA_SECRET_KEY:-}"
+      PaymentProviders__YooKassa__ReturnUrl: "${YOOKASSA_RETURN_URL:-http://localhost:3000/billing/success}"
+      PaymentProviders__YooKassa__UseSandbox: "${YOOKASSA_USE_SANDBOX:-true}"
+
+  aggregator-service:
+    container_name: aggregator-service
+    build:
+      context: ./AggregatorService
+      dockerfile: Dockerfile
+      args:
+        DOTNET_ASPNET_IMAGE: ${DOTNET_10_ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
+        DOTNET_SDK_IMAGE: ${DOTNET_10_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
+    restart: unless-stopped
+    ports:
+      - "5000:5206"
+    networks:
+      - backend
+    depends_on:
+      vocabulary-service:
+        condition: service_started
+      agent-service:
+        condition: service_started
+      media-service:
+        condition: service_started
+      authorization-module:
+        condition: service_started
+      billing-service:
+        condition: service_started
+      ocr-service:
+        condition: service_started
+    environment:
+      APP_UID: "0"
+      ASPNETCORE_URLS: "http://0.0.0.0:5206"
+      AggregatorService__VocabularyServiceBaseUrl: "http://vocabulary-service:5117"
+      AggregatorService__AgentServiceBaseUrl: "http://agent-service:5131"
+      AggregatorService__MediaServiceBaseUrl: "http://media-service:5121"
+      AggregatorService__AuthorizationModuleBaseUrl: "http://authorization-module:5027"
+      AggregatorService__BillingServiceBaseUrl: "http://billing-service:5127"
+      AggregatorService__OcrServiceBaseUrl: "http://ocr-service:50052"
+      Ocr__GrpcAddress: "http://ocr-service:50052"
+      Billing__WebhookApiKey: "${BILLING_WEBHOOK_API_KEY:-}"
+      Cors__AllowedOrigins: "${CORS_ALLOWED_ORIGINS:-http://localhost:3000}"
+      Jwt__Secret: "${JWT_SECRET:-change-me-use-at-least-32-characters-long-secret}"
+      Jwt__Issuer: "${JWT_ISSUER:-polyraspad.local}"
+      Jwt__Audience: "${JWT_AUDIENCE:-polyraspad.local}"
+      Ai__BaseUrl: "${AI_COMPLETION_BASE_URL:-https://api.openai.com/v1}"
+      Ai__ApiKey: "${OPENAI_API_KEY:-}"
+      Ai__Model: "${AI_COMPLETION_MODEL:-gpt-4o-mini}"
+      Ai__TimeoutSeconds: "120"
+      Ai__Enabled: "${AI_COMPLETION_ENABLED:-true}"
+      Features__EnableAIAgents: "${NEXT_PUBLIC_FF_AI_AGENTS:-false}"
+      Features__EnableAdvancedModules: "${NEXT_PUBLIC_FF_ADVANCED_MODULES:-false}"
+      # Общий секрет BFF (Next) ↔ Aggregator; без него пустой ключ в `docker compose config` и /api/ai/* в UI не работает.
+      Ai__ProxyApiKey: "${AI_PROXY_API_KEY:-}"
+      Ai__AllowClientModelOverride: "false"
+      Ai__TtsProvider: "${AI_TTS_PROVIDER:-espeak}"
+      Ai__TtsModel: "${AI_TTS_MODEL:-tts-1}"
+      Ai__TtsVoiceId: "${AI_TTS_VOICE_ID:-}"
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+
+  polyraspad-frontend:
+    container_name: polyraspad-frontend
+    build:
+      context: ./polyraspad-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_FF_AI_AGENTS: ${NEXT_PUBLIC_FF_AI_AGENTS:-false}
+        NEXT_PUBLIC_FF_ADVANCED_MODULES: ${NEXT_PUBLIC_FF_ADVANCED_MODULES:-false}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - backend
+    depends_on:
+      aggregator-service:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      # Должен совпадать с Ai__ProxyApiKey у aggregator-service (не путать с OPENAI_API_KEY провайдера).
+      AI_PROXY_API_KEY: "${AI_PROXY_API_KEY:-}"
+      AGGREGATOR_INTERNAL_URL: http://aggregator-service:5206
+      # В корневом .env может быть GEMINI_API_KEY — для Docker оставляем маршрут через Aggregator по умолчанию.
+      EDITOR_AI_PROVIDER: "${EDITOR_AI_PROVIDER:-aggregator}"
+
+  polyraspad-landing:
+    container_name: polyraspad-landing
+    build:
+      context: ./polyraspad-landing
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${LANDING_NEXT_PUBLIC_APP_URL:-https://app.polyraspad.online}
+        NEXT_PUBLIC_SITE_URL: ${LANDING_NEXT_PUBLIC_SITE_URL:-https://polyraspad.online}
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    networks:
+      - backend
+    environment:
+      NODE_ENV: production
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  minio-data:
+  redis-data:

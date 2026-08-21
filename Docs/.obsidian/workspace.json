@@ -1,0 +1,225 @@
+{
+  "main": {
+    "id": "c180a3d210edc54c",
+    "type": "split",
+    "children": [
+      {
+        "id": "56c0a55cbdd55cc2",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b6a1f7b6a73b7599",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-02_StudySystem.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "SR-VOC-02_StudySystem"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "4ba93ac76bbc9f63",
+    "type": "split",
+    "children": [
+      {
+        "id": "91bb5b9033067398",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e52d8ff49010c6e0",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "파일 탐색기"
+            }
+          },
+          {
+            "id": "67f7488a69c5b26e",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "acf36d123669c2d2",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "fe970e62e48b48e7",
+    "type": "split",
+    "children": [
+      {
+        "id": "1cd0e5eb11135e95",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "80bd099edd6b79c1",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for 01 - Аутентификация и профиль (Auth)"
+            }
+          },
+          {
+            "id": "2c5da3323014e3d9",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from 01 - Аутентификация и профиль (Auth)"
+            }
+          },
+          {
+            "id": "b48a418d091e5a73",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "aeb796881c067d35",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "f77292e56d786b60",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Aggregator Service/04 - Бекенд, API и Контракты/Методы API/DTO/01 - Аутентификация и профиль (Auth).md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of 01 - Аутентификация и профиль (Auth)"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:빠른 전환기 열기": false,
+      "graph:그래프 뷰 열기": false,
+      "canvas:새 캔버스 만들기": false,
+      "daily-notes:오늘의 일일 노트 열기": false,
+      "templates:템플릿 삽입": false,
+      "command-palette:명령어 팔레트 열기": false,
+      "bases:새 베이스 생성하기": false
+    }
+  },
+  "active": "b6a1f7b6a73b7599",
+  "lastOpenFiles": [
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-01_Curriculum.md",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/00 - Общая информация.md",
+    "Agent Service/01 - Функциональная спецификация/Возможности сервиса/00 - Общая информация.md",
+    "Agent Service/02 - Архитектура/00 - Общая архитектура и структура.md",
+    "Agent Service/01 - Функциональная спецификация/Термины и определения.md",
+    "Agent Service/01 - Функциональная спецификация/Проактивный ИИ-Ментор.md",
+    "Agent Service/01 - Функциональная спецификация/Нефункциональные требования.md",
+    "Product/Core_Methodology_Vision.md",
+    "Plans/01_MVP_Completion.md",
+    "Plans/README.md",
+    "Plans",
+    "01Strategic_Roadmap_Founder.md",
+    "Product/01Feature_Map.md",
+    "Product/Feature_Map.md",
+    "Strategic_Roadmap_Founder.md",
+    "Frontend/UserFlows.md",
+    "Frontend/Features/UserTesting.md",
+    "Frontend/Features",
+    "Frontend/TEMPLATE.md",
+    "Frontend",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-08_SystemSettings.md",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-07_MarketplaceCommunity.md",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-06_ActivityAssessment.md",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-05_LinguisticsNLP.md",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-04_VocabularyCore.md",
+    "Agent Service/03 - Модель Данных/01 - Основные сущности/Entity - Кастомные Сценарии - Custom Scenarios.md",
+    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entities - Список сущностей микросервиса Vocabulary Service.md",
+    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности/Entity - Документы и Ридер - Documents & Reader.md",
+    "Vocabulary Service/01 - Функциональная спецификация/Возможности сервиса/SR-VOC-03_Reader.md",
+    "Vocabulary Service/03 - Модель Данных/01 - Основные сущности",
+    "Vocabulary Service/03 - Модель Данных",
+    "Vocabulary Service/02 - Архитектура",
+    "Vocabulary Service/99 - Staging — Разрывы согласованности (DO NOT DELETE)",
+    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/Socket",
+    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/REST API",
+    "Vocabulary Service/04 - Бекенд, API и Контракты/Методы API/gRPC"
+  ]
+}
